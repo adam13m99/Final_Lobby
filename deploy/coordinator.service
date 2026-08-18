@@ -1,0 +1,41 @@
+[Unit]
+Description=Final Lobby coordinator (rooms, addressing, tickets)
+Documentation=https://github.com/adam13m99/Final_Lobby
+After=network-online.target
+Wants=network-online.target
+Before=relay.service
+
+[Service]
+Type=simple
+User=finallobby
+Group=finallobby
+
+# Bound to all interfaces so both test PCs can reach it, and gated by a
+# shared bearer token because there are no accounts yet. When the desktop
+# client ships this moves behind TLS and real authentication.
+ExecStart=/opt/finallobby/coordinator \
+    -listen 0.0.0.0:7001 \
+    -relay-addr 87.107.110.199:443 \
+    -relay-pub /etc/finallobby/relay.pub \
+    -auth-token-file /etc/finallobby/api.token
+
+Restart=always
+RestartSec=2s
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+ReadOnlyPaths=/etc/finallobby
+
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

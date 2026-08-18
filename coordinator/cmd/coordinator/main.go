@@ -1,0 +1,133 @@
+// Command coordinator is the control plane: it owns rooms, allocates virtual
+// addresses, and issues the tickets the relay checks.
+//
+// This is the stub described in the plan's self-review. Accounts, MMR,
+// friends, passwords and PostgreSQL persistence belong to sub-project 2.
+package main
+
+import (
+	"context"
+	"errors"
+	"flag"
+	"log/slog"
+	"net/http"
+	"os"
+	"os/signal"
+	"strings"
+	"syscall"
+	"time"
+
+	"finallobby/coordinator/internal/api"
+	"finallobby/coordinator/internal/room"
+	"finallobby/coordinator/internal/ticket"
+)
+
+func main() {
+	listen := flag.String("listen", "127.0.0.1:7001", "HTTP listen address")
+	relayAddr := flag.String("relay-addr", "87.107.110.199:443", "relay address given to clients")
+	relayPubFile := flag.String("relay-pub", "/etc/finallobby/relay.pub", "file holding the relay public key")
+	tickEvery := flag.Duration("tick", 10*time.Second, "how often room timers advance")
+	authFile := flag.String("auth-token-file", "", "file holding the shared bearer token for the player API (empty = open)")
+	debug := flag.Bool("debug", false, "verbose logging")
+	flag.Parse()
+
+	level := slog.LevelInfo
+	if *debug {
+		level = slog.LevelDebug
+	}
+	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
+	slog.SetDefault(log)
+
+	relayPub, err := os.ReadFile(*relayPubFile)
+	if err != nil {
+		log.Error("cannot read the relay public key", "file", *relayPubFile, "err", err)
+		os.Exit(1)
+	}
+	pub := strings.TrimSpace(string(relayPub))
+	if len(pub) != 64 {
+		log.Error("relay public key must be 64 hex characters", "got", len(pub))
+		os.Exit(1)
+	}
+
+	var authToken string
+	if *authFile != "" {
+		raw, err := os.ReadFile(*authFile)
+		if err != nil {
+			log.Error("cannot read the auth token", "file", *authFile, "err", err)
+			os.Exit(1)
+		}
+		authToken = strings.TrimSpace(string(raw))
+		if len(authToken) < 16 {
+			log.Error("auth token is too short to be worth having", "len", len(authToken))
+			os.Exit(1)
+		}
+	} else {
+		log.Warn("no auth token configured - the player API is open to anyone who can reach it")
+	}
+
+	rooms := room.NewStore()
+	tickets := ticket.NewStore()
+
+	srv := api.New(api.Config{
+		Rooms:     rooms,
+		Tickets:   tickets,
+		RelayAddr: *relayAddr,
+		RelayPub:  pub,
+		Logger:    log,
+		AuthToken: authToken,
+	})
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	go runTimers(ctx, rooms, tickets, *tickEvery, log)
+
+	httpSrv := &http.Server{
+		Addr:              *listen,
+		Handler:           srv.Routes(),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = httpSrv.Shutdown(shutdownCtx)
+	}()
+
+	log.Info("coordinator listening", "addr", *listen, "relay", *relayAddr)
+	if err := httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Error("coordinator stopped", "err", err)
+		os.Exit(1)
+	}
+	log.Info("coordinator shut down cleanly")
+}
+
+// runTimers advances room state and clears expired tickets. Rooms close on a
+// timer, so something has to be turning the handle.
+func runTimers(ctx context.Context, rooms *room.Store, tickets *ticket.Store, every time.Duration, log *slog.Logger) {
+	t := time.NewTicker(every)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+		now := time.Now()
+		for _, id := range rooms.Tick(now) {
+			// The room is over; nobody in it should keep network access.
+			log.Info("room closed", "room", id)
+			revokeRoom(tickets, id)
+		}
+		tickets.Purge(now)
+	}
+}
+
+// revokeRoom drops every ticket belonging to a closed room.
+func revokeRoom(tickets *ticket.Store, roomID string) {
+	tickets.RevokeRoom(roomID)
+}

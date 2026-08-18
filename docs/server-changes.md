@@ -11,7 +11,7 @@ undo it. Nothing outside this list has been touched. **nginx, CoreDNS,
 WireGuard and their configuration files were not modified, restarted, or read
 for anything other than confirming they still work.**
 
-Last audited: 2026-08-18.
+Last audited: 2026-08-18 (after coordinator deployment).
 
 ---
 
@@ -35,12 +35,24 @@ and **has already been removed**.
 
 **Current state:**
 
+A third rule was added later for the coordinator's API so both test PCs can
+reach it:
+
+```
+ufw allow 7001/tcp comment 'Final Lobby coordinator API (test phase)'
+```
+
+That API is **not** open to the world: it requires a shared bearer token
+(`/etc/finallobby/api.token`). It is a test-phase arrangement and goes away
+when the desktop client ships behind TLS and real accounts.
+
 | Rule | Owner |
 |---|---|
 | `22/tcp` | pre-existing (SSH) |
-| `443/udp` | **ours** |
+| `443/udp` | **ours** — relay |
+| `7001/tcp` | **ours** — coordinator API, token-gated |
 
-**To undo:** `ufw delete allow 443/udp`
+**To undo:** `ufw delete allow 443/udp` and `ufw delete allow 7001/tcp`
 
 ---
 
@@ -90,7 +102,10 @@ so the relay does not run as root.
 | `/opt/finallobby/loadtest` | The load generator — safe to delete |
 | `/etc/finallobby/relay.key` | **The relay's private identity key.** Mode 640, root:finallobby |
 | `/etc/finallobby/relay.pub` | The matching public key, `1e07798757a7225f04f6bb2a72ed2ab5116c0f2d7d3ffefd6db96fa4e85bf72e` |
-| `/etc/systemd/system/relay.service` | The service definition |
+| `/opt/finallobby/coordinator` | The coordinator binary |
+| `/etc/finallobby/api.token` | Shared bearer token for the player API. Mode 640, root:finallobby |
+| `/etc/systemd/system/relay.service` | The relay service definition |
+| `/etc/systemd/system/coordinator.service` | The coordinator service definition |
 
 `/etc/finallobby` is mode 750, root:finallobby.
 
@@ -98,26 +113,21 @@ so the relay does not run as root.
 key built into it; replacing the key locks all of them out until they are
 rebuilt and redistributed.
 
-**To undo:** `rm -rf /opt/finallobby /etc/finallobby /etc/systemd/system/relay.service`
+**To undo:** see *Complete removal* at the end of this document.
 
 ---
 
-## 5. A systemd service
+## 5. Two systemd services
 
-`relay.service`, enabled and running. It binds **UDP 443 only**.
+`relay.service` binds **UDP 443 only**. `coordinator.service` binds
+**TCP 7001** and depends on nothing else on the box.
 
-The unit is deliberately locked down: no new privileges, private `/tmp`,
-read-only system paths, no kernel-module or cgroup access, and the only
-capability it holds is `CAP_NET_BIND_SERVICE` — the minimum needed for an
-unprivileged user to hold a port below 1024.
+Both units are deliberately locked down: no new privileges, private `/tmp`,
+read-only system paths, no kernel-module or cgroup access, and neither runs as
+root. The only capability either holds is `CAP_NET_BIND_SERVICE` on the relay
+— the minimum needed for an unprivileged user to hold a port below 1024.
 
-**To undo:**
-
-```
-systemctl disable --now relay.service
-rm /etc/systemd/system/relay.service
-systemctl daemon-reload
-```
+**To undo:** see *Complete removal* at the end of this document.
 
 ---
 
@@ -131,8 +141,8 @@ These existed during testing and have been removed:
 - The `4443/udp` firewall rule
 - Extra relay processes started on ports 4443 and 9443 for testing
 
-Nothing from testing is still running. The only Final Lobby process on the
-box is the one systemd service.
+Nothing from testing is still running. The only Final Lobby processes on the
+box are the two systemd services.
 
 ---
 
@@ -141,12 +151,13 @@ box is the one systemd service.
 To take Final Lobby off this machine entirely:
 
 ```bash
-systemctl disable --now relay.service
-rm -f /etc/systemd/system/relay.service
+systemctl disable --now relay.service coordinator.service
+rm -f /etc/systemd/system/relay.service /etc/systemd/system/coordinator.service
 systemctl daemon-reload
 rm -rf /opt/finallobby /etc/finallobby
 rm -f /etc/sysctl.d/99-finallobby.conf
 ufw delete allow 443/udp
+ufw delete allow 7001/tcp
 userdel finallobby
 ```
 

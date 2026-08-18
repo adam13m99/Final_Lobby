@@ -48,6 +48,7 @@ var (
 // Room is one lobby. Not safe for concurrent use; the store serialises access.
 type Room struct {
 	ID     string
+	Name   string
 	Index  int
 	HostID string
 	Status Status

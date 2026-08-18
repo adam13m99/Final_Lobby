@@ -35,6 +35,45 @@ scp_up() { # local remote
   "$PSCP" -batch -hostkey "$HOSTKEY" -pw "$PASS" "$1" "$USER_HOST:$2"
 }
 
+# upload_verified copies a file and refuses to continue unless the checksum
+# on the far end matches. An upload can fail silently when the target is
+# locked by a running process (D21).
+upload_verified() { # local remote
+  scp_up "$1" "$2"
+  local want got
+  want=$(sha256sum "$1" | cut -d" " -f1)
+  got=$(ssh_run "sha256sum $2 | cut -d' ' -f1" | tr -dc '0-9a-f')
+  if [ "$want" != "$got" ]; then
+    echo "  FAIL upload mismatch for $2: local $want, remote $got" >&2
+    exit 1
+  fi
+  echo "  OK   $2 checksum verified"
+}
+
+deploy_coordinator() {
+  echo "==> building coordinator"
+  ./scripts/build.sh coordinator
+
+  echo "==> uploading"
+  upload_verified bin/coordinator /opt/finallobby/coordinator.new
+  scp_up deploy/coordinator.service /etc/systemd/system/coordinator.service
+
+  echo "==> installing"
+  ssh_run bash -s <<'REMOTE'
+set -euo pipefail
+chmod 755 /opt/finallobby/coordinator.new
+mv /opt/finallobby/coordinator.new /opt/finallobby/coordinator
+systemctl daemon-reload
+systemctl enable coordinator.service >/dev/null 2>&1 || true
+systemctl restart coordinator.service
+sleep 2
+systemctl is-active coordinator.service
+echo "--- health ---"
+curl -s --max-time 5 http://127.0.0.1:7001/healthz || echo "coordinator not answering"
+echo
+REMOTE
+}
+
 deploy_relay() {
   echo "==> building"
   ./scripts/build.sh relay
@@ -101,9 +140,11 @@ ss -ltnp | grep -E ':443\b' || echo "note: nothing on TCP 443"
 REMOTE
 }
 
-case "${1:-relay}" in
-  relay)  deploy_relay ;;
-  status) ssh_run 'systemctl status relay.service --no-pager -l | head -25; echo; ss -lunp | grep :443 || true' ;;
-  logs)   ssh_run 'journalctl -u relay.service -n 80 --no-pager' ;;
-  *)      echo "usage: $0 [relay|status|logs]" >&2; exit 2 ;;
+case "${1:-all}" in
+  all)         deploy_coordinator; deploy_relay ;;
+  coordinator) deploy_coordinator ;;
+  relay)       deploy_relay ;;
+  status) ssh_run 'systemctl status relay.service coordinator.service --no-pager -l | head -40; echo; ss -lunp | grep :443 || true; curl -s http://127.0.0.1:7001/healthz; echo' ;;
+  logs)   ssh_run 'journalctl -u relay.service -u coordinator.service -n 80 --no-pager' ;;
+  *)      echo "usage: $0 [all|relay|coordinator|status|logs]" >&2; exit 2 ;;
 esac
