@@ -28,7 +28,7 @@ Plan: `docs/superpowers/plans/2026-08-18-network-core.md`
 | 3 | Virtual IP allocation | **done** | |
 | 4 | Routing decision (anti-spoof, room scope, broadcast drop) | **done** | |
 | 5 | Bounded per-peer send queue | **done** | |
-| 6 | Session encryption with replay protection | not started | |
+| 6 | Session encryption with replay protection | **done** | |
 | 7 | Noise NK handshake | not started | |
 | 8 | Session and room membership tables | not started | |
 | 9 | Relay server assembly | not started | |
