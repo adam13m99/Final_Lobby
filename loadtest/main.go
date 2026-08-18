@@ -2,8 +2,8 @@
 //
 // It answers two questions the two-PC physical test cannot:
 //
-//	1. Does the relay hold at the target concurrent player count?
-//	2. What throughput does that require?
+//  1. Does the relay hold at the target concurrent player count?
+//  2. What throughput does that require?
 //
 // Each synthetic peer completes a real Noise handshake and sends real
 // encrypted datagrams, so what is measured is the relay's actual work, not a
@@ -69,7 +69,18 @@ func main() {
 	size := flag.Int("packet-size", 200, "inner packet size in bytes")
 	duration := flag.Duration("duration", 60*time.Second, "test duration")
 	rampUp := flag.Duration("ramp-up", 10*time.Second, "spread handshakes over this window")
+	echo := flag.Bool("echo-peer", false, "join as a single peer and answer pings, to prove the data path")
+	ticket := flag.String("ticket", "", "session ticket (echo-peer mode)")
+	quiet := flag.Bool("quiet", false, "do not print each ping")
 	flag.Parse()
+
+	if *echo {
+		if err := runEchoPeer(*relayAddr, *relayPub, *ticket, *quiet); err != nil {
+			fmt.Fprintln(os.Stderr, "echo peer:", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	pub, err := hex.DecodeString(*relayPub)
 	if err != nil || len(pub) != 32 {

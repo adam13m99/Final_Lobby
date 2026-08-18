@@ -357,3 +357,26 @@ It now handles the service and its executable disappearing independently,
 falls back to `sc.exe delete`, and waits for the registration to clear before
 creating the new one. A second install attempt is exactly the state a
 frustrated person reaches, so it has to work.
+
+## D29 — The data path is proven end to end without a second PC
+
+Built `loadtest -echo-peer`: a synthetic peer that joins a room like any
+other client and answers ICMP echo requests. It exists so the whole path can
+be exercised from one machine.
+
+Measured 2026-08-19. A ping from Windows travels into the Wintun adapter,
+through the encrypted tunnel to the relay in Iran, out to the peer, and all
+the way back:
+
+| | Result |
+|---|---|
+| 32-byte packets, warm | 10/10 replies, 0% loss, 4 ms average |
+| 900-byte packets | 6/6 replies, 0% loss, 5 ms average |
+| First packet after connecting | lost, consistently |
+
+That first lost packet is a cold-start artifact - the relay has not yet seen
+where the peer is. Noted rather than chased: a game client retries, and it
+costs one round trip at connect time.
+
+What this retires: everything between the two ends. The only thing left that
+genuinely needs a second machine is Dota's own client-to-host connection.

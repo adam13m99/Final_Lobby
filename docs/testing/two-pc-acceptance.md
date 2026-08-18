@@ -115,6 +115,18 @@ should read **tunnel connected**, and *Adapter* should show `Final Lobby`.
 
 ### 4. They can actually reach each other
 
+**Already proven on one machine, 2026-08-19.** A synthetic peer joined the
+same room from a second process, and a ping from Windows travelled out
+through the Wintun adapter, over the tunnel to the relay in Iran, to that
+peer and back: **10 of 10 replies, 0% loss, 4 ms average**. With 900-byte
+packets, closer to real game traffic: 6 of 6, 5 ms. Only the very first
+packet after connecting was lost, every time — a cold-start artifact worth
+watching but not chasing.
+
+So this case is a confirmation rather than a discovery. Run it anyway: two
+real machines on two real connections is not the same as one machine talking
+to itself through Iran.
+
 On **PC B**, open a normal PowerShell window and ping PC A's address:
 
 ```powershell
@@ -319,8 +331,11 @@ were confirmed on the development machine on 2026-08-19:
 - Room isolation on the client: Windows installs a route for the room's own
   `/28` and nothing else
 - Kick revoking the ticket, so the relay refuses the kicked player
+- **The complete data path**: a ping from Windows through the adapter, the
+  tunnel and the relay to another peer in the same room, 0% loss at 4 ms
 
-What genuinely needs two machines: cases 4, 5, 6, 8, 10, 11.
+What genuinely needs two machines: cases 5, 6, 8, 10 and 11. Case 4 is a
+re-confirmation on real hardware.
 
 ---
 
