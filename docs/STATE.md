@@ -44,7 +44,7 @@ Plan: `docs/superpowers/plans/2026-08-18-network-core.md`
 | 13 | Fail-closed lease watchdog | **done** | |
 | 14 | Dota 2 launch with argument allowlist | **done** | |
 | 15 | Load test harness | **done** | |
-| 16 | Physical two-PC acceptance test | not started | |
+| 16 | Physical two-PC acceptance test | **ready to run** — checklist at `docs/testing/two-pc-acceptance.md`, bundle via `./scripts/bundle.sh` | |
 
 ## Completed outside the plan
 
