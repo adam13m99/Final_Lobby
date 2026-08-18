@@ -34,7 +34,7 @@ Plan: `docs/superpowers/plans/2026-08-18-network-core.md`
 | 9 | Relay server assembly | **done** | |
 | 10 | Room state machine | **done** | |
 | 11 | Windows Wintun adapter | **done** | |
-| 12 | Tunnel client with sticky reconnect | not started | |
+| 12 | Tunnel client with sticky reconnect | **done** | |
 | 13 | Fail-closed lease watchdog | not started | |
 | 14 | Dota 2 launch with argument allowlist | not started | |
 | 15 | Load test harness | not started | |
