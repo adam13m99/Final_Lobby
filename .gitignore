@@ -1,0 +1,48 @@
+# ─── Secrets — never commit ───
+github_token_admin.txt
+mobinhost_server_1.txt
+*.token
+*.pem
+*.key
+!release-pubkey.bin
+.env
+.env.*
+!.env.example
+secrets/
+
+# ─── Build output ───
+/target/
+dist/
+build/
+out/
+artifacts/
+*.exe
+*.dll
+!wintun.dll
+
+# ─── Dependencies ───
+node_modules/
+vendor/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# ─── Go ───
+*.test
+*.out
+
+# ─── Rust / Tauri ───
+**/src-tauri/target/
+
+# ─── Editor / OS ───
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+
+# ─── Logs / local state ───
+*.log
+logs/
+tmp/
