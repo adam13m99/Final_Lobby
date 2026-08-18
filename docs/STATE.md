@@ -5,11 +5,14 @@ this file is a convenience index, not an authority.
 
 ## Current phase
 
-Sub-project 1: network core. **In progress — Tasks 1-15 landed, plus the
-coordinator, Windows service and test CLI that Task 16 needs. The whole
-stack has been driven end to end from this PC against the live server: room
-created, Wintun adapter up, tunnel connected, kick revoking network access,
-clean teardown. Only Task 16 itself — the real two-PC Dota match — remains.**
+Sub-project 1: network core. **Installable prototype ready.** Relay and
+coordinator are deployed and running; the Windows service, desktop app and
+installer all work on the development PC. Dota 2 launches and its listen
+server comes up. What remains is Task 16 itself - the real two-PC match -
+which needs a second machine and a person at each.
+
+Hand the second PC `dist/FinalLobby-test/` from `./scripts/bundle.sh` and
+follow `docs/testing/two-pc-acceptance.md`.
 
 ## Blockers
 
@@ -44,12 +47,15 @@ Plan: `docs/superpowers/plans/2026-08-18-network-core.md`
 | 13 | Fail-closed lease watchdog | **done** | |
 | 14 | Dota 2 launch with argument allowlist | **done** | |
 | 15 | Load test harness | **done** | |
-| 16 | Physical two-PC acceptance test | **ready to run** — checklist at `docs/testing/two-pc-acceptance.md`, bundle via `./scripts/bundle.sh` | |
+| 16 | Physical two-PC acceptance test | **ready to run** — GUI app, installer and checklist all prepared; needs two machines | |
 
 ## Completed outside the plan
 
 | What | Commit |
 |---|---|
+| Stub coordinator: rooms, tickets, rate limiting | `b1f5a1b` |
+| Windows service, named-pipe IPC, test CLI | `cc8e395` |
+| Prototype desktop app, installer, bundle | `1a986e1` |
 | Design spec | `d727a18` |
 | Implementation plan | `06e6a18` |
 | Git sync through server tunnel (GitHub is DPI-blocked locally) | `dd28c05` |
