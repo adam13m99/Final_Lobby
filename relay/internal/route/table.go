@@ -3,17 +3,37 @@ package route
 import (
 	"net/netip"
 	"sync"
+	"sync/atomic"
 
 	"finallobby/relay/internal/sendq"
 )
 
 // Peer is one authenticated, connected client.
+//
+// RoomID is mutated only by Table under its write lock; read it through
+// Table.SenderFor rather than directly, so the read is covered by the read
+// lock. The remote address is different: the reader goroutine updates it on
+// every packet while the peer's writer goroutine reads it, so it is an
+// atomic rather than a plain field.
 type Peer struct {
 	SessionID uint32
 	VirtualIP netip.Addr
 	RoomID    string
-	Remote    netip.AddrPort
 	Queue     *sendq.Queue
+
+	remote atomic.Pointer[netip.AddrPort]
+}
+
+// SetRemote records where the peer's packets are currently arriving from,
+// so a NAT rebinding does not silently black-hole the return path.
+func (p *Peer) SetRemote(ap netip.AddrPort) { p.remote.Store(&ap) }
+
+// Remote returns the peer's current source address.
+func (p *Peer) Remote() netip.AddrPort {
+	if ap := p.remote.Load(); ap != nil {
+		return *ap
+	}
+	return netip.AddrPort{}
 }
 
 // Table indexes peers by session and by virtual IP, and groups them by room.
@@ -115,6 +135,31 @@ func (t *Table) SetRoom(sessionID uint32, roomID string) bool {
 	p.RoomID = roomID
 	t.addToRoomLocked(p, roomID)
 	return true
+}
+
+// SenderFor returns a routing-decision snapshot for a session, taken under
+// the read lock so RoomID cannot change mid-read.
+func (t *Table) SenderFor(id uint32) (Sender, *Peer, bool) {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	p, ok := t.bySess[id]
+	if !ok {
+		return Sender{}, nil, false
+	}
+	return Sender{VirtualIP: p.VirtualIP, RoomID: p.RoomID}, p, true
+}
+
+// ForwardTarget resolves a destination virtual IP, but only within the
+// sender's own room. Doing the lookup and the room check under one lock is
+// what makes cross-room isolation atomic rather than best-effort.
+func (t *Table) ForwardTarget(dst netip.Addr, room string) (*Peer, bool) {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	p, ok := t.byIP[dst]
+	if !ok || p.RoomID != room || room == "" {
+		return nil, false
+	}
+	return p, true
 }
 
 func (t *Table) Count() int {

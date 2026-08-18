@@ -41,8 +41,10 @@ func PublicFromPrivate(priv []byte) ([]byte, error) {
 }
 
 // ClientHandshake builds the first message and returns a finish function
-// that completes the handshake once the relay replies.
-func ClientHandshake(relayStaticPub, ticket []byte) (msg1 []byte, finish func([]byte) (*Session, error), err error) {
+// that completes the handshake once the relay replies. finish yields the
+// session and the relay's encrypted reply payload, which carries the
+// client's assigned session ID and virtual IP.
+func ClientHandshake(relayStaticPub, ticket []byte) (msg1 []byte, finish func([]byte) (*Session, []byte, error), err error) {
 	hs, err := noise.NewHandshakeState(noise.Config{
 		CipherSuite: cipherSuite,
 		Pattern:     noise.HandshakeNK,
@@ -58,23 +60,29 @@ func ClientHandshake(relayStaticPub, ticket []byte) (msg1 []byte, finish func([]
 		return nil, nil, fmt.Errorf("%w: %v", ErrHandshake, err)
 	}
 
-	finish = func(msg2 []byte) (*Session, error) {
-		_, csInitToResp, csRespToInit, err := hs.ReadMessage(nil, msg2)
+	finish = func(msg2 []byte) (*Session, []byte, error) {
+		payload, csInitToResp, csRespToInit, err := hs.ReadMessage(nil, msg2)
 		if err != nil {
-			return nil, fmt.Errorf("%w: %v", ErrHandshake, err)
+			return nil, nil, fmt.Errorf("%w: %v", ErrHandshake, err)
 		}
 		// The initiator writes on the initiator->responder stream.
-		return sessionFromNoise(csInitToResp, csRespToInit)
+		sess, err := sessionFromNoise(csInitToResp, csRespToInit)
+		if err != nil {
+			return nil, nil, err
+		}
+		return sess, payload, nil
 	}
 	return msg1, finish, nil
 }
 
-// ServerHandshake consumes the client's first message, recovers the ticket,
-// and produces the reply plus the established session.
-func ServerHandshake(relayStaticPriv, msg1 []byte) (ticket, msg2 []byte, sess *Session, err error) {
+// ServerHandshake consumes the client's first message and recovers the
+// ticket. It returns a reply function rather than the reply itself: the relay
+// has to validate the ticket and allocate a session ID before it can say what
+// goes in the encrypted reply payload.
+func ServerHandshake(relayStaticPriv, msg1 []byte) (ticket []byte, reply func(payload []byte) ([]byte, *Session, error), err error) {
 	pub, err := PublicFromPrivate(relayStaticPriv)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 	hs, err := noise.NewHandshakeState(noise.Config{
 		CipherSuite:   cipherSuite,
@@ -84,22 +92,26 @@ func ServerHandshake(relayStaticPriv, msg1 []byte) (ticket, msg2 []byte, sess *S
 		Random:        rand.Reader,
 	})
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("%w: %v", ErrHandshake, err)
+		return nil, nil, fmt.Errorf("%w: %v", ErrHandshake, err)
 	}
 	ticket, _, _, err = hs.ReadMessage(nil, msg1)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("%w: %v", ErrHandshake, err)
+		return nil, nil, fmt.Errorf("%w: %v", ErrHandshake, err)
 	}
-	msg2, csInitToResp, csRespToInit, err := hs.WriteMessage(nil, nil)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("%w: %v", ErrHandshake, err)
+
+	reply = func(payload []byte) ([]byte, *Session, error) {
+		msg2, csInitToResp, csRespToInit, err := hs.WriteMessage(nil, payload)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%w: %v", ErrHandshake, err)
+		}
+		// The responder mirrors the initiator.
+		sess, err := sessionFromNoise(csRespToInit, csInitToResp)
+		if err != nil {
+			return nil, nil, err
+		}
+		return msg2, sess, nil
 	}
-	// The responder mirrors the initiator.
-	sess, err = sessionFromNoise(csRespToInit, csInitToResp)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	return ticket, msg2, sess, nil
+	return ticket, reply, nil
 }
 
 // sessionFromNoise adapts Noise CipherStates onto our Session type by

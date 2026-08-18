@@ -1,0 +1,45 @@
+[Unit]
+Description=Final Lobby relay (encrypted room-scoped UDP forwarder)
+Documentation=https://github.com/adam13m99/Final_Lobby
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=finallobby
+Group=finallobby
+
+# UDP 443 only. TCP 443 on this host belongs to an unrelated SNI proxy
+# business with real users - binding it would take down their revenue.
+# CAP_NET_BIND_SERVICE is what lets an unprivileged user hold a low port.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+
+ExecStart=/opt/finallobby/relay \
+    -listen 0.0.0.0:443 \
+    -static-key @/etc/finallobby/relay.key \
+    -coordinator http://127.0.0.1:7001 \
+    -queue-depth 256
+
+Restart=always
+RestartSec=2s
+
+# The relay holds no state worth persisting; everything it needs comes from
+# the coordinator, so a hard restart is always safe.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+ReadOnlyPaths=/etc/finallobby
+
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

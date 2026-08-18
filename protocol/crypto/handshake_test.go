@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"testing"
 
-	"finallobby/relay/internal/crypto"
-	"finallobby/relay/internal/wire"
+	"finallobby/protocol/crypto"
+	"finallobby/protocol/wire"
 )
 
 func TestHandshakeEstablishesMatchingSessions(t *testing.T) {
@@ -19,16 +19,23 @@ func TestHandshakeEstablishesMatchingSessions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	gotTicket, msg2, serverSess, err := crypto.ServerHandshake(priv, msg1)
+	gotTicket, reply, err := crypto.ServerHandshake(priv, msg1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(gotTicket, ticket) {
 		t.Fatalf("ticket = %q, want %q", gotTicket, ticket)
 	}
-	clientSess, err := finish(msg2)
+	msg2, serverSess, err := reply([]byte("assigned-session-payload"))
 	if err != nil {
 		t.Fatal(err)
+	}
+	clientSess, gotPayload, err := finish(msg2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(gotPayload) != "assigned-session-payload" {
+		t.Fatalf("reply payload = %q, want the relay's assignment", gotPayload)
 	}
 
 	// Prove the two derived sessions actually interoperate.
@@ -74,7 +81,7 @@ func TestTicketIsNotSentInPlaintext(t *testing.T) {
 
 func TestServerRejectsGarbageHandshake(t *testing.T) {
 	_, priv, _ := crypto.GenerateStaticKeypair()
-	if _, _, _, err := crypto.ServerHandshake(priv, []byte("not a handshake")); err == nil {
+	if _, _, err := crypto.ServerHandshake(priv, []byte("not a handshake")); err == nil {
 		t.Fatal("expected error for malformed handshake")
 	}
 }
@@ -87,7 +94,7 @@ func TestClientRejectsWrongRelayKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, _, err := crypto.ServerHandshake(realPriv, msg1); err == nil {
+	if _, _, err := crypto.ServerHandshake(realPriv, msg1); err == nil {
 		t.Fatal("server accepted a handshake addressed to a different key")
 	}
 }

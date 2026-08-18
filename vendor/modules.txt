@@ -1,4 +1,6 @@
 ## workspace
+# finallobby/protocol v0.0.0 => ./protocol
+## explicit; go 1.25.0
 # github.com/flynn/noise v1.1.0
 ## explicit; go 1.16
 github.com/flynn/noise

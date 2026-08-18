@@ -147,3 +147,44 @@ do not control; vendoring means losing it costs us nothing.
 The script cross-compiles Linux server binaries from Windows and skips
 components whose source has not been written yet, so it stays usable from
 Task 1 onward rather than only once everything exists.
+
+## D13 — `protocol/` is its own module; wire and crypto are not relay-internal
+
+**Rejected:** the plan's layout, which put `wire` and `crypto` under
+`relay/internal/`.
+
+Go forbids importing another module's `internal/` packages, and the Windows
+net-service, the test CLI and the load generator all need to speak the same
+wire format and run the same handshake. Leaving them under `relay/internal`
+would have forced either a duplicate implementation on the client side - two
+copies of a packet parser that must agree exactly - or a fake "client" that
+lives inside the relay module.
+
+`finallobby/protocol` now holds `wire` and `crypto`. The relay keeps `route`,
+`sendq` and `server` private to itself.
+
+## D14 — Every datagram carries a wire header, handshakes included
+
+**Rejected:** the plan's sketch, which guessed at the packet kind by trying to
+parse a data header and falling back to "this must be a handshake".
+
+A Noise handshake message begins with a random ephemeral public key, so
+roughly one in 65,536 of them would have parsed as a valid data header and
+been misrouted. Prefixing handshake packets with a real header, typed
+`TypeHandshakeInit` or `TypeHandshakeResp`, makes the dispatch exact.
+
+## D15 — The relay assigns the session ID in the encrypted handshake reply
+
+The plan's client had no way to learn its session ID, so it addressed packets
+with session 0 and the relay could not find it. The Noise reply payload now
+carries a `wire.Accept`: session ID, virtual IP and room. It is encrypted, so
+a passive observer cannot map sessions to virtual addresses.
+
+## D16 — ufw on the shared server drops everything except what is named
+
+Discovered 2026-08-18 while smoke-testing: our packets reached the server -
+confirmed with tcpdump - but ufw dropped them before the relay saw them. Only
+`22/tcp` was allowed. We added `443/udp` and nothing else. TCP, nginx, CoreDNS
+and the WireGuard rules were left exactly as they were.
+
+Any future port we need must be opened explicitly. Assume nothing is open.
