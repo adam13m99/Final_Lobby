@@ -23,7 +23,7 @@ Plan: `docs/superpowers/plans/2026-08-18-network-core.md`
 | # | Task | Status | Commit |
 |---|---|---|---|
 | 1 | Repo scaffolding and Go workspace | **done** | |
-| 2 | Packet framing and codec | not started | |
+| 2 | Packet framing and codec | **done** | |
 | 3 | Virtual IP allocation | not started | |
 | 4 | Routing decision (anti-spoof, room scope, broadcast drop) | not started | |
 | 5 | Bounded per-peer send queue | not started | |
