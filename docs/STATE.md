@@ -30,7 +30,7 @@ Plan: `docs/superpowers/plans/2026-08-18-network-core.md`
 | 5 | Bounded per-peer send queue | **done** | |
 | 6 | Session encryption with replay protection | **done** | |
 | 7 | Noise NK handshake | **done** | |
-| 8 | Session and room membership tables | not started | |
+| 8 | Session and room membership tables | **done** | |
 | 9 | Relay server assembly | not started | |
 | 10 | Room state machine | not started | |
 | 11 | Windows Wintun adapter | not started | |
