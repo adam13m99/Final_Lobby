@@ -6,6 +6,8 @@
 set -uo pipefail
 
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=scripts/env.sh
+. scripts/env.sh
 FAIL=0
 
 say()  { printf '%s\n' "$*"; }
@@ -43,12 +45,19 @@ if [ -z "$MODULES" ]; then
   warn "no Go modules yet - plan Task 1 has not landed"
 else
   for m in $MODULES; do
-    if command -v go >/dev/null 2>&1; then
-      if (cd "$m" && go build ./... >/dev/null 2>&1); then ok "build $m"; else bad "build $m"; fi
-      if (cd "$m" && go test ./... >/dev/null 2>&1); then ok "test  $m"; else bad "test  $m"; fi
-    else
+    if ! command -v go >/dev/null 2>&1; then
       warn "skipping $m - go not installed"
+      continue
     fi
+    # A module with no .go files anywhere is scaffolding waiting for its
+    # first task; that is not a failure.
+    if [ -z "$(find "$m" -name '*.go' -not -path '*/.git/*' 2>/dev/null | head -1)" ]; then
+      warn "$m has no source yet"
+      continue
+    fi
+    if (cd "$m" && go build ./... >/dev/null 2>&1); then ok "build $m"; else bad "build $m"; fi
+    if (cd "$m" && go vet ./... >/dev/null 2>&1); then ok "vet   $m"; else bad "vet   $m"; fi
+    if (cd "$m" && go test ./... >/dev/null 2>&1); then ok "test  $m"; else bad "test  $m"; fi
   done
 fi
 

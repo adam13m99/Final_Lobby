@@ -5,15 +5,16 @@ this file is a convenience index, not an authority.
 
 ## Current phase
 
-Sub-project 1: network core. **Not started — blocked on toolchain.**
+Sub-project 1: network core. **In progress — Task 1 landed.**
 
 ## Blockers
 
 | Blocker | Detail | Owner |
 |---|---|---|
-| Go not installed | `go version` fails on the dev PC. Required for every task. Needs Go 1.23+. Note that golang.org may be unreachable; use a domestic mirror or install through the server tunnel. | dev machine setup |
-| `make` not installed | Plan Task 1 assumed it. Superseded by `scripts/check.sh`, which needs only bash. | resolved by design |
+| ~~Go not installed~~ | Resolved 2026-08-18. Go 1.26.6 extracted to `C:\Users\Mcc\sdk\go` (no admin rights needed), fetched from the Aliyun mirror and verified against go.dev's own SHA-256. `scripts/env.sh` puts it on PATH for every script. See decisions D11. | resolved |
+| ~~`make` not installed~~ | Replaced by `scripts/build.sh`. See decisions D12. | resolved |
 | Uplink port speed unknown | MobinHost has not confirmed the server's port speed. Not blocking test-phase work. | product owner |
+| Relay not yet deployable to the server | Owner wants to test host-and-client across two PCs against the real server. `scripts/deploy.sh` lands with Task 9, when there is a relay binary to deploy. | Task 9 |
 
 ## Task ledger
 
@@ -21,7 +22,7 @@ Plan: `docs/superpowers/plans/2026-08-18-network-core.md`
 
 | # | Task | Status | Commit |
 |---|---|---|---|
-| 1 | Repo scaffolding and Go workspace | not started | |
+| 1 | Repo scaffolding and Go workspace | **done** | |
 | 2 | Packet framing and codec | not started | |
 | 3 | Virtual IP allocation | not started | |
 | 4 | Routing decision (anti-spoof, room scope, broadcast drop) | not started | |

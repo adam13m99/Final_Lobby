@@ -16,13 +16,16 @@ dist/
 build/
 out/
 artifacts/
+/bin/
 *.exe
 *.dll
 !wintun.dll
 
 # ─── Dependencies ───
 node_modules/
-vendor/
+# NOTE: Go vendor/ directories are deliberately NOT ignored. goproxy.cn is the
+# only reachable module proxy from here; vendored deps are what keep the build
+# working if it goes away. See docs/decisions.md D11.
 __pycache__/
 *.pyc
 .venv/

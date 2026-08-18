@@ -118,3 +118,32 @@ leak traffic between rooms.
 
 The host always occupying the same offset is what makes D1 possible — clients
 can be told where to connect instead of discovering it.
+
+## D11 — Go toolchain installed per-user; modules fetched via goproxy.cn and vendored
+
+**Rejected:** the official installer from go.dev, and `proxy.golang.org`.
+
+Verified on 2026-08-18 from this connection: `go.dev` itself resolves and
+serves, but `dl.google.com` — where every binary download redirects — answers
+a synthetic **404** for valid files, and `proxy.golang.org` is blackholed
+entirely. Google geo-blocks Iranian addresses on both. `golang.google.cn`,
+USTC and Tsinghua mirrors are also unreachable.
+
+What works: `mirrors.aliyun.com/golang` for the toolchain archive and
+`goproxy.cn` for modules. The toolchain zip was verified against the SHA-256
+published by go.dev itself, which *is* reachable — so a mirror never has to be
+trusted, only used for transport.
+
+Go lives in `C:\Users\Mcc\sdk\go`, extracted from the archive rather than
+installed by MSI, so no administrator rights were needed. `scripts/env.sh`
+finds it regardless of shell PATH, and every script sources that.
+
+Modules are vendored and committed. goproxy.cn is a single point of failure we
+do not control; vendoring means losing it costs us nothing.
+
+## D12 — `scripts/build.sh` replaces the plan's Makefile
+
+`make` is not installed and is not worth a dependency for five build lines.
+The script cross-compiles Linux server binaries from Windows and skips
+components whose source has not been written yet, so it stays usable from
+Task 1 onward rather than only once everything exists.
