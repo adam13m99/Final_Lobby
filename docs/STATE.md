@@ -5,7 +5,7 @@ this file is a convenience index, not an authority.
 
 ## Current phase
 
-Sub-project 1: network core. **In progress — Tasks 1-9 landed. The relay is deployed and reachable.**
+Sub-project 1: network core. **In progress — Tasks 1-11 landed. Relay deployed; Wintun adapter proven on real hardware.**
 
 ## Blockers
 
@@ -33,7 +33,7 @@ Plan: `docs/superpowers/plans/2026-08-18-network-core.md`
 | 8 | Session and room membership tables | **done** | |
 | 9 | Relay server assembly | **done** | |
 | 10 | Room state machine | **done** | |
-| 11 | Windows Wintun adapter | not started | |
+| 11 | Windows Wintun adapter | **done** | |
 | 12 | Tunnel client with sticky reconnect | not started | |
 | 13 | Fail-closed lease watchdog | not started | |
 | 14 | Dota 2 launch with argument allowlist | not started | |
@@ -54,4 +54,7 @@ Plan: `docs/superpowers/plans/2026-08-18-network-core.md`
    Reconnecting your own dropped player works; a different person filling the
    slot is unverified. The dynamic room flow depends on it. Answered by Task 16.
 2. Real per-player bandwidth — estimated, not measured. Task 15/16.
-3. Wintun redistribution licence — confirm before shipping an installer.
+3. Wintun redistribution licence — the DLL is embedded in the binary
+   (`netservice/internal/adapter/bin/wintun.dll`, v0.14.1, Authenticode
+   signature verified as WireGuard LLC). Confirm redistribution terms before
+   shipping a public installer.

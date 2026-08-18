@@ -188,3 +188,21 @@ confirmed with tcpdump - but ufw dropped them before the relay saw them. Only
 and the WireGuard rules were left exactly as they were.
 
 Any future port we need must be opened explicitly. Assume nothing is open.
+
+## D17 — wintun.dll is embedded in the binary, not downloaded or installed
+
+wintun.net is unreachable from Iranian networks, so a player could not fetch
+the driver even if we asked them to, and asking them to install a driver by
+hand is an adoption tax we refuse to pay.
+
+The DLL is committed at `netservice/internal/adapter/bin/wintun.dll` and
+embedded with `go:embed`. At startup the service writes it next to its own
+executable, which is where Wintun's loader looks. An existing copy of the
+same size is left alone, because it may be loaded and locked by the running
+service.
+
+Provenance: version 0.14.1, obtained through the server (which does have
+international access) and verified locally by its Authenticode signature -
+`CN=WireGuard LLC`, issued by DigiCert EV Code Signing CA, signature status
+Valid. That check is stronger than comparing against a hash published on a
+site we cannot reach.
