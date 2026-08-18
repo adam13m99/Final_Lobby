@@ -14,6 +14,7 @@ Sub-project 1: network core. **In progress — Task 1 landed.**
 | ~~Go not installed~~ | Resolved 2026-08-18. Go 1.26.6 extracted to `C:\Users\Mcc\sdk\go` (no admin rights needed), fetched from the Aliyun mirror and verified against go.dev's own SHA-256. `scripts/env.sh` puts it on PATH for every script. See decisions D11. | resolved |
 | ~~`make` not installed~~ | Replaced by `scripts/build.sh`. See decisions D12. | resolved |
 | Uplink port speed unknown | MobinHost has not confirmed the server's port speed. Not blocking test-phase work. | product owner |
+| Race detector unavailable locally | `go test -race` needs cgo and there is no C compiler on the dev PC. The concurrency-critical packages (sendq, route tables, relay server) are race-tested on the Linux server instead, via `scripts/remote-test.sh`, which lands with Task 9. | Task 9 |
 | Relay not yet deployable to the server | Owner wants to test host-and-client across two PCs against the real server. `scripts/deploy.sh` lands with Task 9, when there is a relay binary to deploy. | Task 9 |
 
 ## Task ledger
@@ -26,7 +27,7 @@ Plan: `docs/superpowers/plans/2026-08-18-network-core.md`
 | 2 | Packet framing and codec | **done** | |
 | 3 | Virtual IP allocation | **done** | |
 | 4 | Routing decision (anti-spoof, room scope, broadcast drop) | **done** | |
-| 5 | Bounded per-peer send queue | not started | |
+| 5 | Bounded per-peer send queue | **done** | |
 | 6 | Session encryption with replay protection | not started | |
 | 7 | Noise NK handshake | not started | |
 | 8 | Session and room membership tables | not started | |
