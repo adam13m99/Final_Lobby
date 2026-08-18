@@ -49,3 +49,6 @@ Thumbs.db
 *.log
 logs/
 tmp/
+
+# Test bundle - contains the API token
+/dist/

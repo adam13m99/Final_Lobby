@@ -27,7 +27,9 @@ import (
 	"golang.org/x/sys/windows/svc/eventlog"
 	"golang.org/x/sys/windows/svc/mgr"
 
+	"finallobby/netservice/internal/adapter"
 	"finallobby/netservice/internal/agent"
+	"finallobby/netservice/internal/dota"
 	"finallobby/protocol/ipc"
 )
 
@@ -86,6 +88,7 @@ func runForeground(log *slog.Logger) {
 	a := agent.New(log)
 	defer a.Disconnect("service stopping")
 
+	preflight(log)
 	log.Info("running in the foreground", "pipe", ipc.PipeName)
 	if err := ipc.Listen(ctx, a.Handle, log); err != nil {
 		log.Error("ipc listener stopped", "err", err)
@@ -107,6 +110,7 @@ func (s *service) Execute(_ []string, r <-chan svc.ChangeRequest, changes chan<-
 	defer cancel()
 
 	a := agent.New(s.log)
+	preflight(s.log)
 	go func() {
 		if err := ipc.Listen(ctx, a.Handle, s.log); err != nil {
 			s.log.Error("ipc listener stopped", "err", err)
@@ -213,4 +217,20 @@ func uninstall() error {
 	}
 	_ = eventlog.Remove(serviceName)
 	return nil
+}
+
+// preflight checks the things that would otherwise only fail at the moment a
+// player tries to join a room, when they are least able to act on it. None
+// of these are fatal: the service still starts and reports what is wrong.
+func preflight(log *slog.Logger) {
+	if path, err := adapter.EnsureDriver(); err != nil {
+		log.Error("could not install the network driver", "err", err)
+	} else {
+		log.Info("network driver ready", "path", path)
+	}
+	if exe, err := dota.FindInstall(); err != nil {
+		log.Warn("Dota 2 not found; joining a room will work but launching will not", "err", err)
+	} else {
+		log.Info("found Dota 2", "path", exe)
+	}
 }

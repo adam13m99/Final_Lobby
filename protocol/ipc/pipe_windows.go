@@ -6,12 +6,14 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
 	"time"
 
 	"github.com/Microsoft/go-winio"
+	"golang.org/x/sys/windows"
 )
 
 // pipeSDDL restricts the pipe to SYSTEM, local Administrators, and
@@ -35,6 +37,13 @@ func Listen(ctx context.Context, h Handler, log *slog.Logger) error {
 		OutputBufferSize:   16 << 10,
 	})
 	if err != nil {
+		// Windows reports "Access is denied" when a pipe of this name
+		// already exists and belongs to someone else, which in practice
+		// always means a second copy of the service is running. Saying that
+		// plainly saves the next person a confused half hour.
+		if errors.Is(err, windows.ERROR_ACCESS_DENIED) {
+			return fmt.Errorf("ipc: the Final Lobby service is already running (pipe %s is taken)", PipeName)
+		}
 		return fmt.Errorf("ipc: listen %s: %w", PipeName, err)
 	}
 	go func() {

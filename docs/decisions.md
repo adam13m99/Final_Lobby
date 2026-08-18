@@ -311,3 +311,15 @@ Three tiers now. Creating or joining a room stays tight (0.5/s, burst 5): it
 allocates addresses and issues tickets, and it is what a griefer would
 automate. Managing a room you already host is 2/s with burst 15. Reading is
 5/s with burst 30.
+
+## D26 — The no-UAC promise is verified, not assumed
+
+Checked on 2026-08-19 with a de-elevated Basic User token
+(`runas /trustlevel:0x20000`): an unprivileged user ran `lobbycli connect`,
+and a Wintun adapter was created and addressed with **no elevation prompt**.
+
+That is the design working as intended - the privileged work happens inside
+the LocalSystem service, and the pipe ACL grants interactive users the right
+to ask for it (D24). It is also the single most visible everyday difference
+from the predecessor, which demanded elevation every time a player joined a
+room, so it is worth a standing check rather than an assumption.
