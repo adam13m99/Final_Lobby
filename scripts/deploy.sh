@@ -56,6 +56,16 @@ REMOTE
 
   echo "==> uploading binary"
   scp_up bin/relay /opt/finallobby/relay.new
+  # An upload can fail silently if the target is locked by a running
+  # process; comparing checksums is the only way to know it landed (D21).
+  local want got
+  want=$(sha256sum bin/relay | cut -d" " -f1)
+  got=$(ssh_run "sha256sum /opt/finallobby/relay.new | cut -d' ' -f1" | tr -dc '0-9a-f')
+  if [ "$want" != "$got" ]; then
+    echo "  FAIL upload mismatch: local $want, remote $got" >&2
+    exit 1
+  fi
+  echo "  OK   checksum verified"
   scp_up deploy/relay.service /etc/systemd/system/relay.service
 
   echo "==> installing"
