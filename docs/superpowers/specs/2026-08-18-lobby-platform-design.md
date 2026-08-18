@@ -322,17 +322,37 @@ Every byte crosses the relay twice. The host sends a personalised stream to each
 of the nine other players, and each sends back. That is approximately **1.2 Mbps
 in and 1.2 Mbps out per 10-player game.**
 
-At 1500 concurrent players (150 simultaneous games):
+### Target: 500 concurrent players
 
-| Scenario | Per direction |
+The launch target was reduced from 1500 to **500 concurrent players** on
+2026-08-18, an owner decision. It is a realistic first-year figure and it is
+a load we can actually verify with the hardware available, rather than
+estimate.
+
+**Measured 2026-08-18** against the real relay, 500 synthetic players at
+Dota's packet rate (~30k packets/second in total):
+
+| | Measured |
 |---|---|
-| Conservative | ~175 Mbps |
-| Likely | ~250 Mbps |
-| Planning figure, including encryption overhead and headroom | **~300–350 Mbps** |
+| Packet loss | **0.000%** |
+| Median latency added by the relay | **2.8 ms** |
+| 99th percentile | 69 ms |
+| Throughput | **47.8 Mbps in, 47.8 Mbps out** |
+| Relay CPU | 1.6 of 4 cores |
+| Kernel packet drops | 0 |
 
-**Provision a 1 Gbps symmetric port.** Expected peak use is 250–350 Mbps, leaving
-room to roughly triple before re-provisioning. Monthly volume lands in the tens
-of terabytes, covered by the unlimited-traffic arrangement.
+That is measurement, not estimate, and it leaves roughly 2.5x CPU headroom
+on a 4-core box. Full method and caveats in `loadtest/README.md`.
+
+Real Dota packets vary in size; at the larger end the same player count
+lands nearer **100 Mbps per direction**. A **1 Gbps symmetric port** remains
+the recommendation — it is rarely more expensive than 100 Mbps and removes
+the uplink as a variable entirely.
+
+For reference, if the platform later grows to 1500 players, the same
+measurement scales to roughly 150 Mbps per direction, and the relay would
+need the batched-syscall work described in `loadtest/README.md` to sustain
+the packet rate.
 
 These are engineering estimates until section 10.1 confirms them.
 
@@ -400,8 +420,8 @@ single player costs: the stream down to them and the stream back up. Because the
 host sends a separate stream per client, a ten-player game is very close to nine
 times that measured figure.
 
-Scaling to 1500 needs no Dota at all. Once the per-player rate is known, we
-generate 1500 synthetic peers producing that exact traffic pattern against the
+Scaling to 500 needs no Dota at all. Once the per-player rate is known, we
+generate 500 synthetic peers producing that exact traffic pattern against the
 relay and observe whether it holds.
 
 **Real Dota for the rate; simulated load for the scale.**

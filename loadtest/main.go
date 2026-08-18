@@ -2,7 +2,7 @@
 //
 // It answers two questions the two-PC physical test cannot:
 //
-//	1. Does the relay hold at 1500 concurrent players?
+//	1. Does the relay hold at the target concurrent player count?
 //	2. What throughput does that require?
 //
 // Each synthetic peer completes a real Noise handshake and sends real
@@ -11,7 +11,7 @@
 //
 // Usage:
 //
-//	loadtest -relay 127.0.0.1:9443 -relay-pub <hex> -peers 1500 \
+//	loadtest -relay 127.0.0.1:9443 -relay-pub <hex> -peers 500 \
 //	         -pps 60 -packet-size 200 -duration 120s
 package main
 
@@ -64,7 +64,7 @@ func (s *stats) record(d time.Duration) {
 func main() {
 	relayAddr := flag.String("relay", "127.0.0.1:9443", "relay UDP address")
 	relayPub := flag.String("relay-pub", "", "hex relay static public key")
-	peers := flag.Int("peers", 1500, "number of synthetic peers")
+	peers := flag.Int("peers", 500, "number of synthetic peers")
 	pps := flag.Int("pps", 60, "packets per second per peer")
 	size := flag.Int("packet-size", 200, "inner packet size in bytes")
 	duration := flag.Duration("duration", 60*time.Second, "test duration")

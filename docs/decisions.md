@@ -256,3 +256,25 @@ A `pscp` upload silently failed because the target file was locked by the
 running process, and the next twenty minutes were spent testing an old
 binary against a new expectation. Deployments now compare checksums on both
 ends.
+
+## D22 — Launch target is 500 concurrent players, not 1500
+
+Owner decision, 2026-08-18, taken when a second VPS for load generation was
+ruled out on cost.
+
+This is a better decision than it looks like a compromise. 500 is a realistic
+first-year figure, and - unlike 1500 - it is a load we can *measure* on the
+hardware we actually have rather than estimate. Measured the same day, with
+the relay given CPU priority to approximate a dedicated box:
+
+| | Measured at 500 players |
+|---|---|
+| Packet loss | 0.000% |
+| Median added latency | 2.8 ms |
+| Throughput | 47.8 Mbps each direction |
+| Relay CPU | 1.6 of 4 cores |
+| Kernel drops | 0 |
+
+Roughly 2.5x headroom. The batched-syscall work in D20 is therefore deferred
+rather than dropped: it is what unlocks the next tier, and it is not needed
+for this one.

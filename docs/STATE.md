@@ -5,7 +5,7 @@ this file is a convenience index, not an authority.
 
 ## Current phase
 
-Sub-project 1: network core. **In progress — Tasks 1-15 landed. Relay deployed and load-tested; only the two-PC acceptance test (16) remains, plus the stub coordinator and service entrypoint it needs.**
+Sub-project 1: network core. **In progress — Tasks 1-15 landed. Relay deployed and verified at the 500-player target; only the two-PC acceptance test (16) remains, plus the stub coordinator and service entrypoint it needs.**
 
 ## Blockers
 
@@ -14,8 +14,8 @@ Sub-project 1: network core. **In progress — Tasks 1-15 landed. Relay deployed
 | ~~Go not installed~~ | Resolved 2026-08-18. Go 1.26.6 extracted to `C:\Users\Mcc\sdk\go` (no admin rights needed), fetched from the Aliyun mirror and verified against go.dev's own SHA-256. `scripts/env.sh` puts it on PATH for every script. See decisions D11. | resolved |
 | ~~`make` not installed~~ | Replaced by `scripts/build.sh`. See decisions D12. | resolved |
 | Uplink port speed unknown | MobinHost has not confirmed the server's port speed. Deferred by the owner until the product works. | product owner |
-| No second machine for load generation | The 1500-player capacity question cannot be answered while the load generator shares the relay's 4 cores. Needs a second cheap VPS for a few hours. See `loadtest/README.md`. | product owner |
-| Data plane not using batched syscalls | One `sendto`/`recvfrom` per packet caps the relay near 20-30k pps. `recvmmsg`/`sendmmsg` batching is the standard fix and the highest-value data-plane work left. Not blocking the two-PC test. | open |
+| ~~No second machine for load generation~~ | Resolved differently: the owner set the target to 500 concurrent players (2026-08-18), which is verifiable on this box. Measured 0.000% loss, 2.8 ms median, 1.6 of 4 cores used. No second VPS needed. | resolved |
+| Data plane not using batched syscalls | One `sendto`/`recvfrom` per packet caps the relay near 30k pps, which covers the 500-player target with headroom but not much beyond it. `recvmmsg`/`sendmmsg` batching is the standard fix. Deferred: not needed at the current target. | deferred |
 | Race detector unavailable locally | `go test -race` needs cgo and there is no C compiler on the dev PC. Run it on the Linux server, which has one. Not yet scripted. | open |
 | ~~Relay not deployable~~ | Resolved 2026-08-18. `scripts/deploy.sh` builds, uploads and restarts it under systemd. Live on UDP 443 at 87.107.110.199, verified reachable from the dev PC at 4-8 ms. | resolved |
 
