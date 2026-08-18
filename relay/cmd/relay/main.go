@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"finallobby/protocol/crypto"
 	"finallobby/relay/internal/server"
@@ -21,6 +22,8 @@ func main() {
 	coordinator := flag.String("coordinator", "http://127.0.0.1:7001", "coordinator base URL")
 	allowMulticast := flag.Bool("allow-multicast", false, "re-enable room-scoped multicast fanout (see docs/decisions.md D1)")
 	queueDepth := flag.Int("queue-depth", 256, "per-peer send queue depth in packets")
+	readers := flag.Int("readers", 0, "socket reader goroutines (0 = one per CPU)")
+	statsEvery := flag.Duration("stats-every", 30*time.Second, "how often to log packet counters (0 to disable)")
 	devTickets := flag.Bool("dev-unsigned-tickets", false, "TESTING ONLY: accept unsigned roomID|virtualIP tickets")
 	genKey := flag.Bool("genkey", false, "print a fresh static keypair and exit")
 	flag.Parse()
@@ -52,6 +55,7 @@ func main() {
 		StaticPriv:     priv,
 		AllowMulticast: *allowMulticast,
 		QueueDepth:     *queueDepth,
+		Readers:        *readers,
 		ValidateTicket: validate,
 	})
 	if err != nil {
@@ -67,6 +71,10 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	if *statsEvery > 0 {
+		go logStats(ctx, srv, *statsEvery)
+	}
 
 	slog.Info("relay listening",
 		"addr", srv.LocalAddr().String(),
@@ -103,4 +111,32 @@ func loadStaticKey(spec string) ([]byte, error) {
 		return nil, fmt.Errorf("static key must be 32 bytes (64 hex characters), got %d", len(priv))
 	}
 	return priv, nil
+}
+
+// logStats prints the packet counters periodically. Attributing loss to a
+// specific cause - a full queue, a refused route, a failed authentication -
+// is what makes a capacity problem diagnosable instead of mysterious.
+func logStats(ctx context.Context, srv *server.Server, every time.Duration) {
+	t := time.NewTicker(every)
+	defer t.Stop()
+	st := srv.Stats()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+		slog.Info("relay stats",
+			"peers", srv.Table().Count(),
+			"handshakes", st.Handshakes.Load(),
+			"handshake_rejected", st.HandshakeBad.Load(),
+			"data_in", st.DataIn.Load(),
+			"forwarded", st.Forwarded.Load(),
+			"fanned_out", st.FannedOut.Load(),
+			"auth_failed", st.AuthFailed.Load(),
+			"dropped_route", st.DroppedRoute.Load(),
+			"dropped_queue", st.DroppedQueue.Load(),
+			"write_errors", st.WriteErrors.Load(),
+		)
+	}
 }

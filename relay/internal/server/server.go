@@ -16,7 +16,9 @@ import (
 	"log/slog"
 	"net"
 	"net/netip"
+	"runtime"
 	"sync"
+	"sync/atomic"
 
 	"finallobby/protocol/crypto"
 	"finallobby/relay/internal/route"
@@ -44,6 +46,30 @@ type Config struct {
 	// safe for concurrent use.
 	ValidateTicket func(ticket []byte) (TicketClaims, error)
 	Logger         *slog.Logger
+	// SocketBuffer is the requested kernel socket buffer size in bytes for
+	// both directions. The default 208 KB holds roughly ten milliseconds of
+	// traffic at full load, so any scheduling hiccup becomes packet loss
+	// the application never even sees. The kernel silently caps the request
+	// at net.core.rmem_max, so what was actually granted is logged.
+	SocketBuffer int
+	// Readers is how many goroutines pull from the socket in parallel.
+	// Defaults to the CPU count. Each one decrypts and routes independently.
+	Readers int
+}
+
+// Stats are the relay's packet counters. Attributing loss to a specific
+// cause is the difference between diagnosing a capacity problem and
+// guessing at one.
+type Stats struct {
+	Handshakes   atomic.Uint64
+	HandshakeBad atomic.Uint64
+	DataIn       atomic.Uint64
+	AuthFailed   atomic.Uint64
+	Forwarded    atomic.Uint64
+	FannedOut    atomic.Uint64
+	DroppedRoute atomic.Uint64 // spoofed, broadcast, cross-room, unknown peer
+	DroppedQueue atomic.Uint64 // peer send queue was full
+	WriteErrors  atomic.Uint64
 }
 
 // Server is the relay.
@@ -53,9 +79,13 @@ type Server struct {
 	table    *route.Table
 	log      *slog.Logger
 	sessions sync.Map // sessionID (uint32) -> *crypto.Session
+	stats    Stats
 
 	wg sync.WaitGroup
 }
+
+// Stats returns the live counters.
+func (s *Server) Stats() *Stats { return &s.stats }
 
 func New(cfg Config) (*Server, error) {
 	if cfg.ValidateTicket == nil {
@@ -70,6 +100,12 @@ func New(cfg Config) (*Server, error) {
 	if cfg.Logger == nil {
 		cfg.Logger = slog.Default()
 	}
+	if cfg.Readers <= 0 {
+		cfg.Readers = runtime.NumCPU()
+	}
+	if cfg.SocketBuffer <= 0 {
+		cfg.SocketBuffer = 8 << 20 // 8 MiB
+	}
 	addr, err := net.ResolveUDPAddr("udp", cfg.Listen)
 	if err != nil {
 		return nil, fmt.Errorf("server: resolve %q: %w", cfg.Listen, err)
@@ -78,6 +114,19 @@ func New(cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("server: listen: %w", err)
 	}
+	// Best effort: a kernel that refuses the size still gives us a working
+	// relay, just a more loss-prone one, so this is logged and not fatal.
+	if err := conn.SetReadBuffer(cfg.SocketBuffer); err != nil {
+		cfg.Logger.Warn("could not set socket read buffer", "want", cfg.SocketBuffer, "err", err)
+	}
+	if err := conn.SetWriteBuffer(cfg.SocketBuffer); err != nil {
+		cfg.Logger.Warn("could not set socket write buffer", "want", cfg.SocketBuffer, "err", err)
+	}
+	if got := actualReadBuffer(conn); got > 0 && got < cfg.SocketBuffer {
+		cfg.Logger.Warn("kernel capped the socket read buffer - raise net.core.rmem_max",
+			"requested", cfg.SocketBuffer, "granted", got)
+	}
+
 	return &Server{
 		cfg:   cfg,
 		conn:  conn,
@@ -92,8 +141,16 @@ func (s *Server) LocalAddr() netip.AddrPort {
 
 func (s *Server) Table() *route.Table { return s.table }
 
-// Serve runs the read loop until ctx is cancelled, then waits for every
+// Serve runs the read loops until ctx is cancelled, then waits for every
 // per-peer writer to finish.
+//
+// Reads are spread across several goroutines on the same socket. One reader
+// caps out around 50,000 packets per second on a modest core - measured on
+// the 4-core development box - because every datagram costs a ChaCha20
+// decrypt before it can be routed. At 1500 players that ceiling produced
+// 43% loss and multi-second latency. Reader count scales with CPUs, a small
+// fixed number, so the rule that goroutines never scale with packet rate
+// still holds.
 func (s *Server) Serve(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -105,23 +162,37 @@ func (s *Server) Serve(ctx context.Context) error {
 		close(closed)
 	}()
 
+	var readers sync.WaitGroup
+	for i := 0; i < s.cfg.Readers; i++ {
+		readers.Add(1)
+		go func() {
+			defer readers.Done()
+			s.readLoop(ctx)
+		}()
+	}
+	readers.Wait()
+
+	cancel()
+	<-closed
+	s.wg.Wait()
+	return nil
+}
+
+// readLoop pulls datagrams off the shared socket. Concurrent reads on one
+// UDP socket are safe; the kernel hands each datagram to exactly one waiter.
+func (s *Server) readLoop(ctx context.Context) {
 	buf := make([]byte, maxDatagram)
 	for {
 		n, from, err := s.conn.ReadFromUDPAddrPort(buf)
 		if err != nil {
 			if ctx.Err() != nil {
-				break
+				return
 			}
 			s.log.Warn("read error", "err", err)
 			continue
 		}
 		s.handle(ctx, buf[:n], from)
 	}
-
-	cancel()
-	<-closed
-	s.wg.Wait()
-	return nil
 }
 
 // handle dispatches on the packet type. Every datagram carries a wire
@@ -149,11 +220,13 @@ func (s *Server) handle(ctx context.Context, pkt []byte, from netip.AddrPort) {
 func (s *Server) handleHandshake(ctx context.Context, msg1 []byte, from netip.AddrPort) {
 	ticket, reply, err := crypto.ServerHandshake(s.cfg.StaticPriv, msg1)
 	if err != nil {
+		s.stats.HandshakeBad.Add(1)
 		s.log.Debug("handshake rejected", "from", from)
 		return
 	}
 	claims, err := s.cfg.ValidateTicket(ticket)
 	if err != nil {
+		s.stats.HandshakeBad.Add(1)
 		s.log.Debug("ticket rejected", "from", from)
 		return
 	}
@@ -212,22 +285,27 @@ func (s *Server) handleHandshake(ctx context.Context, msg1 []byte, from netip.Ad
 		defer s.wg.Done()
 		s.writeLoop(ctx, peer, sess)
 	}()
-	s.log.Info("peer connected", "vip", claims.VirtualIP, "room", claims.RoomID, "session", sessionID)
+	s.stats.Handshakes.Add(1)
+	s.log.Debug("peer connected", "vip", claims.VirtualIP, "room", claims.RoomID, "session", sessionID)
 }
 
 func (s *Server) handleData(h wire.Header, pkt []byte, from netip.AddrPort) {
+	s.stats.DataIn.Add(1)
 	sender, peer, ok := s.table.SenderFor(h.SessionID)
 	if !ok {
+		s.stats.DroppedRoute.Add(1)
 		return
 	}
 	sessAny, ok := s.sessions.Load(h.SessionID)
 	if !ok {
+		s.stats.DroppedRoute.Add(1)
 		return
 	}
 	sess := sessAny.(*crypto.Session)
 
 	_, inner, err := sess.Open(pkt)
 	if err != nil {
+		s.stats.AuthFailed.Add(1)
 		return
 	}
 	// Keep the peer's remote address current so NAT rebinding survives.
@@ -239,17 +317,24 @@ func (s *Server) handleData(h wire.Header, pkt []byte, from netip.AddrPort) {
 	case route.VerdictForward:
 		dst, ok := s.table.ForwardTarget(decision.Dst, sender.RoomID)
 		if !ok {
+			s.stats.DroppedRoute.Add(1)
 			return // unknown peer, or a different room: drop
 		}
-		dst.Queue.Push(inner)
+		if dst.Queue.Push(inner) {
+			s.stats.DroppedQueue.Add(1)
+		}
+		s.stats.Forwarded.Add(1)
 	case route.VerdictFanout:
 		for _, m := range s.table.RoomMembers(sender.RoomID) {
 			if m.SessionID != peer.SessionID {
-				m.Queue.Push(inner)
+				if m.Queue.Push(inner) {
+					s.stats.DroppedQueue.Add(1)
+				}
 			}
 		}
+		s.stats.FannedOut.Add(1)
 	default:
-		// dropped
+		s.stats.DroppedRoute.Add(1)
 	}
 }
 
@@ -283,6 +368,7 @@ func (s *Server) writeLoop(ctx context.Context, peer *route.Peer, sess *crypto.S
 			continue
 		}
 		if _, err := s.conn.WriteToUDPAddrPort(out, peer.Remote()); err != nil {
+			s.stats.WriteErrors.Add(1)
 			s.log.Debug("write failed", "vip", peer.VirtualIP, "err", err)
 		}
 	}
@@ -300,4 +386,18 @@ func newSessionID() (uint32, error) {
 			return id, nil
 		}
 	}
+}
+
+// actualReadBuffer reports the receive buffer the kernel really gave us.
+// Linux returns double the requested value, so it is halved back here.
+func actualReadBuffer(conn *net.UDPConn) int {
+	raw, err := conn.SyscallConn()
+	if err != nil {
+		return 0
+	}
+	var size int
+	_ = raw.Control(func(fd uintptr) {
+		size, _ = getSockoptRcvbuf(fd)
+	})
+	return size
 }

@@ -206,3 +206,53 @@ international access) and verified locally by its Authenticode signature -
 `CN=WireGuard LLC`, issued by DigiCert EV Code Signing CA, signature status
 Valid. That check is stronger than comparing against a hash published on a
 site we cannot reach.
+
+## D18 — The relay reads on one goroutine per CPU, not one goroutine total
+
+Measured 2026-08-18. A single reader goroutine pinned one core and capped the
+relay near 50k packets per second, because every datagram costs a ChaCha20
+decrypt before it can be routed. At 1500 synthetic players that produced 43%
+loss and multi-second latency while three of four cores sat idle.
+
+Concurrent reads on one UDP socket are safe; the kernel hands each datagram
+to exactly one waiter. Reader count scales with CPUs - a small fixed number -
+so the rule that goroutines never scale with packet rate still holds.
+
+## D19 — The relay sets an 8 MB socket buffer and says so when the kernel refuses
+
+The kernel default of 208 KB holds roughly ten milliseconds of traffic at
+load. `netstat -su` on the dev server showed 1,084,680 receive-buffer errors:
+packets the relay never saw and could not count.
+
+The relay now requests 8 MB in both directions and logs a warning naming
+`net.core.rmem_max` when the kernel grants less - silent truncation of a
+buffer request is exactly the kind of invisible failure that wastes days.
+
+`net.core.rmem_max` was raised to 16 MB on the dev server via
+`/etc/sysctl.d/99-finallobby.conf`. Only the ceiling changed; per-socket
+defaults are untouched, so nginx, CoreDNS and WireGuard behave exactly as
+before.
+
+## D20 — Peer count is not the scaling limit; packet rate is
+
+The measurement that matters, from `loadtest/README.md`:
+
+- 1500 peers at 12 pps: **zero** loss, 613 µs median, all 1500 handshakes
+  succeeded, no queue drops, no routing drops.
+- 300 peers at 300 pps: 47% loss.
+
+Same relay, same box. The relay does not care how many players exist; it
+cares how many packets per second arrive. This is the evidence that the
+ancestor's collapse-as-players-join failure is designed out rather than
+merely postponed.
+
+It also redirects future optimisation. Work that reduces per-player cost is
+not worth doing; work that reduces per-packet cost - batched syscalls above
+all - is where the remaining headroom is.
+
+## D21 — Always verify an upload by checksum
+
+A `pscp` upload silently failed because the target file was locked by the
+running process, and the next twenty minutes were spent testing an old
+binary against a new expectation. Deployments now compare checksums on both
+ends.
