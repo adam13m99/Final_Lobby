@@ -323,3 +323,37 @@ the LocalSystem service, and the pipe ACL grants interactive users the right
 to ask for it (D24). It is also the single most visible everyday difference
 from the predecessor, which demanded elevation every time a player joined a
 room, so it is worth a standing check rather than an assumption.
+
+## D27 — The prototype UI is a local web page served by a process in the player's session
+
+Rejected: Tauri, which the spec names. It needs a Rust toolchain and a Node
+build, both large downloads over a connection that blocks a lot of the
+internet, and the point of this build is to get two people playing tonight -
+not to spend the evening on toolchains. Tauri remains the right choice for
+sub-project 3.
+
+Also rejected: a native Windows GUI. Every reasonable Go option needs cgo,
+and there is no C compiler on this machine (see D18's neighbours - the same
+constraint blocks the race detector).
+
+`lobbyapp` serves a small page on 127.0.0.1 on a random port and opens the
+browser at it. Pure Go, no toolchain, and the UI is easy to change.
+
+**This is not the mistake D6 warns about.** That was a *privileged* agent on
+localhost, so any web page a player visited could drive it as Administrator.
+This process has exactly the rights the player already has, requires a random
+per-run token, and refuses cross-origin callers. A hostile page gains nothing
+it could not get by running a program as the user. The privileged half stays
+in the service, behind the named pipe.
+
+## D28 — The installer must survive a half-removed install
+
+Found by running it: after uninstalling, the service entry lingered - Windows
+keeps one registered until every handle closes - while its executable was
+already gone. The installer then tried to run the missing binary to clean up,
+and stopped with a path error.
+
+It now handles the service and its executable disappearing independently,
+falls back to `sc.exe delete`, and waits for the registration to clear before
+creating the new one. A second install attempt is exactly the state a
+frustrated person reaches, so it has to work.

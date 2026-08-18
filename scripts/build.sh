@@ -36,9 +36,10 @@ case "$target" in
   all|relay)       build relay       relay          linux   cmd/relay ;;&
   all|coordinator) build coordinator coordinator    linux   cmd/coordinator ;;&
   all|netservice)  build netservice  netservice.exe windows cmd/netservice ;;&
+  all|lobbyapp)    build lobbyapp    lobbyapp.exe   windows . ;;&
   all|lobbycli)    build lobbycli    lobbycli.exe   windows . ;;&
   all|loadtest)    build loadtest    loadtest       linux   . ;;&
-  all|relay|coordinator|netservice|lobbycli|loadtest) ;;
+  all|relay|coordinator|netservice|lobbyapp|lobbycli|loadtest) ;;
   *) echo "unknown target: $target" >&2; exit 2 ;;
 esac
 

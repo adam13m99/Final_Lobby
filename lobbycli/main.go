@@ -30,8 +30,10 @@ import (
 	"strings"
 	"time"
 
-	"finallobby/protocol/ipc"
+	"finallobby/client/lobby"
+	"finallobby/client/session"
 	"finallobby/protocol/crypto"
+	"finallobby/protocol/ipc"
 	"finallobby/protocol/wire"
 )
 
@@ -115,7 +117,7 @@ func cmdSetup(args []string) error {
 	nick := fs.String("nick", "", "in-game nickname (defaults to the player ID)")
 	_ = fs.Parse(args)
 
-	cfg, err := loadConfig()
+	cfg, err := session.Load()
 	if err != nil {
 		return err
 	}
@@ -137,12 +139,12 @@ func cmdSetup(args []string) error {
 	if cfg.Coordinator == "" || cfg.PlayerID == "" {
 		return fmt.Errorf("-coordinator and -player are both required")
 	}
-	if err := cfg.save(); err != nil {
+	if err := cfg.Save(); err != nil {
 		return err
 	}
 
 	// Prove it works now rather than at the worst moment.
-	if _, err := newAPI(cfg).listRooms(); err != nil {
+	if _, err := lobby.New(cfg.Coordinator, cfg.AuthToken).ListRooms(); err != nil {
 		return fmt.Errorf("saved, but the coordinator is not answering: %w", err)
 	}
 	fmt.Printf("Saved. You are %q talking to %s\n", cfg.PlayerID, cfg.Coordinator)
@@ -150,14 +152,14 @@ func cmdSetup(args []string) error {
 }
 
 func cmdRooms() error {
-	cfg, err := loadConfig()
+	cfg, err := session.Load()
 	if err != nil {
 		return err
 	}
-	if err := cfg.requireLogin(); err != nil {
+	if err := cfg.RequireLogin(); err != nil {
 		return err
 	}
-	rooms, err := newAPI(cfg).listRooms()
+	rooms, err := lobby.New(cfg.Coordinator, cfg.AuthToken).ListRooms()
 	if err != nil {
 		return err
 	}
@@ -178,19 +180,19 @@ func cmdCreate(args []string) error {
 	name := fs.String("name", "", "room name")
 	_ = fs.Parse(args)
 
-	cfg, err := loadConfig()
+	cfg, err := session.Load()
 	if err != nil {
 		return err
 	}
-	if err := cfg.requireLogin(); err != nil {
+	if err := cfg.RequireLogin(); err != nil {
 		return err
 	}
-	info, err := newAPI(cfg).createRoom(cfg.PlayerID, *name)
+	info, err := lobby.New(cfg.Coordinator, cfg.AuthToken).CreateRoom(cfg.PlayerID, *name)
 	if err != nil {
 		return err
 	}
 	storeRoom(cfg, info)
-	if err := cfg.save(); err != nil {
+	if err := cfg.Save(); err != nil {
 		return err
 	}
 	fmt.Printf("Room %s created. You are the host at %s.\n", info.RoomID, info.VirtualIP)
@@ -202,19 +204,19 @@ func cmdJoin(args []string) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: lobbycli join <room-id>")
 	}
-	cfg, err := loadConfig()
+	cfg, err := session.Load()
 	if err != nil {
 		return err
 	}
-	if err := cfg.requireLogin(); err != nil {
+	if err := cfg.RequireLogin(); err != nil {
 		return err
 	}
-	info, err := newAPI(cfg).joinRoom(args[0], cfg.PlayerID)
+	info, err := lobby.New(cfg.Coordinator, cfg.AuthToken).JoinRoom(args[0], cfg.PlayerID)
 	if err != nil {
 		return err
 	}
 	storeRoom(cfg, info)
-	if err := cfg.save(); err != nil {
+	if err := cfg.Save(); err != nil {
 		return err
 	}
 	fmt.Printf("Joined %s as slot %d. Your address is %s; the host is at %s.\n",
@@ -223,7 +225,7 @@ func cmdJoin(args []string) error {
 	return nil
 }
 
-func storeRoom(cfg *Config, info *connectInfo) {
+func storeRoom(cfg *session.Config, info *lobby.ConnectInfo) {
 	cfg.RoomID = info.RoomID
 	cfg.VirtualIP = info.VirtualIP
 	cfg.HostIP = info.HostIP
@@ -235,11 +237,11 @@ func storeRoom(cfg *Config, info *connectInfo) {
 }
 
 func cmdConnect() error {
-	cfg, err := loadConfig()
+	cfg, err := session.Load()
 	if err != nil {
 		return err
 	}
-	if err := cfg.requireRoom(); err != nil {
+	if err := cfg.RequireRoom(); err != nil {
 		return err
 	}
 
@@ -298,7 +300,7 @@ func cmdDisconnect() error {
 }
 
 func cmdStatus() error {
-	cfg, err := loadConfig()
+	cfg, err := session.Load()
 	if err != nil {
 		return err
 	}
@@ -312,7 +314,7 @@ func cmdStatus() error {
 	fmt.Println()
 
 	if cfg.RoomID != "" {
-		if rv, err := newAPI(cfg).getRoom(cfg.RoomID); err == nil {
+		if rv, err := lobby.New(cfg.Coordinator, cfg.AuthToken).GetRoom(cfg.RoomID); err == nil {
 			fmt.Printf("room status %s\n", rv.Status)
 			fmt.Printf("players     %s\n", strings.Join(rv.Players, ", "))
 		}
@@ -346,11 +348,11 @@ func cmdPlay(args []string) error {
 	team := fs.String("team", "good", "good, bad or spec")
 	_ = fs.Parse(args)
 
-	cfg, err := loadConfig()
+	cfg, err := session.Load()
 	if err != nil {
 		return err
 	}
-	if err := cfg.requireRoom(); err != nil {
+	if err := cfg.RequireRoom(); err != nil {
 		return err
 	}
 
@@ -394,14 +396,14 @@ func cmdPlay(args []string) error {
 }
 
 func cmdStatusChange(status string) error {
-	cfg, err := loadConfig()
+	cfg, err := session.Load()
 	if err != nil {
 		return err
 	}
-	if err := cfg.requireRoom(); err != nil {
+	if err := cfg.RequireRoom(); err != nil {
 		return err
 	}
-	if err := newAPI(cfg).setStatus(cfg.RoomID, cfg.PlayerID, status); err != nil {
+	if err := lobby.New(cfg.Coordinator, cfg.AuthToken).SetStatus(cfg.RoomID, cfg.PlayerID, status); err != nil {
 		return err
 	}
 	fmt.Printf("Room %s is now %s.\n", cfg.RoomID, status)
@@ -412,14 +414,14 @@ func cmdKick(args []string) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: lobbycli kick <player>")
 	}
-	cfg, err := loadConfig()
+	cfg, err := session.Load()
 	if err != nil {
 		return err
 	}
-	if err := cfg.requireRoom(); err != nil {
+	if err := cfg.RequireRoom(); err != nil {
 		return err
 	}
-	if err := newAPI(cfg).kick(cfg.RoomID, cfg.PlayerID, args[0]); err != nil {
+	if err := lobby.New(cfg.Coordinator, cfg.AuthToken).Kick(cfg.RoomID, cfg.PlayerID, args[0]); err != nil {
 		return err
 	}
 	fmt.Printf("%s removed. They cannot rejoin for 5 minutes.\n", args[0])
@@ -427,14 +429,14 @@ func cmdKick(args []string) error {
 }
 
 func cmdLeave() error {
-	cfg, err := loadConfig()
+	cfg, err := session.Load()
 	if err != nil {
 		return err
 	}
-	if err := cfg.requireRoom(); err != nil {
+	if err := cfg.RequireRoom(); err != nil {
 		return err
 	}
-	if err := newAPI(cfg).leaveRoom(cfg.RoomID, cfg.PlayerID); err != nil {
+	if err := lobby.New(cfg.Coordinator, cfg.AuthToken).LeaveRoom(cfg.RoomID, cfg.PlayerID); err != nil {
 		return err
 	}
 	// Drop the tunnel too. Leaving the room but keeping the adapter up is
@@ -443,8 +445,8 @@ func cmdLeave() error {
 		fmt.Fprintf(os.Stderr, "note: could not reach the service to disconnect: %v\n", err)
 	}
 	room := cfg.RoomID
-	cfg.clearRoom()
-	if err := cfg.save(); err != nil {
+	cfg.ClearRoom()
+	if err := cfg.Save(); err != nil {
 		return err
 	}
 	fmt.Printf("Left %s.\n", room)
@@ -463,7 +465,7 @@ func cmdProbe(args []string) error {
 	timeout := fs.Duration("timeout", 5*time.Second, "per-attempt timeout")
 	_ = fs.Parse(args)
 
-	cfg, _ := loadConfig()
+	cfg, _ := session.Load()
 	if *relayAddr == "" && cfg != nil {
 		*relayAddr = cfg.RelayAddr
 	}

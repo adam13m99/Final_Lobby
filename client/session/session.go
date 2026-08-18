@@ -1,4 +1,4 @@
-package main
+package session
 
 import (
 	"encoding/json"
@@ -30,7 +30,7 @@ type Config struct {
 	IsHost    bool   `json:"is_host,omitempty"`
 }
 
-func configPath() string {
+func Path() string {
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		dir = "."
@@ -38,9 +38,9 @@ func configPath() string {
 	return filepath.Join(dir, "FinalLobby", "lobbycli.json")
 }
 
-func loadConfig() (*Config, error) {
+func Load() (*Config, error) {
 	cfg := &Config{}
-	data, err := os.ReadFile(configPath())
+	data, err := os.ReadFile(Path())
 	if err != nil {
 		if os.IsNotExist(err) {
 			return cfg, nil
@@ -48,13 +48,13 @@ func loadConfig() (*Config, error) {
 		return nil, err
 	}
 	if err := json.Unmarshal(data, cfg); err != nil {
-		return nil, fmt.Errorf("config at %s is corrupt: %w", configPath(), err)
+		return nil, fmt.Errorf("config at %s is corrupt: %w", Path(), err)
 	}
 	return cfg, nil
 }
 
-func (c *Config) save() error {
-	p := configPath()
+func (c *Config) Save() error {
+	p := Path()
 	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
 		return err
 	}
@@ -67,7 +67,7 @@ func (c *Config) save() error {
 }
 
 // clearRoom forgets the current room without forgetting who you are.
-func (c *Config) clearRoom() {
+func (c *Config) ClearRoom() {
 	c.RoomID = ""
 	c.VirtualIP = ""
 	c.HostIP = ""
@@ -76,15 +76,15 @@ func (c *Config) clearRoom() {
 	c.IsHost = false
 }
 
-func (c *Config) requireLogin() error {
+func (c *Config) RequireLogin() error {
 	if c.Coordinator == "" || c.PlayerID == "" {
 		return fmt.Errorf("run `lobbycli setup` first")
 	}
 	return nil
 }
 
-func (c *Config) requireRoom() error {
-	if err := c.requireLogin(); err != nil {
+func (c *Config) RequireRoom() error {
+	if err := c.RequireLogin(); err != nil {
 		return err
 	}
 	if c.RoomID == "" {

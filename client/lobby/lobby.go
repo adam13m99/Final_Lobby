@@ -1,4 +1,4 @@
-package main
+package lobby
 
 import (
 	"bytes"
@@ -11,20 +11,20 @@ import (
 )
 
 // connectInfo mirrors what the coordinator returns from create and join.
-type connectInfo struct {
-	RoomID     string `json:"room_id"`
-	Slot       int    `json:"slot"`
-	IsHost     bool   `json:"is_host"`
-	VirtualIP  string `json:"virtual_ip"`
-	HostIP     string `json:"host_ip"`
-	Subnet     string `json:"subnet"`
-	Ticket     string `json:"ticket"`
-	RelayAddr  string `json:"relay_addr"`
-	RelayPub   string `json:"relay_pub"`
+type ConnectInfo struct {
+	RoomID      string `json:"room_id"`
+	Slot        int    `json:"slot"`
+	IsHost      bool   `json:"is_host"`
+	VirtualIP   string `json:"virtual_ip"`
+	HostIP      string `json:"host_ip"`
+	Subnet      string `json:"subnet"`
+	Ticket      string `json:"ticket"`
+	RelayAddr   string `json:"relay_addr"`
+	RelayPub    string `json:"relay_pub"`
 	DotaConnect string `json:"dota_connect"`
 }
 
-type roomView struct {
+type RoomView struct {
 	ID      string   `json:"id"`
 	Name    string   `json:"name"`
 	Status  string   `json:"status"`
@@ -33,21 +33,21 @@ type roomView struct {
 	Free    int      `json:"free_slots"`
 }
 
-type apiClient struct {
+type Client struct {
 	base  string
 	token string
 	http  *http.Client
 }
 
-func newAPI(cfg *Config) *apiClient {
-	return &apiClient{
-		base:  strings.TrimRight(cfg.Coordinator, "/"),
-		token: cfg.AuthToken,
+func New(coordinator, token string) *Client {
+	return &Client{
+		base:  strings.TrimRight(coordinator, "/"),
+		token: token,
 		http:  &http.Client{Timeout: 15 * time.Second},
 	}
 }
 
-func (c *apiClient) do(method, path string, body any, out any) error {
+func (c *Client) do(method, path string, body any, out any) error {
 	var rdr io.Reader
 	if body != nil {
 		buf, err := json.Marshal(body)
@@ -111,42 +111,42 @@ func friendly(code int, msg string) string {
 	return msg
 }
 
-func (c *apiClient) createRoom(playerID, name string) (*connectInfo, error) {
-	var info connectInfo
+func (c *Client) CreateRoom(playerID, name string) (*ConnectInfo, error) {
+	var info ConnectInfo
 	err := c.do("POST", "/v1/rooms", map[string]string{"player_id": playerID, "name": name}, &info)
 	return &info, err
 }
 
-func (c *apiClient) joinRoom(roomID, playerID string) (*connectInfo, error) {
-	var info connectInfo
+func (c *Client) JoinRoom(roomID, playerID string) (*ConnectInfo, error) {
+	var info ConnectInfo
 	err := c.do("POST", "/v1/rooms/"+roomID+"/join", map[string]string{"player_id": playerID}, &info)
 	return &info, err
 }
 
-func (c *apiClient) listRooms() ([]roomView, error) {
+func (c *Client) ListRooms() ([]RoomView, error) {
 	var out struct {
-		Rooms []roomView `json:"rooms"`
+		Rooms []RoomView `json:"rooms"`
 	}
 	err := c.do("GET", "/v1/rooms", nil, &out)
 	return out.Rooms, err
 }
 
-func (c *apiClient) getRoom(roomID string) (*roomView, error) {
-	var rv roomView
+func (c *Client) GetRoom(roomID string) (*RoomView, error) {
+	var rv RoomView
 	err := c.do("GET", "/v1/rooms/"+roomID, nil, &rv)
 	return &rv, err
 }
 
-func (c *apiClient) leaveRoom(roomID, playerID string) error {
+func (c *Client) LeaveRoom(roomID, playerID string) error {
 	return c.do("POST", "/v1/rooms/"+roomID+"/leave", map[string]string{"player_id": playerID}, nil)
 }
 
-func (c *apiClient) kick(roomID, playerID, targetID string) error {
+func (c *Client) Kick(roomID, playerID, targetID string) error {
 	return c.do("POST", "/v1/rooms/"+roomID+"/kick",
 		map[string]string{"player_id": playerID, "target_id": targetID}, nil)
 }
 
-func (c *apiClient) setStatus(roomID, playerID, status string) error {
+func (c *Client) SetStatus(roomID, playerID, status string) error {
 	return c.do("POST", "/v1/rooms/"+roomID+"/status",
 		map[string]string{"player_id": playerID, "status": status}, nil)
 }

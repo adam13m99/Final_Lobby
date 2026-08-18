@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Final Lobby</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <span class="mark"></span>
+    <h1>Final Lobby</h1>
+  </div>
+  <div class="status" id="status-bar">
+    <span class="pill" id="pill-service">service</span>
+    <span class="pill" id="pill-tunnel">tunnel</span>
+    <span class="who" id="who"></span>
+  </div>
+</header>
+
+<main>
+
+  <!-- First run --------------------------------------------------------->
+  <section id="view-setup" class="card hidden">
+    <h2>Set up Final Lobby</h2>
+    <p class="muted">You only do this once. Ask whoever runs the server for the
+    address and access code.</p>
+
+    <label>Server address
+      <input id="in-coordinator" placeholder="http://87.107.110.199:7001" autocomplete="off">
+    </label>
+    <label>Access code
+      <input id="in-token" placeholder="paste the code" autocomplete="off">
+    </label>
+    <label>Your player name
+      <input id="in-player" placeholder="e.g. arman" autocomplete="off">
+      <small>Must be different from everyone else's.</small>
+    </label>
+    <label>In-game nickname <span class="muted">(optional)</span>
+      <input id="in-nick" placeholder="shown in Dota" autocomplete="off">
+    </label>
+
+    <button class="primary" id="btn-setup">Save and continue</button>
+  </section>
+
+  <!-- Room list --------------------------------------------------------->
+  <section id="view-lobby" class="hidden">
+    <div class="row-between">
+      <h2>Open rooms</h2>
+      <div class="actions">
+        <input id="in-roomname" placeholder="Room name" autocomplete="off">
+        <button class="primary" id="btn-create">Create room</button>
+      </div>
+    </div>
+    <div id="rooms"></div>
+  </section>
+
+  <!-- In a room --------------------------------------------------------->
+  <section id="view-room" class="hidden">
+    <div class="card">
+      <div class="row-between">
+        <div>
+          <h2 id="room-name">Room</h2>
+          <p class="muted" id="room-sub"></p>
+        </div>
+        <span class="badge" id="room-status">open</span>
+      </div>
+
+      <div class="net">
+        <div><span class="label">Your address</span><span class="value" id="my-ip">—</span></div>
+        <div><span class="label">Host address</span><span class="value" id="host-ip">—</span></div>
+        <div><span class="label">Adapter</span><span class="value" id="adapter">—</span></div>
+      </div>
+
+      <div class="controls">
+        <button class="primary" id="btn-connect">Connect</button>
+        <button class="primary" id="btn-play" disabled>Launch Dota 2</button>
+        <select id="in-mode">
+          <option value="1">All Pick</option>
+          <option value="23">Turbo</option>
+          <option value="2">Captain's Mode</option>
+          <option value="5">All Random</option>
+          <option value="3">Random Draft</option>
+          <option value="4">Single Draft</option>
+          <option value="18">Ability Draft</option>
+        </select>
+        <select id="in-team">
+          <option value="good">Radiant</option>
+          <option value="bad">Dire</option>
+        </select>
+        <span class="spacer"></span>
+        <button id="btn-leave" class="danger">Leave room</button>
+      </div>
+
+      <div class="controls host-only hidden" id="host-controls">
+        <button id="btn-lock">Lock — match starting</button>
+        <button id="btn-open">Reopen for a replacement</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Players</h3>
+      <ul id="players"></ul>
+    </div>
+  </section>
+
+</main>
+
+<div id="toast" class="toast hidden"></div>
+
+<footer>
+  <span class="muted" id="foot">Prototype client · leave the black window open while you play</span>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
