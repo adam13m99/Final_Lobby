@@ -28,9 +28,16 @@ const pipeSDDL = "D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GRGW;;;IU)"
 // Handler answers one request.
 type Handler func(ctx context.Context, req Request) Response
 
-// Listen serves the named pipe until ctx is cancelled.
+// Listen serves the service's named pipe until ctx is cancelled.
 func Listen(ctx context.Context, h Handler, log *slog.Logger) error {
-	l, err := winio.ListenPipe(PipeName, &winio.PipeConfig{
+	return ListenOn(ctx, PipeName, h, log)
+}
+
+// ListenOn is Listen on an arbitrary pipe name. Tests use it with a unique
+// name so they neither collide with an installed service nor depend on one
+// being absent.
+func ListenOn(ctx context.Context, name string, h Handler, log *slog.Logger) error {
+	l, err := winio.ListenPipe(name, &winio.PipeConfig{
 		SecurityDescriptor: pipeSDDL,
 		MessageMode:        false,
 		InputBufferSize:    16 << 10,
@@ -42,16 +49,16 @@ func Listen(ctx context.Context, h Handler, log *slog.Logger) error {
 		// always means a second copy of the service is running. Saying that
 		// plainly saves the next person a confused half hour.
 		if errors.Is(err, windows.ERROR_ACCESS_DENIED) {
-			return fmt.Errorf("ipc: the Final Lobby service is already running (pipe %s is taken)", PipeName)
+			return fmt.Errorf("ipc: the Final Lobby service is already running (pipe %s is taken)", name)
 		}
-		return fmt.Errorf("ipc: listen %s: %w", PipeName, err)
+		return fmt.Errorf("ipc: listen %s: %w", name, err)
 	}
 	go func() {
 		<-ctx.Done()
 		_ = l.Close()
 	}()
 
-	log.Info("ipc listening", "pipe", PipeName)
+	log.Info("ipc listening", "pipe", name)
 	for {
 		conn, err := l.Accept()
 		if err != nil {
@@ -94,8 +101,13 @@ func serveConn(ctx context.Context, conn net.Conn, h Handler, log *slog.Logger) 
 
 // Call sends one request to a running service and returns its reply.
 func Call(ctx context.Context, req Request) (Response, error) {
+	return CallOn(ctx, PipeName, req)
+}
+
+// CallOn is Call against an arbitrary pipe name.
+func CallOn(ctx context.Context, name string, req Request) (Response, error) {
 	timeout := 10 * time.Second
-	conn, err := winio.DialPipeContext(ctx, PipeName)
+	conn, err := winio.DialPipeContext(ctx, name)
 	if err != nil {
 		return Response{}, fmt.Errorf("ipc: the Final Lobby service is not running: %w", err)
 	}
