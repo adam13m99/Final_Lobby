@@ -30,6 +30,7 @@ import (
 	"finallobby/netservice/internal/adapter"
 	"finallobby/netservice/internal/agent"
 	"finallobby/netservice/internal/dota"
+	"finallobby/netservice/internal/firewall"
 	"finallobby/protocol/ipc"
 )
 
@@ -184,6 +185,17 @@ func install() error {
 	_ = eventlog.InstallAsEventCreate(serviceName,
 		eventlog.Error|eventlog.Warning|eventlog.Info)
 
+	// Open the firewall for hosting now, while we already have the rights,
+	// rather than at the moment a friend fails to connect. Scoped to our own
+	// subnet, so nothing else on the player's network gains access.
+	dotaExe, _ := dota.FindInstall()
+	if err := firewall.Ensure(dotaExe); err != nil {
+		fmt.Fprintln(os.Stderr, "warning: could not open the firewall for hosting:", err)
+		fmt.Fprintln(os.Stderr, "you can still join games; hosting may not work until this is fixed")
+	} else {
+		fmt.Println("Firewall rule added for hosting Dota 2 matches.")
+	}
+
 	if err := s.Start(); err != nil {
 		return fmt.Errorf("service created but would not start: %w", err)
 	}
@@ -216,6 +228,10 @@ func uninstall() error {
 		return err
 	}
 	_ = eventlog.Remove(serviceName)
+	// Uninstalling should leave nothing behind, firewall rules included.
+	if err := firewall.Remove(); err != nil {
+		fmt.Fprintln(os.Stderr, "warning:", err)
+	}
 	return nil
 }
 

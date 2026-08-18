@@ -16,7 +16,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/netip"
-	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -41,7 +40,6 @@ type Agent struct {
 	cancel   context.CancelFunc
 	roomID   string
 	vip      netip.Addr
-	dotaCmd  *exec.Cmd
 	teardown string
 }
 
@@ -88,9 +86,6 @@ func (a *Agent) status() ipc.Response {
 	}
 	if a.teardown != "" {
 		resp.Err = a.teardown
-	}
-	if a.dotaCmd != nil && a.dotaCmd.Process != nil {
-		resp.DotaRunning = a.dotaCmd.ProcessState == nil
 	}
 	return resp
 }
@@ -202,7 +197,19 @@ func (a *Agent) Disconnect(reason string) {
 	}
 }
 
-// launch starts Dota 2 with allowlisted arguments.
+// launch validates a Dota 2 launch and returns the exact command to run.
+//
+// It deliberately does NOT start the process. The service runs as LocalSystem
+// in session 0, which has no desktop and no GPU: a game started from here
+// fails with "No display adapters found - failed to initialize video".
+// Verified on 2026-08-19; this is Windows session isolation, not a bug we
+// can configure away.
+//
+// The client runs in the player's own session and starts the process there.
+// Nothing is lost by moving it: launching a game needs no privileges, and
+// the argument allowlist still runs here, on this side, where the untrusted
+// inputs - the room's host address, another player's nickname - are checked
+// before they can reach a command line.
 func (a *Agent) launch(req ipc.Request) ipc.Response {
 	a.mu.Lock()
 	connected := a.client != nil && a.client.State() == tunnel.StateConnected
@@ -238,25 +245,15 @@ func (a *Agent) launch(req ipc.Request) ipc.Response {
 		return ipc.Response{Err: err.Error()}
 	}
 
-	// -condebug makes Dota write console.log, which is how we detect that
-	// the host's listen server is actually up.
+	// -condebug makes Dota write console.log, which is how readiness is
+	// detected.
 	args = append(args, "-condebug")
 	if err := dota.ValidateArgs(args); err != nil {
 		return ipc.Response{Err: err.Error()}
 	}
 
-	cmd := exec.Command(exe, args...)
-	cmd.Dir = parentDir(exe)
-	if err := cmd.Start(); err != nil {
-		return ipc.Response{Err: "could not start Dota 2: " + err.Error()}
-	}
-
-	a.mu.Lock()
-	a.dotaCmd = cmd
-	a.mu.Unlock()
-
-	a.log.Info("launched dota", "role", req.Role, "exe", exe, "args", strings.Join(args, " "))
-	return ipc.Response{DotaPath: exe, Args: args, DotaRunning: true}
+	a.log.Info("prepared dota launch", "role", req.Role, "exe", exe, "args", strings.Join(args, " "))
+	return ipc.Response{DotaPath: exe, Args: args}
 }
 
 func teamOr(t string) string {

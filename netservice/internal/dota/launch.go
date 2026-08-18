@@ -177,33 +177,82 @@ func ValidateArgs(args []string) error {
 	return nil
 }
 
-// readyMarkers are the console.log lines that mean the host's listen server
-// is up.
+// The console.log lines that mean the host's listen server is up.
 //
-// UNVERIFIED against the current Dota 2 build. Confirm these during the
-// two-PC acceptance test on a real host and correct them if they differ.
-var readyMarkers = []string{
-	"Server started",
-	"Host_NewGame",
-}
+// VERIFIED 2026-08-19 against a real Dota 2 console.log from this machine.
+// The plan guessed at "Server started" and "Host_NewGame"; neither string
+// appears in the log even once. The real sequence, in order, is:
+//
+//	[Networking] Network socket 'server' opened on port 27015
+//	[Server] SV:  Spawn Server: dota
+//	[Server] CNetworkGameServerBase::SetServerState (ss_loading -> ss_active)
+//	[Client] CL:  CWaitForGameServerStartupPrerequisite done waiting for server
+//
+// Both halves are needed. "ss_loading -> ss_active" alone fires for the main
+// menu's own server too - six times in one session - so on its own it would
+// report the match ready before it existed. "Spawn Server: dota" names the
+// map, and the state change that follows it is the moment the server accepts
+// players.
+const (
+	markerMapSpawned  = "Spawn Server: dota"
+	markerServerLive  = "ss_loading -> ss_active"
+	markerSocketOpen  = "Network socket 'server' opened on port "
+)
 
 // ServerReady reports whether the host's Dota 2 has finished starting its
-// LAN server, by looking for a marker in the part of console.log written
-// since the launch. Reading only the new tail matters: the log persists
-// between matches, so an old marker would otherwise report ready instantly.
+// LAN server, reading only the part of console.log written since the launch.
+// Reading only the new tail matters: the log persists between matches, so an
+// old marker would otherwise report ready instantly.
 func ServerReady(consoleLogPath string, since int64) (bool, error) {
-	data, err := os.ReadFile(consoleLogPath)
+	tail, err := logTail(consoleLogPath, since)
 	if err != nil {
 		return false, err
 	}
-	if int64(len(data)) <= since {
+	spawn := strings.Index(tail, markerMapSpawned)
+	if spawn < 0 {
 		return false, nil
 	}
-	tail := string(data[since:])
-	for _, marker := range readyMarkers {
-		if strings.Contains(tail, marker) {
-			return true, nil
-		}
+	// The state change must come after the map spawn, not before it.
+	return strings.Contains(tail[spawn:], markerServerLive), nil
+}
+
+// ServerPort returns the port Dota actually opened its server socket on.
+//
+// We tell joining clients to connect to port 27015, which is the default -
+// but it is a default, not a guarantee, and a client sent to the wrong port
+// fails in a way that looks like a network fault rather than a config one.
+func ServerPort(consoleLogPath string, since int64) (int, error) {
+	tail, err := logTail(consoleLogPath, since)
+	if err != nil {
+		return 0, err
 	}
-	return false, nil
+	i := strings.LastIndex(tail, markerSocketOpen)
+	if i < 0 {
+		return 0, fmt.Errorf("%w: no server socket line in console.log", ErrBadPath)
+	}
+	rest := tail[i+len(markerSocketOpen):]
+	end := strings.IndexFunc(rest, func(r rune) bool { return r < '0' || r > '9' })
+	if end < 0 {
+		end = len(rest)
+	}
+	port, err := strconv.Atoi(rest[:end])
+	if err != nil {
+		return 0, fmt.Errorf("%w: unreadable port in console.log", ErrBadPath)
+	}
+	return port, nil
+}
+
+// logTail returns whatever has been appended to the log since the offset.
+func logTail(path string, since int64) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	// Dota truncates console.log on every launch - observed 2026-08-19, a
+	// 281 KB log became 862 bytes. A stale offset past the new end means the
+	// file was rotated, not that nothing has happened, so read it whole.
+	if since < 0 || since > int64(len(data)) {
+		return string(data), nil
+	}
+	return string(data[since:]), nil
 }

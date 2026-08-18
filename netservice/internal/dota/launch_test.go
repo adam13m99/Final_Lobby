@@ -105,28 +105,77 @@ func TestFindInstallOnThisMachine(t *testing.T) {
 	}
 }
 
+// realLogPrologue is copied verbatim from a Dota 2 console.log on a test
+// machine: the main menu spins up its own server before any match exists.
+// Treating that as "ready" would tell a joining player to connect before the
+// host had a game.
+const realLogPrologue = `05/08 21:30:20 [Server] CNetworkGameServerBase::SetServerState (ss_dead -> ss_waitingforgamesessionmanifest)
+05/08 21:30:20 [Networking] Network socket 'server' opened on port 27015
+05/08 21:32:35 [Server] SV:  Spawn Server: <empty>
+05/08 21:32:35 [Server] CNetworkGameServerBase::SetServerState (ss_waitingforgamesessionmanifest -> ss_loading)
+05/08 21:32:35 [Server] CNetworkGameServerBase::SetServerState (ss_loading -> ss_active)
+`
+
+// realLogMatchStart is the sequence a real match produces.
+const realLogMatchStart = `05/08 21:30:24 [Server] SV:  Spawn Server: dota
+05/08 21:30:24 [Server] CNetworkGameServerBase::SetServerState (ss_waitingforgamesessionmanifest -> ss_loading)
+05/08 21:30:24 [Server] CNetworkGameServerBase::SetServerState (ss_loading -> ss_active)
+05/08 21:30:24 [Client] CL:  CWaitForGameServerStartupPrerequisite done waiting for server
+`
+
+func TestServerReadyIgnoresTheMainMenuServer(t *testing.T) {
+	dir := t.TempDir()
+	log := filepath.Join(dir, "console.log")
+	if err := os.WriteFile(log, []byte(realLogPrologue), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ready, err := dota.ServerReady(log, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ready {
+		t.Fatal("the main menu's own server was reported as a ready match; " +
+			"a joining player would be sent to a game that does not exist yet")
+	}
+}
+
+func TestServerReadyDetectsARealMatch(t *testing.T) {
+	dir := t.TempDir()
+	log := filepath.Join(dir, "console.log")
+	if err := os.WriteFile(log, []byte(realLogPrologue+realLogMatchStart), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ready, err := dota.ServerReady(log, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ready {
+		t.Fatal("a real match start was not detected")
+	}
+}
+
 func TestServerReadyOnlyReadsNewOutput(t *testing.T) {
 	dir := t.TempDir()
 	log := filepath.Join(dir, "console.log")
 
-	old := "some old line mentioning Server started from a previous match\n"
+	// A previous match left its markers in the log.
+	old := realLogPrologue + realLogMatchStart
 	if err := os.WriteFile(log, []byte(old), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	// Starting from the end of the existing file, nothing new has happened.
 	ready, err := dota.ServerReady(log, int64(len(old)))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if ready {
-		t.Fatal("stale marker from a previous match reported as ready")
+		t.Fatal("markers from a previous match reported as ready")
 	}
 
 	f, err := os.OpenFile(log, os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.WriteString("Host_NewGame\n"); err != nil {
+	if _, err := f.WriteString(realLogMatchStart); err != nil {
 		t.Fatal(err)
 	}
 	f.Close()
@@ -136,6 +185,35 @@ func TestServerReadyOnlyReadsNewOutput(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !ready {
-		t.Fatal("fresh readiness marker was not detected")
+		t.Fatal("a fresh match start after the offset was not detected")
+	}
+}
+
+func TestServerPortIsReadFromTheLogNotAssumed(t *testing.T) {
+	dir := t.TempDir()
+	log := filepath.Join(dir, "console.log")
+	if err := os.WriteFile(log, []byte(realLogPrologue), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	port, err := dota.ServerPort(log, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if port != 27015 {
+		t.Fatalf("port = %d, want 27015", port)
+	}
+
+	// If Dota ever opens a different port, we must read it rather than keep
+	// sending clients to 27015.
+	moved := strings.Replace(realLogPrologue, "port 27015", "port 27016", 1)
+	if err := os.WriteFile(log, []byte(moved), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	port, err = dota.ServerPort(log, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if port != 27016 {
+		t.Fatalf("port = %d, want 27016 - the port must come from the log", port)
 	}
 }

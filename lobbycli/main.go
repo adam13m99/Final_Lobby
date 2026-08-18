@@ -25,6 +25,8 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -372,6 +374,17 @@ func cmdPlay(args []string) error {
 	if resp.Err != "" {
 		return fmt.Errorf("%s", resp.Err)
 	}
+
+	// The service validates and hands back the command; we start it here.
+	// A service runs in session 0, which has no desktop and no GPU, so a
+	// game started there dies with "failed to initialize video".
+	cmd := exec.Command(resp.DotaPath, resp.Args...)
+	cmd.Dir = filepath.Dir(resp.DotaPath)
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("could not start Dota 2: %w", err)
+	}
+	_ = cmd.Process.Release()
+
 	fmt.Printf("Launched Dota 2 as %s.\n", req.Role)
 	fmt.Printf("  %s\n  %s\n", resp.DotaPath, strings.Join(resp.Args, " "))
 	if cfg.IsHost {
