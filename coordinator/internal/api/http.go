@@ -31,8 +31,9 @@ type Server struct {
 	relayAddr string
 	relayPub  string
 
-	limitJoin *Limiter
-	limitRead *Limiter
+	limitJoin   *Limiter
+	limitManage *Limiter
+	limitRead   *Limiter
 	now       func() time.Time
 
 	// authToken gates the player-facing API during the test phase. There
@@ -66,9 +67,15 @@ func New(cfg Config) *Server {
 		log:       cfg.Logger,
 		relayAddr: cfg.RelayAddr,
 		relayPub:  cfg.RelayPub,
-		// Creating or joining a room is expensive; reading is cheap.
-		limitJoin: NewLimiter(0.5, 5),
-		limitRead: NewLimiter(5, 30),
+		// Three tiers, because the risks differ. Creating or joining a room
+		// costs us an address allocation and a ticket, and is what a griefer
+		// would automate - keep it tight. Managing a room you already host
+		// is legitimate and bursty: a host locking, reopening and kicking
+		// within a few seconds is normal play, and throttling that is a bug
+		// the player experiences as the app ignoring them. Reading is cheap.
+		limitJoin:   NewLimiter(0.5, 5),
+		limitManage: NewLimiter(2, 15),
+		limitRead:   NewLimiter(5, 30),
 		now:       cfg.Now,
 		authToken: cfg.AuthToken,
 	}
@@ -90,9 +97,9 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /v1/rooms", s.limited(s.limitJoin, s.createRoom))
 	mux.HandleFunc("GET /v1/rooms/{id}", s.limited(s.limitRead, s.getRoom))
 	mux.HandleFunc("POST /v1/rooms/{id}/join", s.limited(s.limitJoin, s.joinRoom))
-	mux.HandleFunc("POST /v1/rooms/{id}/leave", s.limited(s.limitJoin, s.leaveRoom))
-	mux.HandleFunc("POST /v1/rooms/{id}/kick", s.limited(s.limitJoin, s.kickPlayer))
-	mux.HandleFunc("POST /v1/rooms/{id}/status", s.limited(s.limitJoin, s.setStatus))
+	mux.HandleFunc("POST /v1/rooms/{id}/leave", s.limited(s.limitManage, s.leaveRoom))
+	mux.HandleFunc("POST /v1/rooms/{id}/kick", s.limited(s.limitManage, s.kickPlayer))
+	mux.HandleFunc("POST /v1/rooms/{id}/status", s.limited(s.limitManage, s.setStatus))
 	mux.HandleFunc("POST /v1/lease/renew", s.limited(s.limitRead, s.renewLease))
 
 	// The relay asks about tickets here. Not rate limited: throttling the

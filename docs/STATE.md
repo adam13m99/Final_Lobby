@@ -5,7 +5,11 @@ this file is a convenience index, not an authority.
 
 ## Current phase
 
-Sub-project 1: network core. **In progress — Tasks 1-15 landed. Relay deployed and verified at the 500-player target; only the two-PC acceptance test (16) remains, plus the stub coordinator and service entrypoint it needs.**
+Sub-project 1: network core. **In progress — Tasks 1-15 landed, plus the
+coordinator, Windows service and test CLI that Task 16 needs. The whole
+stack has been driven end to end from this PC against the live server: room
+created, Wintun adapter up, tunnel connected, kick revoking network access,
+clean teardown. Only Task 16 itself — the real two-PC Dota match — remains.**
 
 ## Blockers
 

@@ -336,3 +336,34 @@ func TestBearerTokenGatesThePlayerAPI(t *testing.T) {
 		t.Errorf("correct token returned %d, want 201", code)
 	}
 }
+
+func TestHostCanManageTheirRoomInQuickSuccession(t *testing.T) {
+	h := newHarness(t)
+	_, host := h.post(t, "/v1/rooms", map[string]string{"player_id": "alice"})
+	roomID := host["room_id"].(string)
+	h.post(t, "/v1/rooms/"+roomID+"/join", map[string]string{"player_id": "bob"})
+
+	// Lock, reopen, kick, lock again - a normal few seconds for a host
+	// starting a match. Throttling this reads to the player as the app
+	// ignoring them.
+	steps := []struct {
+		path string
+		body map[string]string
+	}{
+		{"/status", map[string]string{"player_id": "alice", "status": "locked_in_game"}},
+		{"/status", map[string]string{"player_id": "alice", "status": "open_to_new_players"}},
+		{"/kick", map[string]string{"player_id": "alice", "target_id": "bob"}},
+		{"/status", map[string]string{"player_id": "alice", "status": "locked_in_game"}},
+		{"/status", map[string]string{"player_id": "alice", "status": "open_to_new_players"}},
+		{"/status", map[string]string{"player_id": "alice", "status": "locked_in_game"}},
+	}
+	for i, st := range steps {
+		code, body := h.post(t, "/v1/rooms/"+roomID+st.path, st.body)
+		if code == http.StatusTooManyRequests {
+			t.Fatalf("step %d (%s) was rate limited; a host managing their own room must not be", i, st.path)
+		}
+		if code != http.StatusOK {
+			t.Fatalf("step %d (%s) returned %d: %v", i, st.path, code, body)
+		}
+	}
+}

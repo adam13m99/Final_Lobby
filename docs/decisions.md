@@ -278,3 +278,36 @@ the relay given CPU priority to approximate a dedicated box:
 Roughly 2.5x headroom. The batched-syscall work in D20 is therefore deferred
 rather than dropped: it is what unlocks the next tier, and it is not needed
 for this one.
+
+## D23 — The IPC contract lives in `protocol/`, like the wire format
+
+Same reason as D13: the test client - and later the desktop app - must speak
+the service's command protocol, and Go forbids importing another module's
+`internal/` packages. `protocol/ipc` holds the request and response types,
+the named-pipe listener and the client dialer.
+
+## D24 — Named pipe with an explicit ACL, not a localhost port
+
+The pipe is created with `D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GRGW;;;IU)`: full
+control for SYSTEM and local Administrators, read and write for interactive
+users - the person physically at the machine.
+
+Interactive users are allowed deliberately, because the desktop client runs
+as the player rather than as an administrator; that is the whole point of the
+service existing (D6). What matters is that a *web page* cannot reach a named
+pipe, which is exactly how the predecessor's localhost HTTP bridge became a
+remote-code-execution hole.
+
+The service still validates everything it is asked to do. The client names a
+room; it never names an executable or an address.
+
+## D25 — Rate limits are tiered by risk, not applied uniformly
+
+Found by using the CLI: a host locking the room, reopening it and kicking a
+player within a few seconds - entirely normal play - hit the throttle meant
+for room creation, and the app appeared to ignore them.
+
+Three tiers now. Creating or joining a room stays tight (0.5/s, burst 5): it
+allocates addresses and issues tickets, and it is what a griefer would
+automate. Managing a room you already host is 2/s with burst 15. Reading is
+5/s with burst 30.
