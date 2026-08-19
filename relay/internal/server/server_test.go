@@ -247,3 +247,97 @@ func TestRelayRejectsBadTicket(t *testing.T) {
 		t.Fatalf("table has %d peers, want 0", srv.Table().Count())
 	}
 }
+
+func TestSilentPeerIsReaped(t *testing.T) {
+	// A client that crashes never sends a disconnect. The relay must notice
+	// the silence and let the session go, or dead peers accumulate forever.
+	pub, priv, err := crypto.GenerateStaticKeypair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	validate := func(ticket []byte) (server.TicketClaims, error) {
+		return server.TicketClaims{RoomID: "room-a",
+			VirtualIP: netip.MustParseAddr("10.87.0.2")}, nil
+	}
+	srv, err := server.New(server.Config{
+		Listen:         "127.0.0.1:0",
+		StaticPriv:     priv,
+		QueueDepth:     8,
+		ValidateTicket: validate,
+		IdleTimeout:    600 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { defer close(done); _ = srv.Serve(ctx) }()
+	t.Cleanup(func() { cancel(); <-done })
+
+	peer := dialPeer(t, srv.LocalAddr(), pub, "room-a|10.87.0.2")
+	_ = peer
+	if srv.Table().Count() != 1 {
+		t.Fatalf("table has %d peers after a handshake, want 1", srv.Table().Count())
+	}
+
+	// Say nothing at all, as a crashed client would.
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if srv.Table().Count() == 0 {
+			if got := srv.Stats().Expired.Load(); got != 1 {
+				t.Fatalf("Expired counter = %d, want 1", got)
+			}
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatal("a silent peer was never reaped; dead sessions would accumulate forever")
+}
+
+func TestKeepaliveKeepsAPeerAlive(t *testing.T) {
+	pub, priv, err := crypto.GenerateStaticKeypair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	validate := func(ticket []byte) (server.TicketClaims, error) {
+		return server.TicketClaims{RoomID: "room-a",
+			VirtualIP: netip.MustParseAddr("10.87.0.2")}, nil
+	}
+	srv, err := server.New(server.Config{
+		Listen:         "127.0.0.1:0",
+		StaticPriv:     priv,
+		QueueDepth:     8,
+		ValidateTicket: validate,
+		IdleTimeout:    600 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { defer close(done); _ = srv.Serve(ctx) }()
+	t.Cleanup(func() { cancel(); <-done })
+
+	p := dialPeer(t, srv.LocalAddr(), pub, "room-a|10.87.0.2")
+
+	// A quiet but living player - one who is watching, not moving - must
+	// not be disconnected.
+	hdr := make([]byte, wire.HeaderSize)
+	wire.EncodeHeader(hdr, wire.Header{
+		Version:   wire.ProtocolVersion,
+		Type:      wire.TypeKeepalive,
+		SessionID: p.accept.SessionID,
+	})
+	for i := 0; i < 10; i++ {
+		if _, err := p.conn.Write(hdr); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	if srv.Table().Count() != 1 {
+		t.Fatal("a peer sending keepalives was reaped anyway")
+	}
+	if got := srv.Stats().Expired.Load(); got != 0 {
+		t.Fatalf("Expired = %d, want 0", got)
+	}
+}

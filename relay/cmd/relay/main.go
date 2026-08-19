@@ -23,6 +23,7 @@ func main() {
 	allowMulticast := flag.Bool("allow-multicast", false, "re-enable room-scoped multicast fanout (see docs/decisions.md D1)")
 	queueDepth := flag.Int("queue-depth", 256, "per-peer send queue depth in packets")
 	readers := flag.Int("readers", 0, "socket reader goroutines (0 = one per CPU)")
+	idleTimeout := flag.Duration("idle-timeout", 90*time.Second, "drop a peer after this much silence")
 	statsEvery := flag.Duration("stats-every", 30*time.Second, "how often to log packet counters (0 to disable)")
 	devTickets := flag.Bool("dev-unsigned-tickets", false, "TESTING ONLY: accept unsigned roomID|virtualIP tickets")
 	genKey := flag.Bool("genkey", false, "print a fresh static keypair and exit")
@@ -56,6 +57,7 @@ func main() {
 		AllowMulticast: *allowMulticast,
 		QueueDepth:     *queueDepth,
 		Readers:        *readers,
+		IdleTimeout:    *idleTimeout,
 		ValidateTicket: validate,
 	})
 	if err != nil {
@@ -137,6 +139,7 @@ func logStats(ctx context.Context, srv *server.Server, every time.Duration) {
 			"dropped_route", st.DroppedRoute.Load(),
 			"dropped_queue", st.DroppedQueue.Load(),
 			"write_errors", st.WriteErrors.Load(),
+			"expired", st.Expired.Load(),
 		)
 	}
 }

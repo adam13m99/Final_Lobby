@@ -2,6 +2,7 @@ package route_test
 
 import (
 	"testing"
+	"time"
 
 	"finallobby/relay/internal/route"
 	"finallobby/relay/internal/sendq"
@@ -80,5 +81,37 @@ func TestSetRoomMovesMembership(t *testing.T) {
 	}
 	if tbl.SetRoom(99, "room-c") {
 		t.Error("SetRoom returned true for an unknown session")
+	}
+}
+
+func TestIdleSinceFindsPeersWeStoppedHearingFrom(t *testing.T) {
+	tbl := route.NewTable()
+	base := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+
+	live := peer(t, 1, "10.87.0.2", "room-a")
+	live.Touch(base)
+	tbl.Add(live)
+
+	dead := peer(t, 2, "10.87.0.3", "room-a")
+	dead.Touch(base.Add(-5 * time.Minute))
+	tbl.Add(dead)
+
+	idle := tbl.IdleSince(base.Add(-90 * time.Second))
+	if len(idle) != 1 {
+		t.Fatalf("found %d idle peers, want 1", len(idle))
+	}
+	if idle[0].SessionID != 2 {
+		t.Fatalf("found session %d, want the silent one (2)", idle[0].SessionID)
+	}
+}
+
+func TestNeverTouchedPeerCountsAsIdle(t *testing.T) {
+	// A peer that completed a handshake and then said nothing at all must
+	// still be reaped; otherwise a half-open connection lives forever.
+	tbl := route.NewTable()
+	tbl.Add(peer(t, 1, "10.87.0.2", "room-a"))
+
+	if got := len(tbl.IdleSince(time.Now())); got != 1 {
+		t.Fatalf("found %d idle peers, want 1", got)
 	}
 }

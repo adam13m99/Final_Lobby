@@ -19,6 +19,7 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"finallobby/protocol/crypto"
 	"finallobby/relay/internal/route"
@@ -52,6 +53,10 @@ type Config struct {
 	// the application never even sees. The kernel silently caps the request
 	// at net.core.rmem_max, so what was actually granted is logged.
 	SocketBuffer int
+	// IdleTimeout is how long a peer may stay silent before its session is
+	// dropped. Clients send a keepalive every 15 seconds, so the default
+	// allows six to be missed before we give up on them.
+	IdleTimeout time.Duration
 	// Readers is how many goroutines pull from the socket in parallel.
 	// Defaults to the CPU count. Each one decrypts and routes independently.
 	Readers int
@@ -70,6 +75,7 @@ type Stats struct {
 	DroppedRoute atomic.Uint64 // spoofed, broadcast, cross-room, unknown peer
 	DroppedQueue atomic.Uint64 // peer send queue was full
 	WriteErrors  atomic.Uint64
+	Expired      atomic.Uint64 // sessions reaped for going silent
 }
 
 // Server is the relay.
@@ -105,6 +111,9 @@ func New(cfg Config) (*Server, error) {
 	}
 	if cfg.SocketBuffer <= 0 {
 		cfg.SocketBuffer = 8 << 20 // 8 MiB
+	}
+	if cfg.IdleTimeout <= 0 {
+		cfg.IdleTimeout = 90 * time.Second
 	}
 	addr, err := net.ResolveUDPAddr("udp", cfg.Listen)
 	if err != nil {
@@ -162,6 +171,8 @@ func (s *Server) Serve(ctx context.Context) error {
 		close(closed)
 	}()
 
+	go s.reapIdle(ctx)
+
 	var readers sync.WaitGroup
 	for i := 0; i < s.cfg.Readers; i++ {
 		readers.Add(1)
@@ -211,6 +222,7 @@ func (s *Server) handle(ctx context.Context, pkt []byte, from netip.AddrPort) {
 	case wire.TypeKeepalive:
 		if _, peer, ok := s.table.SenderFor(h.SessionID); ok {
 			peer.SetRemote(from)
+			peer.Touch(time.Now())
 		}
 	case wire.TypeDisconnect:
 		s.dropSession(h.SessionID)
@@ -264,6 +276,7 @@ func (s *Server) handleHandshake(ctx context.Context, msg1 []byte, from netip.Ad
 		Queue:     sendq.New(s.cfg.QueueDepth),
 	}
 	peer.SetRemote(from)
+	peer.Touch(time.Now())
 	s.table.Add(peer)
 	s.sessions.Store(sessionID, sess)
 
@@ -310,6 +323,7 @@ func (s *Server) handleData(h wire.Header, pkt []byte, from netip.AddrPort) {
 	}
 	// Keep the peer's remote address current so NAT rebinding survives.
 	peer.SetRemote(from)
+	peer.Touch(time.Now())
 
 	decision := route.Decide(sender, inner, route.Options{AllowMulticast: s.cfg.AllowMulticast})
 
@@ -335,6 +349,37 @@ func (s *Server) handleData(h wire.Header, pkt []byte, from netip.AddrPort) {
 		s.stats.FannedOut.Add(1)
 	default:
 		s.stats.DroppedRoute.Add(1)
+	}
+}
+
+// reapIdle drops sessions we have stopped hearing from.
+//
+// A client that crashes, is killed, or loses power never sends a disconnect.
+// Without this the relay accumulates dead sessions forever - each holding a
+// virtual address and a writer goroutine that will never write again. It is
+// the slow leak that only shows up after a month of uptime.
+func (s *Server) reapIdle(ctx context.Context) {
+	every := s.cfg.IdleTimeout / 3
+	if every < time.Second {
+		every = time.Second
+	}
+	t := time.NewTicker(every)
+	defer t.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+		cutoff := time.Now().Add(-s.cfg.IdleTimeout)
+		for _, peer := range s.table.IdleSince(cutoff) {
+			s.log.Info("dropping a silent peer",
+				"vip", peer.VirtualIP, "session", peer.SessionID,
+				"silent_for", time.Since(peer.LastSeen()).Round(time.Second))
+			s.dropSession(peer.SessionID)
+			s.stats.Expired.Add(1)
+		}
 	}
 }
 

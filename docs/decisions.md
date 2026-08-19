@@ -380,3 +380,24 @@ costs one round trip at connect time.
 
 What this retires: everything between the two ends. The only thing left that
 genuinely needs a second machine is Dota's own client-to-host connection.
+
+## D30 — The relay expires peers that go silent
+
+Found on 2026-08-20 from the relay's own counters: it reported five connected
+peers a day after the machines behind them had been shut down. Nothing ever
+removed them.
+
+A session was only ever dropped when a client politely sent a disconnect, or
+when someone reconnected onto the same virtual address. A client that
+crashes, is killed, or loses power does none of that - so its session, its
+claimed address and its writer goroutine lived forever.
+
+It is the shape of leak that stays invisible in testing and shows up after a
+month of uptime, and it quietly breaks the rule in D3 that goroutines scale
+with players: they were scaling with every player who had *ever* connected.
+
+Peers now record when we last heard from them, and a reaper drops anything
+silent for 90 seconds - six missed keepalives, since clients send one every
+15. A quiet player who is watching rather than moving still sends keepalives,
+and a test covers exactly that case so the timeout can never be tightened
+into disconnecting real players.

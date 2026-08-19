@@ -4,6 +4,7 @@ import (
 	"net/netip"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"finallobby/relay/internal/sendq"
 )
@@ -22,7 +23,18 @@ type Peer struct {
 	Queue     *sendq.Queue
 
 	remote atomic.Pointer[netip.AddrPort]
+
+	// lastSeen is when a packet last arrived from this peer, as Unix
+	// nanoseconds. A peer that crashes or loses power never says goodbye,
+	// so silence is the only signal we get that it is gone.
+	lastSeen atomic.Int64
 }
+
+// Touch records that we just heard from this peer.
+func (p *Peer) Touch(now time.Time) { p.lastSeen.Store(now.UnixNano()) }
+
+// LastSeen reports when we last heard from this peer.
+func (p *Peer) LastSeen() time.Time { return time.Unix(0, p.lastSeen.Load()) }
 
 // SetRemote records where the peer's packets are currently arriving from,
 // so a NAT rebinding does not silently black-hole the return path.
@@ -160,6 +172,24 @@ func (t *Table) ForwardTarget(dst netip.Addr, room string) (*Peer, bool) {
 		return nil, false
 	}
 	return p, true
+}
+
+// IdleSince returns every peer we have not heard from since cutoff.
+//
+// Without this a session lives forever: the relay only removes a peer that
+// politely disconnects, and a crashed client never does. Each stale entry
+// costs memory, a claimed virtual address, and a writer goroutine that will
+// never write again.
+func (t *Table) IdleSince(cutoff time.Time) []*Peer {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	var out []*Peer
+	for _, p := range t.bySess {
+		if p.LastSeen().Before(cutoff) {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func (t *Table) Count() int {
