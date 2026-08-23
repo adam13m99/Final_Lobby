@@ -6,10 +6,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
 )
+
+// urlQuery escapes a value for a query string.
+func urlQuery(v string) string { return url.QueryEscape(v) }
 
 // SessionHeader carries the signed-in session. It must match the coordinator's
 // constant of the same name.
@@ -174,6 +178,14 @@ func friendly(code int, msg string) string {
 		return "that room is invitation only - ask the host for an invite"
 	case strings.Contains(msg, "MMR is below"):
 		return "your MMR is below what that room asks for"
+	case strings.Contains(msg, "you are not friends"):
+		return "you can only do that with a friend"
+	case strings.Contains(msg, "no request to answer"):
+		return "there is no friend request from that player"
+	case strings.Contains(msg, "no player with that username"):
+		return "no player has that username - check the spelling"
+	case strings.Contains(msg, "friends list holds at most"):
+		return "your friends list is full"
 	case strings.Contains(msg, "no free player slot"):
 		return "that room is full"
 	case strings.Contains(msg, "already in this room"):

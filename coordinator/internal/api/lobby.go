@@ -63,6 +63,12 @@ type syncRequest struct {
 
 	LobbyCursor uint64 `json:"lobby_cursor"`
 	RoomCursor  uint64 `json:"room_cursor"`
+
+	// InGame is the client telling us whether Dota is running. The service
+	// knows because it launched it and watches its log (D41); nothing else
+	// on the server can see a match start, so this is the only honest
+	// source for a friend's "in game" light.
+	InGame bool `json:"in_game,omitempty"`
 }
 
 type syncResponse struct {
@@ -96,6 +102,7 @@ func (s *Server) sync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.seen(body.PlayerID, body.Nick)
+	s.players.SetInGame(body.PlayerID, body.InGame, s.now())
 
 	out := syncResponse{
 		Online:     s.players.Online(OnlineWindow, s.now()),

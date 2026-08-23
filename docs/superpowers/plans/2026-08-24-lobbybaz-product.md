@@ -145,14 +145,35 @@ Notes for whoever picks this up:
   a friends-only room refuses everybody but its host — it refuses rather than
   quietly admitting everybody.
 
-## T7 — Friends *(D41)*
+## T7 — Friends *(D41)* — **done 2026-08-24**
 
-- [ ] Add, remove, block
-- [ ] Private chat
-- [ ] Invite to room
-- [ ] Online/offline, and in-game/not-in-game — the service already knows
-      whether Dota is running, so this is surfacing a signal we have
-- [ ] Tests: request/accept/remove, invite reaching the right person
+- [x] Add, remove, block — `coordinator/internal/social/`
+- [x] Private chat, durable, friends only
+- [x] Invite to room
+- [x] Online/offline, and in-game/not-in-game — reported by the player's own
+      service, which knows because it launched Dota and watches its log
+- [x] Tests: request/accept/remove, invite reaching the right person, and the
+      block rules
+
+Notes for whoever picks this up:
+
+- **A friendship is two directed rows.** One row is "A asked B"; two rows are
+  a friendship. That is what makes a pending request expressible, and it makes
+  removal one deletion rather than a search for whichever ordering was stored.
+- **A block is not the absence of a friendship.** It is its own row,
+  one-directional, and it outranks everything. Several endpoints therefore
+  return 200 for something that did not happen — a blocked person's message or
+  request is accepted and dropped. That is not a bug: an error would tell them
+  they had been blocked, which turns blocking into a message of its own.
+- **"In game" is reported, never inferred.** A room can be locked while its
+  host is still on the hero screen. `POST /v1/sync` carries `in_game` from the
+  service; the coordinator never guesses it from room state.
+- Private messages are durable; lobby and room chat are not. A message to
+  somebody offline has to still be there when they come back.
+- `api.Friends`, the seam T6 left, is now filled by `social.Store`. Note
+  `friendsOrNil` in `cmd/coordinator`: a typed nil in an interface is not nil,
+  and passing the pointer straight through would panic the first time somebody
+  opened a friends-only room on a coordinator with no database.
 
 ## T8 — Roles and moderation *(D43, D47)*
 

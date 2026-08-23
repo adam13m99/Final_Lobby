@@ -25,6 +25,7 @@ import (
 	"lobbybaz/coordinator/internal/chat"
 	"lobbybaz/coordinator/internal/player"
 	"lobbybaz/coordinator/internal/room"
+	"lobbybaz/coordinator/internal/social"
 	"lobbybaz/coordinator/internal/store"
 	"lobbybaz/coordinator/internal/ticket"
 )
@@ -96,7 +97,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	var accounts *account.Store
+	var (
+		accounts *account.Store
+		friends  *social.Store
+	)
 	rooms := room.NewStore()
 	if *dbPath != "" {
 		db, err := store.Open(*dbPath)
@@ -107,6 +111,7 @@ func main() {
 		defer db.Close()
 		version, _ := store.Version(db)
 		accounts = account.New(db)
+		friends = social.New(db)
 
 		// Every kick is written down, so a moderator can see a pattern that
 		// outlives the room it happened in (D52). Recording never blocks the
@@ -132,6 +137,8 @@ func main() {
 		Players:     players,
 		Chat:        board,
 		Accounts:    accounts,
+		Social:      friends,
+		Friends:     friendsOrNil(friends),
 		RelayAddr:   *relayAddr,
 		RelayPub:    pub,
 		Logger:      log,
@@ -199,4 +206,17 @@ func runTimers(ctx context.Context, rooms *room.Store, tickets *ticket.Store, bo
 // revokeRoom drops every ticket belonging to a closed room.
 func revokeRoom(tickets *ticket.Store, roomID string) {
 	tickets.RevokeRoom(roomID)
+}
+
+// friendsOrNil keeps a nil *social.Store from becoming a non-nil api.Friends.
+//
+// A typed nil in an interface is not nil, so passing the pointer straight
+// through would give the room door a Friends that panics the first time
+// somebody opens a friends-only room on a coordinator running without a
+// database.
+func friendsOrNil(s *social.Store) api.Friends {
+	if s == nil {
+		return nil
+	}
+	return s
 }

@@ -545,3 +545,24 @@ func (s *Store) SetDisabled(accountID string, disabled bool, now time.Time) erro
 	}
 	return nil
 }
+
+// ByUsername finds an account by its login name, which must already be
+// folded. It is how a friend request finds somebody to be addressed to.
+func (s *Store) ByUsername(folded string) (Account, error) {
+	var (
+		a    Account
+		hash string
+	)
+	row := s.db.QueryRow(
+		`SELECT id, username, display_name, password_hash, mmr, mmr_set_at, created_at, disabled_at
+		 FROM accounts WHERE username = ?`, folded)
+	disabled, mmrSet, err := scanAccount(row, &a, &hash)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Account{}, ErrNoSuchAccount
+	}
+	if err != nil {
+		return Account{}, fmt.Errorf("account: reading: %w", err)
+	}
+	a.MMRSetAt, a.Disabled = mmrSet, disabled
+	return a, nil
+}

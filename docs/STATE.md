@@ -159,11 +159,17 @@ there; this is the summary.
 | T4 kick escalation 1/3/5/7 min (D39) | **done** — as events, not live blocks (D52) |
 | T5 accounts (D37) | **done** — server and client library; **not switched on yet, see below** |
 | T6 room privacy (D41) | **done** — all four doors, plus an MMR floor |
-| T7 friends (D41) | not started |
+| T7 friends (D41) | **done** — graph, blocks, private chat, invites, presence |
 | T8 roles and moderation (D43, D47) | not started |
 | T9 interface built for translation (D44) | not started |
 | T10 the new lobby (D42) | not started |
 | T11 desktop application (D45) | not started |
+
+**Friends exist.** Requests, accepts, removals, blocks, durable private
+messages, room invitations, and presence including a real in-game light
+reported by the player's own service. A friends-only room now consults the
+real graph. Blocking is silent by design — a blocked person's message is
+accepted and dropped, because an error would tell them they had been blocked.
 
 **Rooms have doors.** Public, password, friends-only, invite-only, plus an
 optional MMR floor (D41). The door is checked server-side from the server's own

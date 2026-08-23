@@ -19,6 +19,7 @@ import (
 	"lobbybaz/coordinator/internal/chat"
 	"lobbybaz/coordinator/internal/player"
 	"lobbybaz/coordinator/internal/room"
+	"lobbybaz/coordinator/internal/social"
 	"lobbybaz/coordinator/internal/ticket"
 )
 
@@ -29,6 +30,7 @@ type Server struct {
 	players  *player.Registry
 	chat     *chat.Board
 	accounts *account.Store
+	social   *social.Store
 	friends  Friends
 	diag     *diagLog
 	dl       *downloads
@@ -60,6 +62,10 @@ type Config struct {
 	Tickets *ticket.Store
 	Players *player.Registry
 	Chat    *chat.Board
+	// Social is the friend graph. Nil runs the coordinator without a
+	// friends list, which is what the loadtest harness wants.
+	Social *social.Store
+
 	// Friends answers whether two people are friends, for friends-only
 	// rooms (D41). Nil until T7 lands the friend graph; a friends-only room
 	// then admits nobody but its host, which is the honest failure.
@@ -101,6 +107,7 @@ func New(cfg Config) *Server {
 		players:   cfg.Players,
 		chat:      cfg.Chat,
 		accounts:  cfg.Accounts,
+		social:    cfg.Social,
 		friends:   cfg.Friends,
 		diag:      &diagLog{},
 		dl:        &downloads{dir: cfg.DistDir, key: cfg.DownloadKey},
@@ -152,6 +159,15 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /v1/auth/me", s.authenticated(s.limitRead, s.whoami))
 	mux.HandleFunc("POST /v1/auth/password", s.authenticated(s.limitAuth, s.changePassword))
 	mux.HandleFunc("POST /v1/terms/accept", s.authenticated(s.limitManage, s.acceptTerms))
+
+	// Friends (D41). All of it needs an account: a friends list belongs to
+	// somebody, and there is nobody to belong to without one.
+	mux.HandleFunc("GET /v1/friends", s.authenticated(s.limitRead, s.friendList))
+	mux.HandleFunc("POST /v1/friends", s.authenticated(s.limitManage, s.befriend))
+	mux.HandleFunc("GET /v1/players/find", s.authenticated(s.limitRead, s.findPlayer))
+	mux.HandleFunc("POST /v1/friends/messages", s.authenticated(s.limitChat, s.privateMessages))
+	mux.HandleFunc("POST /v1/friends/invite", s.authenticated(s.limitManage, s.inviteFriend))
+	mux.HandleFunc("POST /v1/friends/invitations/seen", s.authenticated(s.limitManage, s.seenInvitations))
 
 	// Reading the room list needs no account. D45: somebody who has just
 	// installed the app should see what is going on before deciding whether

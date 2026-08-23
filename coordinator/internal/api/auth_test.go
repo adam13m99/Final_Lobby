@@ -13,6 +13,7 @@ import (
 	"lobbybaz/coordinator/internal/chat"
 	"lobbybaz/coordinator/internal/player"
 	"lobbybaz/coordinator/internal/room"
+	"lobbybaz/coordinator/internal/social"
 	"lobbybaz/coordinator/internal/store"
 	"lobbybaz/coordinator/internal/ticket"
 )
@@ -22,6 +23,7 @@ type authRig struct {
 	t   *testing.T
 	srv http.Handler
 	acc *account.Store
+	soc *social.Store
 	// friends is swappable so a test can install a graph after signing
 	// people up - their IDs are not known until then.
 	friends *swappableFriends
@@ -49,6 +51,7 @@ func newAuthRig(t *testing.T) *authRig {
 	t.Cleanup(func() { _ = db.Close() })
 
 	acc := account.New(db)
+	soc := social.New(db)
 	friends := &swappableFriends{}
 	s := New(Config{
 		Friends:   friends,
@@ -57,11 +60,12 @@ func newAuthRig(t *testing.T) *authRig {
 		Players:   player.NewRegistry(),
 		Chat:      chat.NewBoard(),
 		Accounts:  acc,
+		Social:    soc,
 		RelayAddr: "127.0.0.1:443",
 		RelayPub:  "00",
 		Now:       func() time.Time { return time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC) },
 	})
-	return &authRig{t: t, srv: s.Routes(), acc: acc, friends: friends}
+	return &authRig{t: t, srv: s.Routes(), acc: acc, soc: soc, friends: friends}
 }
 
 func (g *authRig) do(method, path, session string, body any) (*httptest.ResponseRecorder, map[string]any) {

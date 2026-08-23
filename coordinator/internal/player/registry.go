@@ -1,11 +1,16 @@
-// Package player holds who each player is: the name they chose and the MMR
-// they declared.
+// Package player is the live view of who is here: who is online, what they
+// are called right now, and whether their copy of Dota is running.
 //
-// Identity is deliberately thin for the test phase - the product owner
-// decided on 2026-08-23 that a player is a name plus a locally generated ID,
-// with no password. The consequence is understood and written down: a kicked
-// player can reinstall and come back as somebody new. That must be fixed
-// before real players, and is not worth blocking the two-PC test on.
+// It is deliberately in memory and deliberately not the source of truth. Since
+// T5 a player's durable facts - username, password, declared MMR, display
+// name - live in the accounts table, and this registry mirrors them for the
+// things a room list has to draw on every poll. What is genuinely only here is
+// presence: last seen, and in-game. Neither survives a restart, and neither
+// should: a coordinator that has just started has not seen anybody yet, and
+// saying otherwise would show a lobby full of ghosts.
+//
+// A coordinator running without a database (the loadtest harness) has only
+// this, and that is the one case where it is the whole of identity.
 package player
 
 import (
@@ -43,6 +48,13 @@ type Player struct {
 	MMRSetAt  time.Time `json:"mmr_set_at,omitempty"`
 	FirstSeen time.Time `json:"first_seen"`
 	LastSeen  time.Time `json:"last_seen"`
+
+	// InGame is reported by the player's own service, which knows because it
+	// launched Dota and watches its log (D41). It is not inferred from room
+	// state: a room can be locked while its host is still on the hero screen,
+	// and telling somebody their friend is playing when they are waiting for
+	// them is exactly the wrong thing to say.
+	InGame bool `json:"in_game"`
 }
 
 // MMRChangeableAt is when this player may next change their MMR. Zero means
@@ -54,11 +66,7 @@ func (p Player) MMRChangeableAt() time.Time {
 	return p.MMRSetAt.Add(MMRChangeInterval)
 }
 
-// Registry is every player the coordinator has seen.
-//
-// In memory, like the room store. Persistence arrives with PostgreSQL in
-// sub-project 2; a restart during testing costs everyone their declared MMR
-// and nothing else.
+// Registry is every player the coordinator has seen since it started.
 type Registry struct {
 	mu      sync.Mutex
 	players map[string]*Player
@@ -130,6 +138,22 @@ func (r *Registry) SetMMR(id string, mmr int, now time.Time) (Player, error) {
 		p.MMRSetAt = now
 	}
 	return *p, nil
+}
+
+// SetInGame records whether somebody's copy of Dota is running.
+//
+// Reported, not inferred. The signal costs nothing - the service launched the
+// game and is already watching its log - and it is the only honest source: a
+// coordinator cannot see a match start.
+func (r *Registry) SetInGame(id string, playing bool, now time.Time) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	p, ok := r.players[id]
+	if !ok {
+		return
+	}
+	p.InGame = playing
+	p.LastSeen = now
 }
 
 // Get returns one player.

@@ -183,6 +183,13 @@ var migrations = []string{
 	`,
 }
 
+// all returns every migration in order. The list is split across files only
+// for length; the index in this slice is still the version number, so nothing
+// may be inserted in the middle.
+func all() []string {
+	return append(append([]string{}, migrations...), socialMigrations...)
+}
+
 // Migrate brings an open database up to the current schema version.
 func Migrate(db *sql.DB) error {
 	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)`); err != nil {
@@ -194,13 +201,14 @@ func Migrate(db *sql.DB) error {
 		return fmt.Errorf("store: reading schema version: %w", err)
 	}
 
-	for i := current; i < len(migrations); i++ {
+	scripts := all()
+	for i := current; i < len(scripts); i++ {
 		version := i + 1
 		tx, err := db.Begin()
 		if err != nil {
 			return fmt.Errorf("store: migration %d: %w", version, err)
 		}
-		for _, stmt := range splitStatements(migrations[i]) {
+		for _, stmt := range splitStatements(scripts[i]) {
 			if _, err := tx.Exec(stmt); err != nil {
 				_ = tx.Rollback()
 				return fmt.Errorf("store: migration %d: %w\nstatement: %s", version, err, stmt)
