@@ -22,7 +22,7 @@ import (
 
 // RuleName is what appears in Windows Defender Firewall. It is distinctive so
 // a person can find and remove it.
-const RuleName = "Final Lobby (Dota 2 match hosting)"
+const RuleName = "LobbyBaz (Dota 2 match hosting)"
 
 // ourSubnet scopes the rule to our own address space. Without this we would
 // be opening the player's game to their whole local network, which is more

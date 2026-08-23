@@ -30,11 +30,11 @@ import (
 	"strings"
 	"time"
 
-	"finallobby/client/lobby"
-	"finallobby/client/session"
-	"finallobby/protocol/crypto"
-	"finallobby/protocol/ipc"
-	"finallobby/protocol/wire"
+	"lobbybaz/client/lobby"
+	"lobbybaz/client/session"
+	"lobbybaz/protocol/crypto"
+	"lobbybaz/protocol/ipc"
+	"lobbybaz/protocol/wire"
 )
 
 func main() {
@@ -89,7 +89,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Print(`lobbycli - Final Lobby test client
+	fmt.Print(`lobbycli - LobbyBaz test client
 
   setup       -coordinator URL -token TOKEN -player NAME [-nick NICK]
   rooms       list open rooms

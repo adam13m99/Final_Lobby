@@ -15,10 +15,10 @@ import (
 	"strings"
 	"time"
 
-	"finallobby/coordinator/internal/chat"
-	"finallobby/coordinator/internal/player"
-	"finallobby/coordinator/internal/room"
-	"finallobby/coordinator/internal/ticket"
+	"lobbybaz/coordinator/internal/chat"
+	"lobbybaz/coordinator/internal/player"
+	"lobbybaz/coordinator/internal/room"
+	"lobbybaz/coordinator/internal/ticket"
 )
 
 // Server wires the room store and ticket store behind HTTP.

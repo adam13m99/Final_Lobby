@@ -17,8 +17,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"finallobby/protocol/crypto"
-	"finallobby/protocol/wire"
+	"lobbybaz/protocol/crypto"
+	"lobbybaz/protocol/wire"
 )
 
 // State is the tunnel's connection state.

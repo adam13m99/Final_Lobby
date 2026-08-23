@@ -25,10 +25,10 @@ FAIL=0
 : "${FL_DOWNLOAD_BASE:=}"
 
 stamp() {
-  printf -- '-X finallobby/client/build.Version=%s ' "$FL_VERSION"
-  printf -- '-X finallobby/client/build.Coordinator=%s ' "$FL_COORDINATOR"
-  printf -- '-X finallobby/client/build.AuthToken=%s ' "$FL_AUTH_TOKEN"
-  printf -- '-X finallobby/client/build.DownloadBase=%s' "$FL_DOWNLOAD_BASE"
+  printf -- '-X lobbybaz/client/build.Version=%s ' "$FL_VERSION"
+  printf -- '-X lobbybaz/client/build.Coordinator=%s ' "$FL_COORDINATOR"
+  printf -- '-X lobbybaz/client/build.AuthToken=%s ' "$FL_AUTH_TOKEN"
+  printf -- '-X lobbybaz/client/build.DownloadBase=%s' "$FL_DOWNLOAD_BASE"
 }
 
 # pack compresses a built executable into the installer's payload. The
@@ -87,9 +87,9 @@ case "$target" in
     pack lobbyapp.exe
     pack lobbycli.exe
     if [ "$FAIL" -ne 0 ]; then
-      printf '  SKIP  bin/FinalLobby-Setup.exe (its payload is incomplete)'; echo
+      printf '  SKIP  bin/LobbyBaz-Setup.exe (its payload is incomplete)'; echo
     else
-      build installer FinalLobby-Setup.exe windows .
+      build installer LobbyBaz-Setup.exe windows .
     fi
     ;;&
   all|relay|coordinator|netservice|lobbyapp|lobbycli|loadtest|installer) ;;

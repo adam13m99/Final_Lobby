@@ -23,13 +23,13 @@ func server(t *testing.T, version string, payload []byte, hash string) *httptest
 		Version:   version,
 		SHA256:    hash,
 		Size:      int64(len(payload)),
-		Installer: "FinalLobby-Setup.exe",
+		Installer: "LobbyBaz-Setup.exe",
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/version.json", func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(m)
 	})
-	mux.HandleFunc("/FinalLobby-Setup.exe", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/LobbyBaz-Setup.exe", func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(payload)
 	})
 	srv := httptest.NewServer(mux)

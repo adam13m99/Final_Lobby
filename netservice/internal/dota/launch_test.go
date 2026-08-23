@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"finallobby/netservice/internal/dota"
+	"lobbybaz/netservice/internal/dota"
 )
 
 func TestBuildHostArgs(t *testing.T) {

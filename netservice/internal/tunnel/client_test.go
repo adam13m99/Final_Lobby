@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"finallobby/netservice/internal/tunnel"
-	"finallobby/protocol/crypto"
-	"finallobby/protocol/wire"
+	"lobbybaz/netservice/internal/tunnel"
+	"lobbybaz/protocol/crypto"
+	"lobbybaz/protocol/wire"
 )
 
 // fakeDevice stands in for the Wintun adapter.

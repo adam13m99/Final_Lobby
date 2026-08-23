@@ -12,8 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	"finallobby/protocol/crypto"
-	"finallobby/relay/internal/server"
+	"lobbybaz/protocol/crypto"
+	"lobbybaz/relay/internal/server"
 )
 
 func main() {

@@ -1,4 +1,4 @@
-// Final Lobby - prototype UI.
+// LobbyBaz - prototype UI.
 //
 // The page is a renderer. It polls one endpoint, draws what came back, and
 // posts actions. It holds no state of its own beyond which screen is showing

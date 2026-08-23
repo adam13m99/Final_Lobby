@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"finallobby/coordinator/internal/api"
-	"finallobby/coordinator/internal/room"
-	"finallobby/coordinator/internal/ticket"
+	"lobbybaz/coordinator/internal/api"
+	"lobbybaz/coordinator/internal/room"
+	"lobbybaz/coordinator/internal/ticket"
 )
 
 type harness struct {

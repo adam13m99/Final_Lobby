@@ -86,7 +86,7 @@ FL_AUTH_TOKEN="$API_TOKEN" \
 FL_DOWNLOAD_BASE="$DOWNLOAD_BASE" \
   ./scripts/build.sh installer
 
-SETUP="bin/FinalLobby-Setup.exe"
+SETUP="bin/LobbyBaz-Setup.exe"
 [ -f "$SETUP" ] || { echo "the installer was not built" >&2; exit 1; }
 
 SUM=$(sha256sum "$SETUP" | cut -d" " -f1)
@@ -98,16 +98,16 @@ cat > dist/version.json <<EOF
   "version": "$VERSION",
   "sha256": "$SUM",
   "size": $SIZE,
-  "url": "$DOWNLOAD_BASE/FinalLobby-Setup.exe",
+  "url": "$DOWNLOAD_BASE/LobbyBaz-Setup.exe",
   "built_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "installer": "FinalLobby-Setup.exe"
+  "installer": "LobbyBaz-Setup.exe"
 }
 EOF
 
 # ----------------------------------------------------------------- upload
 
 echo "==> publishing"
-upload_verified "$SETUP" "$DIST_DIR/FinalLobby-Setup.exe.new"
+upload_verified "$SETUP" "$DIST_DIR/LobbyBaz-Setup.exe.new"
 upload_verified dist/version.json "$DIST_DIR/version.json.new"
 
 # Swap both into place together. A manifest that arrives before its
@@ -115,9 +115,9 @@ upload_verified dist/version.json "$DIST_DIR/version.json.new"
 # does not match, and the app refuses it.
 ssh_run bash -s <<REMOTE
 set -euo pipefail
-mv $DIST_DIR/FinalLobby-Setup.exe.new $DIST_DIR/FinalLobby-Setup.exe
+mv $DIST_DIR/LobbyBaz-Setup.exe.new $DIST_DIR/LobbyBaz-Setup.exe
 mv $DIST_DIR/version.json.new $DIST_DIR/version.json
-chmod 644 $DIST_DIR/FinalLobby-Setup.exe $DIST_DIR/version.json
+chmod 644 $DIST_DIR/LobbyBaz-Setup.exe $DIST_DIR/version.json
 REMOTE
 
 # ------------------------------------------- make sure the server serves it

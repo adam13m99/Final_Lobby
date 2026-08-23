@@ -20,15 +20,15 @@ import (
 	"sync"
 	"time"
 
-	"finallobby/netservice/internal/adapter"
-	"finallobby/netservice/internal/dota"
-	"finallobby/protocol/ipc"
-	"finallobby/netservice/internal/tunnel"
-	"finallobby/netservice/internal/watchdog"
+	"lobbybaz/netservice/internal/adapter"
+	"lobbybaz/netservice/internal/dota"
+	"lobbybaz/protocol/ipc"
+	"lobbybaz/netservice/internal/tunnel"
+	"lobbybaz/netservice/internal/watchdog"
 )
 
 // adapterName is the interface the player sees in their network settings.
-const adapterName = "Final Lobby"
+const adapterName = "LobbyBaz"
 
 // Agent holds all live state. One room at a time.
 type Agent struct {

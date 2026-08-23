@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"finallobby/relay/internal/sendq"
+	"lobbybaz/relay/internal/sendq"
 )
 
 func TestPreservesOrder(t *testing.T) {

@@ -11,14 +11,14 @@ import (
 	"syscall"
 	"time"
 
-	"finallobby/client/build"
+	"lobbybaz/client/build"
 
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
 	"golang.org/x/sys/windows/svc/mgr"
 )
 
-const serviceName = "FinalLobbyNet"
+const serviceName = "LobbyBazNet"
 
 func installDir() string {
 	base := os.Getenv("ProgramFiles")
@@ -167,7 +167,7 @@ func writeShortcut(dir string) error {
 	script := fmt.Sprintf(
 		`$s=(New-Object -ComObject WScript.Shell).CreateShortcut(%q);`+
 			`$s.TargetPath=%q;$s.WorkingDirectory=%q;`+
-			`$s.Description='Final Lobby - play Dota 2 with friends';$s.Save()`,
+			`$s.Description='LobbyBaz - play Dota 2 with friends';$s.Save()`,
 		lnk, target, dir)
 
 	out, err := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive",
@@ -180,7 +180,7 @@ func writeShortcut(dir string) error {
 
 // --- add or remove programs ---------------------------------------------
 
-const uninstallKey = `Software\Microsoft\Windows\CurrentVersion\Uninstall\FinalLobby`
+const uninstallKey = `Software\Microsoft\Windows\CurrentVersion\Uninstall\LobbyBaz`
 
 func registerUninstall(dir string) error {
 	k, _, err := registry.CreateKey(registry.LOCAL_MACHINE, uninstallKey, registry.SET_VALUE)
@@ -189,7 +189,7 @@ func registerUninstall(dir string) error {
 	}
 	defer k.Close()
 
-	self := filepath.Join(dir, "FinalLobby-Setup.exe")
+	self := filepath.Join(dir, "LobbyBaz-Setup.exe")
 	// Keep a copy of ourselves so the entry still works after the download
 	// is deleted, which is the first thing most people do.
 	if exe, err := os.Executable(); err == nil {
@@ -199,7 +199,7 @@ func registerUninstall(dir string) error {
 	for name, value := range map[string]string{
 		"DisplayName":     appName,
 		"DisplayVersion":  build.Version,
-		"Publisher":       "Final Lobby",
+		"Publisher":       "LobbyBaz",
 		"InstallLocation": dir,
 		"UninstallString": `"` + self + `" /uninstall`,
 		"DisplayIcon":     filepath.Join(dir, "lobbyapp.exe"),
@@ -237,4 +237,111 @@ func launchAsUser(path string) {
 		return
 	}
 	_ = cmd.Process.Release()
+}
+
+// --- the previous name --------------------------------------------------
+//
+// The product was called "Final Lobby" until 2026-08-24 (D46). Machines
+// installed before the rename carry a service, a directory, a shortcut and an
+// uninstall entry under the old name, and none of them share a name with
+// their replacement - so nothing about installing LobbyBaz disturbs them.
+//
+// That is the danger. Left alone they do not conflict, they *coexist*: two
+// services racing to create a virtual adapter, two shortcuts, and a player
+// who cannot tell which app they just opened. The old install has to be
+// removed deliberately, because Windows will not do it for us.
+//
+// This can be deleted once no machine is running a pre-rename build. Until
+// then, deleting it silently strands whoever has not upgraded yet.
+
+const (
+	legacyServiceName = "FinalLobbyNet"
+	legacyAppName     = "Final Lobby"
+	legacyUninstall   = `Software\Microsoft\Windows\CurrentVersion\Uninstall\FinalLobby`
+)
+
+// removePreviousName clears out an install made under the old product name.
+func removePreviousName() {
+	removed := false
+
+	// The service first: while it runs it holds its binary open, and it will
+	// happily keep creating an adapter that now belongs to somebody else.
+	if svc := legacyInstallDir(); svc != "" {
+		exe := filepath.Join(svc, "netservice.exe")
+		if _, err := os.Stat(exe); err == nil {
+			_ = exec.Command(exe, "uninstall").Run()
+			removed = true
+		}
+	}
+	if legacyServiceExists() {
+		_ = exec.Command("sc.exe", "stop", legacyServiceName).Run()
+		_ = exec.Command("sc.exe", "delete", legacyServiceName).Run()
+		removed = true
+	}
+
+	// The old app may be running and holding files open.
+	_ = exec.Command("taskkill.exe", "/F", "/IM", "lobbyapp.exe").Run()
+
+	if dir := legacyInstallDir(); dir != "" {
+		// Never delete a folder we are running from - the same trap the
+		// updater fell into once already.
+		safe := true
+		if exe, err := os.Executable(); err == nil && within(dir, filepath.Dir(exe)) {
+			safe = false
+		}
+		if safe {
+			if err := os.RemoveAll(dir); err == nil {
+				removed = true
+			}
+		}
+	}
+
+	if p, err := legacyShortcutPath(); err == nil {
+		if _, statErr := os.Stat(p); statErr == nil {
+			_ = os.Remove(p)
+			removed = true
+		}
+	}
+	_ = registry.DeleteKey(registry.LOCAL_MACHINE, legacyUninstall)
+
+	if removed {
+		say("Removed the older " + legacyAppName + " install")
+	}
+}
+
+func legacyInstallDir() string {
+	base := os.Getenv("ProgramFiles")
+	if base == "" {
+		base = `C:\Program Files`
+	}
+	if !filepath.IsAbs(base) {
+		return ""
+	}
+	dir := filepath.Join(base, legacyAppName)
+	if _, err := os.Stat(dir); err != nil {
+		return ""
+	}
+	return dir
+}
+
+func legacyServiceExists() bool {
+	m, err := mgr.Connect()
+	if err != nil {
+		return false
+	}
+	defer m.Disconnect()
+	s, err := m.OpenService(legacyServiceName)
+	if err != nil {
+		return false
+	}
+	_ = s.Close()
+	return true
+}
+
+func legacyShortcutPath() (string, error) {
+	dir, err := windows.KnownFolderPath(windows.FOLDERID_PublicDesktop, 0)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, legacyAppName+".lnk"), nil
 }

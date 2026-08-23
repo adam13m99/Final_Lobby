@@ -7,7 +7,7 @@ import (
 	"os"
 	"testing"
 
-	"finallobby/netservice/internal/adapter"
+	"lobbybaz/netservice/internal/adapter"
 )
 
 // These tests need Administrator rights and the Wintun driver.
@@ -76,7 +76,7 @@ func TestMaskForKnownPrefixes(t *testing.T) {
 func TestAdapterLifecycle(t *testing.T) {
 	requireAdmin(t)
 
-	a, err := adapter.Open("FinalLobbyTest", adapter.MTU)
+	a, err := adapter.Open("LobbyBazTest", adapter.MTU)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}

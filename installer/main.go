@@ -1,4 +1,4 @@
-// Command FinalLobby-Setup installs Final Lobby.
+// Command LobbyBaz-Setup installs LobbyBaz.
 //
 // One file. A player downloads it, runs it, allows the one Windows prompt,
 // and the app opens. There is no folder to copy, no script to right-click,
@@ -23,7 +23,7 @@ import (
 	"strings"
 	"time"
 
-	"finallobby/client/build"
+	"lobbybaz/client/build"
 )
 
 // The payload. scripts/build.sh compiles each component, compresses it, and
@@ -36,7 +36,7 @@ var payload embed.FS
 // installDir is machine-wide because the network service runs as the system
 // account and must be able to read its own binary regardless of who is
 // logged in.
-const appName = "Final Lobby"
+const appName = "LobbyBaz"
 
 // components are the executables carried inside this installer, written out
 // in this order.
@@ -72,7 +72,7 @@ func main() {
 	}
 
 	if uninstall {
-		say("Final Lobby has been removed.")
+		say("LobbyBaz has been removed.")
 	} else {
 		say("")
 		say("  Done. Open \"" + appName + "\" from your desktop to play.")
@@ -95,6 +95,7 @@ func install(silent bool) error {
 	// into, so each half is handled on its own.
 	stopExisting(dir)
 	removeLegacyInstall()
+	removePreviousName()
 
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("could not create %s: %w", dir, err)
@@ -178,13 +179,13 @@ func writeComponent(dir, name string) error {
 func removeLegacyInstall() {
 	// Guard on the environment variable, not on the joined path. With
 	// LOCALAPPDATA unset, filepath.Join returns the bare relative name
-	// "FinalLobby" and this would delete whatever happens to be sitting in
+	// "LobbyBaz" and this would delete whatever happens to be sitting in
 	// the working directory.
 	base := os.Getenv("LOCALAPPDATA")
 	if base == "" || !filepath.IsAbs(base) {
 		return
 	}
-	old := filepath.Join(base, "FinalLobby")
+	old := filepath.Join(base, "LobbyBaz")
 	if _, err := os.Stat(old); err != nil {
 		return
 	}
@@ -217,6 +218,7 @@ func removeAll() error {
 	dir := installDir()
 	stopExisting(dir)
 	removeLegacyInstall()
+	removePreviousName()
 	unregisterUninstall()
 	if p, err := desktopShortcutPath(); err == nil {
 		_ = os.Remove(p)
@@ -231,7 +233,7 @@ func removeAll() error {
 
 func banner() {
 	fmt.Println()
-	fmt.Println("  Final Lobby - setup")
+	fmt.Println("  LobbyBaz - setup")
 	fmt.Println("  ===================")
 	fmt.Println("  version", build.Version)
 	fmt.Println()

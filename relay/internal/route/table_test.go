@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"finallobby/relay/internal/route"
-	"finallobby/relay/internal/sendq"
+	"lobbybaz/relay/internal/route"
+	"lobbybaz/relay/internal/sendq"
 )
 
 func peer(t *testing.T, id uint32, ip, room string) *route.Peer {

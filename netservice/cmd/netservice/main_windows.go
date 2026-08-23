@@ -27,17 +27,17 @@ import (
 	"golang.org/x/sys/windows/svc/eventlog"
 	"golang.org/x/sys/windows/svc/mgr"
 
-	"finallobby/netservice/internal/adapter"
-	"finallobby/netservice/internal/agent"
-	"finallobby/netservice/internal/dota"
-	"finallobby/netservice/internal/firewall"
-	"finallobby/protocol/ipc"
+	"lobbybaz/netservice/internal/adapter"
+	"lobbybaz/netservice/internal/agent"
+	"lobbybaz/netservice/internal/dota"
+	"lobbybaz/netservice/internal/firewall"
+	"lobbybaz/protocol/ipc"
 )
 
 const (
-	serviceName = "FinalLobbyNet"
-	displayName = "Final Lobby Network Service"
-	description = "Manages the Final Lobby virtual network adapter and relay tunnel."
+	serviceName = "LobbyBazNet"
+	displayName = "LobbyBaz Network Service"
+	description = "Manages the LobbyBaz virtual network adapter and relay tunnel."
 )
 
 func main() {
@@ -55,13 +55,13 @@ func main() {
 			fmt.Fprintln(os.Stderr, "install failed:", err)
 			os.Exit(1)
 		}
-		fmt.Println("Final Lobby network service installed and started.")
+		fmt.Println("LobbyBaz network service installed and started.")
 	case "uninstall":
 		if err := uninstall(); err != nil {
 			fmt.Fprintln(os.Stderr, "uninstall failed:", err)
 			os.Exit(1)
 		}
-		fmt.Println("Final Lobby network service removed.")
+		fmt.Println("LobbyBaz network service removed.")
 	case "run":
 		runForeground(log)
 	case "auto":
@@ -140,7 +140,7 @@ func (s *service) Execute(_ []string, r <-chan svc.ChangeRequest, changes chan<-
 func runAsService(log *slog.Logger) {
 	if elog, err := eventlog.Open(serviceName); err == nil {
 		defer elog.Close()
-		_ = elog.Info(1, "Final Lobby network service starting")
+		_ = elog.Info(1, "LobbyBaz network service starting")
 	}
 	if err := svc.Run(serviceName, &service{log: log}); err != nil {
 		log.Error("service failed", "err", err)

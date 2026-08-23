@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"finallobby/coordinator/internal/ticket"
+	"lobbybaz/coordinator/internal/ticket"
 )
 
 var t0 = time.Date(2026, 8, 18, 12, 0, 0, 0, time.UTC)

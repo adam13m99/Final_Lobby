@@ -11,7 +11,7 @@ package build
 
 import "strings"
 
-// Set with -ldflags "-X finallobby/client/build.Version=..." by
+// Set with -ldflags "-X lobbybaz/client/build.Version=..." by
 // scripts/build.sh. The zero values are what a developer building by hand
 // gets, and they are deliberately unusable rather than pointing at
 // production by accident.

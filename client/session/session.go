@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"finallobby/client/build"
+	"lobbybaz/client/build"
 )
 
 // Config is what the CLI remembers between commands: who you are, where the
@@ -83,7 +83,7 @@ func Path() string {
 	if err != nil {
 		dir = "."
 	}
-	return filepath.Join(dir, "FinalLobby", "lobbycli.json")
+	return filepath.Join(dir, "LobbyBaz", "lobbycli.json")
 }
 
 func Load() (*Config, error) {

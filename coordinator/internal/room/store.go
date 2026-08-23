@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"finallobby/coordinator/internal/ipam"
+	"lobbybaz/coordinator/internal/ipam"
 )
 
 var (

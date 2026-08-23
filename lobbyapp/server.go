@@ -14,10 +14,10 @@ import (
 	"sync"
 	"time"
 
-	"finallobby/client/build"
-	"finallobby/client/lobby"
-	"finallobby/client/session"
-	"finallobby/protocol/ipc"
+	"lobbybaz/client/build"
+	"lobbybaz/client/lobby"
+	"lobbybaz/client/session"
+	"lobbybaz/protocol/ipc"
 )
 
 // chatKeep is how many messages the app holds for the page to draw. The
@@ -168,7 +168,7 @@ func (s *server) state(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	if resp, err := ipc.Call(ctx, ipc.Request{Op: ipc.OpStatus}); err != nil {
 		out["service"] = false
-		out["service_error"] = "The Final Lobby network service is not running. " +
+		out["service_error"] = "The LobbyBaz network service is not running. " +
 			"Reinstall the app from the download link."
 	} else {
 		out["service"] = true

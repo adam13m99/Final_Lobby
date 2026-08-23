@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"finallobby/coordinator/internal/chat"
-	"finallobby/coordinator/internal/player"
-	"finallobby/coordinator/internal/room"
+	"lobbybaz/coordinator/internal/chat"
+	"lobbybaz/coordinator/internal/player"
+	"lobbybaz/coordinator/internal/room"
 )
 
 // OnlineWindow is how recently a player must have synced to count as online.

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"finallobby/netservice/internal/watchdog"
+	"lobbybaz/netservice/internal/watchdog"
 )
 
 func TestRevokedVerdictTearsDownImmediately(t *testing.T) {

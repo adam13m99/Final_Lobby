@@ -1,10 +1,10 @@
-module finallobby/lobbycli
+module lobbybaz/lobbycli
 
 go 1.25.0
 
 require (
-	finallobby/client v0.0.0
-	finallobby/protocol v0.0.0
+	lobbybaz/client v0.0.0
+	lobbybaz/protocol v0.0.0
 )
 
 require (
@@ -14,6 +14,6 @@ require (
 	golang.org/x/sys v0.47.0 // indirect
 )
 
-replace finallobby/client => ../client
+replace lobbybaz/client => ../client
 
-replace finallobby/protocol => ../protocol
+replace lobbybaz/protocol => ../protocol

@@ -1,3 +1,3 @@
-module finallobby/coordinator
+module lobbybaz/coordinator
 
 go 1.23

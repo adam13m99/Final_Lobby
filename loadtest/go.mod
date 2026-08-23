@@ -1,8 +1,8 @@
-module finallobby/loadtest
+module lobbybaz/loadtest
 
 go 1.25.0
 
-require finallobby/protocol v0.0.0
+require lobbybaz/protocol v0.0.0
 
 require (
 	github.com/flynn/noise v1.1.0 // indirect
@@ -10,4 +10,4 @@ require (
 	golang.org/x/sys v0.47.0 // indirect
 )
 
-replace finallobby/protocol => ../protocol
+replace lobbybaz/protocol => ../protocol

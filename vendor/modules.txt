@@ -1,7 +1,7 @@
 ## workspace
-# finallobby/client v0.0.0 => ./client
+# lobbybaz/client v0.0.0 => ./client
 ## explicit; go 1.25.0
-# finallobby/protocol v0.0.0 => ./protocol
+# lobbybaz/protocol v0.0.0 => ./protocol
 ## explicit; go 1.25.0
 # github.com/Microsoft/go-winio v0.6.2
 ## explicit; go 1.21

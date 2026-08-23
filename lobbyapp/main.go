@@ -1,4 +1,4 @@
-// Command lobbyapp is the Final Lobby desktop client.
+// Command lobbyapp is the LobbyBaz desktop client.
 //
 // It runs in the player's own session with no special rights, serves the UI
 // on loopback, and opens it in the default browser. The privileged work -
@@ -28,8 +28,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"finallobby/client/build"
-	"finallobby/client/selfupdate"
+	"lobbybaz/client/build"
+	"lobbybaz/client/selfupdate"
 )
 
 //go:embed ui
@@ -59,7 +59,7 @@ func main() {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	fmt.Printf("Final Lobby %s is running.\n", build.Version)
+	fmt.Printf("LobbyBaz %s is running.\n", build.Version)
 	fmt.Println()
 	fmt.Println("  ", url)
 	fmt.Println()
@@ -129,13 +129,13 @@ func (s *server) checkForUpdate() {
 
 // updateDir is where a downloaded installer waits to be run.
 //
-// Deliberately not %LOCALAPPDATA%\FinalLobby, which is where the first test
+// Deliberately not %LOCALAPPDATA%\LobbyBaz, which is where the first test
 // build installed itself: the new installer removes that folder, and putting
 // the installer inside the folder it is about to delete meant it was trying
 // to delete itself while running. It failed silently and left the folder
 // behind, which is how the collision was noticed at all.
 func updateDir() string {
-	return filepath.Join(os.TempDir(), "FinalLobby-update")
+	return filepath.Join(os.TempDir(), "LobbyBaz-update")
 }
 
 // clearOldUpdate deletes an installer left over from a previous update. It

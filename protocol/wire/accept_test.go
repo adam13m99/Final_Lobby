@@ -5,7 +5,7 @@ import (
 	"net/netip"
 	"testing"
 
-	"finallobby/protocol/wire"
+	"lobbybaz/protocol/wire"
 )
 
 func TestAcceptRoundTrip(t *testing.T) {

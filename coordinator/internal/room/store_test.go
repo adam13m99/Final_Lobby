@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"finallobby/coordinator/internal/room"
+	"lobbybaz/coordinator/internal/room"
 )
 
 func TestCreateSeatsHostAtTheDeterministicAddress(t *testing.T) {

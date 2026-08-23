@@ -17,17 +17,17 @@ import (
 	"syscall"
 	"time"
 
-	"finallobby/coordinator/internal/api"
-	"finallobby/coordinator/internal/chat"
-	"finallobby/coordinator/internal/player"
-	"finallobby/coordinator/internal/room"
-	"finallobby/coordinator/internal/ticket"
+	"lobbybaz/coordinator/internal/api"
+	"lobbybaz/coordinator/internal/chat"
+	"lobbybaz/coordinator/internal/player"
+	"lobbybaz/coordinator/internal/room"
+	"lobbybaz/coordinator/internal/ticket"
 )
 
 func main() {
 	listen := flag.String("listen", "127.0.0.1:7001", "HTTP listen address")
 	relayAddr := flag.String("relay-addr", "87.107.110.199:443", "relay address given to clients")
-	relayPubFile := flag.String("relay-pub", "/etc/finallobby/relay.pub", "file holding the relay public key")
+	relayPubFile := flag.String("relay-pub", "/etc/lobbybaz/relay.pub", "file holding the relay public key")
 	tickEvery := flag.Duration("tick", 10*time.Second, "how often room timers advance")
 	authFile := flag.String("auth-token-file", "", "file holding the shared bearer token for the player API (empty = open)")
 	distDir := flag.String("dist-dir", "", "directory holding the published installer and version.json (empty = serve no downloads)")

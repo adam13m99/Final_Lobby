@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"finallobby/relay/internal/server"
+	"lobbybaz/relay/internal/server"
 )
 
 // ticketTTL is how long a positive validation is trusted. Short enough that

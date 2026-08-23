@@ -1,4 +1,4 @@
-module finallobby/relay
+module lobbybaz/relay
 
 go 1.25.0
 
@@ -9,6 +9,6 @@ require (
 
 require golang.org/x/sys v0.47.0
 
-require finallobby/protocol v0.0.0
+require lobbybaz/protocol v0.0.0
 
-replace finallobby/protocol => ../protocol
+replace lobbybaz/protocol => ../protocol

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"finallobby/protocol/ipc"
+	"lobbybaz/protocol/ipc"
 )
 
 func TestPipeRoundTrip(t *testing.T) {

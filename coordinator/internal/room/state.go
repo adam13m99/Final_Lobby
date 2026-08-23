@@ -9,7 +9,7 @@ import (
 	"errors"
 	"time"
 
-	"finallobby/coordinator/internal/ipam"
+	"lobbybaz/coordinator/internal/ipam"
 )
 
 // Status is the room's admission state.

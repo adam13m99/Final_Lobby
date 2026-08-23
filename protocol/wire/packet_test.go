@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"finallobby/protocol/wire"
+	"lobbybaz/protocol/wire"
 )
 
 func TestHeaderRoundTrip(t *testing.T) {

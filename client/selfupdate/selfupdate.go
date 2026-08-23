@@ -81,7 +81,7 @@ func Download(m *Manifest, baseURL, dir string) (string, error) {
 	if url == "" {
 		name := m.Installer
 		if name == "" {
-			name = "FinalLobby-Setup.exe"
+			name = "LobbyBaz-Setup.exe"
 		}
 		url = strings.TrimRight(baseURL, "/") + "/" + name
 	}
@@ -123,7 +123,7 @@ func Download(m *Manifest, baseURL, dir string) (string, error) {
 		return "", fmt.Errorf("the download stopped short: got %d bytes, expected %d", n, m.Size)
 	}
 
-	final := filepath.Join(dir, "FinalLobby-Update.exe")
+	final := filepath.Join(dir, "LobbyBaz-Update.exe")
 	// Windows will not rename over a file that exists.
 	_ = os.Remove(final)
 	if err := os.Rename(tmpName, final); err != nil {

@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"finallobby/protocol/crypto"
-	"finallobby/protocol/wire"
+	"lobbybaz/protocol/crypto"
+	"lobbybaz/protocol/wire"
 )
 
 func pair(t *testing.T) (client, server *crypto.Session) {

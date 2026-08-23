@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"finallobby/relay/internal/sendq"
+	"lobbybaz/relay/internal/sendq"
 )
 
 // Peer is one authenticated, connected client.

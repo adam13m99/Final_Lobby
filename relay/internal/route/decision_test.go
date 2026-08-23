@@ -4,7 +4,7 @@ import (
 	"net/netip"
 	"testing"
 
-	"finallobby/relay/internal/route"
+	"lobbybaz/relay/internal/route"
 )
 
 // ipv4 builds a minimal 20-byte IPv4 header with the given addresses.

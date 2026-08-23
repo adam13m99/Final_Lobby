@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"finallobby/client/build"
-	"finallobby/client/lobby"
-	"finallobby/client/session"
-	"finallobby/protocol/ipc"
+	"lobbybaz/client/build"
+	"lobbybaz/client/lobby"
+	"lobbybaz/client/session"
+	"lobbybaz/protocol/ipc"
 )
 
 // Diagnostics replace the acceptance checklist that a person used to fill in

@@ -15,13 +15,13 @@ func TestWithin(t *testing.T) {
 		dir, path string
 		want      bool
 	}{
-		{`C:\Users\a\AppData\Local\FinalLobby`, `C:\Users\a\AppData\Local\FinalLobby`, true},
-		{`C:\Users\a\AppData\Local\FinalLobby`, `C:\Users\a\AppData\Local\FinalLobby\sub`, true},
-		{`C:\Users\a\AppData\Local\FinalLobby`, `C:\Users\a\AppData\Local`, false},
-		{`C:\Users\a\AppData\Local\FinalLobby`, `C:\Users\a\AppData\Local\Temp`, false},
+		{`C:\Users\a\AppData\Local\LobbyBaz`, `C:\Users\a\AppData\Local\LobbyBaz`, true},
+		{`C:\Users\a\AppData\Local\LobbyBaz`, `C:\Users\a\AppData\Local\LobbyBaz\sub`, true},
+		{`C:\Users\a\AppData\Local\LobbyBaz`, `C:\Users\a\AppData\Local`, false},
+		{`C:\Users\a\AppData\Local\LobbyBaz`, `C:\Users\a\AppData\Local\Temp`, false},
 		// The near-miss that matters: a sibling whose name starts with the
 		// same characters must not be mistaken for a child.
-		{`C:\Users\a\AppData\Local\FinalLobby`, `C:\Users\a\AppData\Local\FinalLobbyOther`, false},
+		{`C:\Users\a\AppData\Local\LobbyBaz`, `C:\Users\a\AppData\Local\LobbyBazOther`, false},
 	}
 	for _, c := range cases {
 		if got := within(filepath.FromSlash(c.dir), filepath.FromSlash(c.path)); got != c.want {

@@ -4,7 +4,7 @@
 
 This machine runs an unrelated, live SNI-proxy business with real paying
 users: nginx on **TCP** 443, CoreDNS on 53, and an active WireGuard peer.
-Final Lobby is a guest on it for development and measurement only.
+LobbyBaz is a guest on it for development and measurement only.
 
 Every change we have made is listed below, with what it was before and how to
 undo it. Nothing outside this list has been touched. **nginx, CoreDNS,
@@ -141,7 +141,7 @@ These existed during testing and have been removed:
 - The `4443/udp` firewall rule
 - Extra relay processes started on ports 4443 and 9443 for testing
 
-Nothing from testing is still running. The only Final Lobby processes on the
+Nothing from testing is still running. The only LobbyBaz processes on the
 box are the two systemd services.
 
 ---
@@ -152,7 +152,7 @@ Added 2026-08-23.
 
 ```
 /var/lib/finallobby/dist/          755 root:root
-    FinalLobby-Setup.exe           644  the installer players download
+    LobbyBaz-Setup.exe           644  the installer players download
     version.json                   644  what build is current, and its hash
 /etc/finallobby/download.key       640 root:finallobby
 ```
@@ -191,7 +191,7 @@ different sockets and do not interact.
 
 ## Complete removal
 
-To take Final Lobby off this machine entirely:
+To take LobbyBaz off this machine entirely:
 
 ```bash
 systemctl disable --now relay.service coordinator.service

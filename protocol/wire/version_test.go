@@ -3,7 +3,7 @@ package wire_test
 import (
 	"testing"
 
-	"finallobby/protocol/wire"
+	"lobbybaz/protocol/wire"
 )
 
 func TestProtocolVersionIsOne(t *testing.T) {

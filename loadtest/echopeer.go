@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"finallobby/protocol/wire"
+	"lobbybaz/protocol/wire"
 )
 
 // runEchoPeer joins a room as an ordinary peer and answers ICMP echo

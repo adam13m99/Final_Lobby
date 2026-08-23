@@ -49,7 +49,7 @@ func ListenOn(ctx context.Context, name string, h Handler, log *slog.Logger) err
 		// always means a second copy of the service is running. Saying that
 		// plainly saves the next person a confused half hour.
 		if errors.Is(err, windows.ERROR_ACCESS_DENIED) {
-			return fmt.Errorf("ipc: the Final Lobby service is already running (pipe %s is taken)", name)
+			return fmt.Errorf("ipc: the LobbyBaz service is already running (pipe %s is taken)", name)
 		}
 		return fmt.Errorf("ipc: listen %s: %w", name, err)
 	}
@@ -109,7 +109,7 @@ func CallOn(ctx context.Context, name string, req Request) (Response, error) {
 	timeout := 10 * time.Second
 	conn, err := winio.DialPipeContext(ctx, name)
 	if err != nil {
-		return Response{}, fmt.Errorf("ipc: the Final Lobby service is not running: %w", err)
+		return Response{}, fmt.Errorf("ipc: the LobbyBaz service is not running: %w", err)
 	}
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(timeout))

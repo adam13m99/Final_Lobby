@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"finallobby/coordinator/internal/ipam"
+	"lobbybaz/coordinator/internal/ipam"
 )
 
 func TestRoomSubnetLayout(t *testing.T) {

@@ -13,7 +13,7 @@ import (
 
 	"golang.org/x/crypto/chacha20poly1305"
 
-	"finallobby/protocol/wire"
+	"lobbybaz/protocol/wire"
 )
 
 var (

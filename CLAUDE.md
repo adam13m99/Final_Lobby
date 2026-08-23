@@ -1,4 +1,11 @@
-# Final Lobby — agent context
+# LobbyBaz — agent context
+
+> **The product is called LobbyBaz.** Renamed by the owner on 2026-08-24
+> (D46); "Final Lobby" was a working title. **The folder, the git repo and the
+> GitHub remote are all still `Final_Lobby`** — that mismatch is deliberate and
+> nothing should be renamed to fix it. Server-side paths (`/etc/finallobby`,
+> `/opt/finallobby`, the `finallobby` unix user, the systemd unit names) also
+> keep the old name on purpose — see D50.
 
 Read this file, then `docs/STATE.md`, before touching anything.
 

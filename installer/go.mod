@@ -1,4 +1,4 @@
-module finallobby/installer
+module lobbybaz/installer
 
 go 1.25.0
 

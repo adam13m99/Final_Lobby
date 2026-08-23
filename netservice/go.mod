@@ -1,4 +1,4 @@
-module finallobby/netservice
+module lobbybaz/netservice
 
 go 1.25.0
 
@@ -13,8 +13,8 @@ require (
 )
 
 require (
-	finallobby/protocol v0.0.0
+	lobbybaz/protocol v0.0.0
 	golang.org/x/sys v0.47.0
 )
 
-replace finallobby/protocol => ../protocol
+replace lobbybaz/protocol => ../protocol

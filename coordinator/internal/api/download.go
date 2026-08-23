@@ -30,7 +30,7 @@ import (
 // reach. Real accounts replace this before real players arrive.
 
 // InstallerName is the file a player downloads.
-const InstallerName = "FinalLobby-Setup.exe"
+const InstallerName = "LobbyBaz-Setup.exe"
 
 // manifestName is the file describing the current build, written by the
 // deploy script next to the installer.
@@ -205,7 +205,7 @@ func (s *Server) downloadIndex(w http.ResponseWriter, r *http.Request) {
 const downloadPage = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Final Lobby</title>
+<title>LobbyBaz</title>
 <style>
  :root{color-scheme:dark}
  body{margin:0;min-height:100vh;display:grid;place-items:center;
@@ -222,7 +222,7 @@ const downloadPage = `<!doctype html>
  ol{text-align:left}
  li{margin:.4rem 0}
 </style></head><body><div class="card">
-<h1>Final Lobby</h1>
+<h1>LobbyBaz</h1>
 <p class="sub">Dota 2 with your friends, over the domestic network.</p>
 <a class="btn" href="%s">Download for Windows</a>
 <ol>
@@ -236,7 +236,7 @@ const downloadPage = `<!doctype html>
 const downloadProblemPage = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Final Lobby</title>
+<title>LobbyBaz</title>
 <style>:root{color-scheme:dark}body{margin:0;min-height:100vh;display:grid;
  place-items:center;background:#14161c;color:#e7e9ee;
  font:16px/1.6 "Segoe UI",system-ui,sans-serif;text-align:center}

@@ -2,8 +2,8 @@ go 1.25.0
 
 use (
 	./client
-	./installer
 	./coordinator
+	./installer
 	./loadtest
 	./lobbyapp
 	./lobbycli

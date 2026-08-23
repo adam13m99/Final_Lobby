@@ -29,8 +29,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"finallobby/protocol/crypto"
-	"finallobby/protocol/wire"
+	"lobbybaz/protocol/crypto"
+	"lobbybaz/protocol/wire"
 )
 
 const (

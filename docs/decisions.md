@@ -822,3 +822,45 @@ to be rehearsed rather than improvised on the day:
   matters and it is easy to get backwards.
 
 Recorded now so that none of the above is discovered on the day.
+
+## D50 — The rename stops at the server's filesystem
+
+**Engineering decision, 2026-08-24**, taken while implementing D46.
+
+Everything a player can see is now LobbyBaz: the Windows service, the install
+directory, the virtual adapter, the shortcut, the Add or Remove Programs
+entry, the installer filename, the per-user config directory, every string in
+the interface, and all nine Go module paths.
+
+**The server keeps the old name.** `/etc/finallobby`, `/opt/finallobby`,
+`/var/lib/finallobby`, the `finallobby` unix user, and the `relay.service` and
+`coordinator.service` unit names are unchanged.
+
+Three reasons, in order of weight:
+
+1. **`/etc/finallobby/relay.key` cannot be regenerated.** Every installed
+   client carries its public half, baked in at build time. Moving it is a file
+   operation that either works or silently breaks every copy of the app in
+   existence, and the failure would not show up until somebody tried to
+   connect.
+2. **The box also runs the owner's live, unrelated business.** Renaming a
+   system user and rewriting systemd units on a machine serving real customers
+   of something else is risk taken on their behalf, not ours.
+3. **The payoff is zero.** No player, and no future engineer reading the
+   deploy scripts, is misled by a directory name. It is internal.
+
+The ldflags stamping paths **did** have to change — `-X finallobby/client/build.X`
+became `-X lobbybaz/client/build.X` — because a stale ldflags path does not
+error. Go accepts it, sets nothing, and ships a binary with no server address
+and no version. That is the one part of this rename that fails silently, which
+is why it is called out here.
+
+`installer/rename_test.go` pins both halves: the legacy names must **not** be
+renamed, or machines running a pre-rename build end up with two installs
+racing to create the same virtual adapter; and the current names must have
+moved, or the "upgrade" would collide with what it is replacing rather than
+replace it.
+
+Revisit when the platform moves to its own server (D49). That migration
+rebuilds the filesystem layout anyway, and is the natural moment to make the
+names match.

@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"finallobby/protocol/ipc"
+	"lobbybaz/protocol/ipc"
 )
 
 var pipeSeq atomic.Int64

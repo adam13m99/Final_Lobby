@@ -101,14 +101,14 @@ not know exists" below.
 
 ### 2. Real bandwidth
 
-While the match runs, watch Task Manager → Performance → the **Final Lobby**
+While the match runs, watch Task Manager → Performance → the **LobbyBaz**
 adapter on both PCs.
 
 Every capacity and cost figure we have rests on roughly 1.2 Mbps each way per
 ten-player game. Two players will use far less; what matters is the
 per-player rate, which we can multiply up.
 
-Measured on PC A's **Final Lobby** adapter during the match, over a 10-second
+Measured on PC A's **LobbyBaz** adapter during the match, over a 10-second
 sample, with **two** players connected:
 
 | Direction | Rate |
@@ -194,7 +194,7 @@ two people at once.
 ## If something goes wrong
 
 **"Service not running".** Open PowerShell as Administrator and run
-`Start-Service FinalLobbyNet`. If there is no such service, run the
+`Start-Service LobbyBazNet`. If there is no such service, run the
 installer again from the link.
 
 **Connect fails, and the app says the tunnel did not come up.** This was
@@ -209,7 +209,7 @@ journalctl -u relay -n 5 --no-pager
 `handshake_rejected` climbing as you press Connect means the relay is
 refusing the ticket rather than the packets going missing.
 
-**Connect fails.** From `C:\Program Files\Final Lobby` run
+**Connect fails.** From `C:\Program Files\LobbyBaz` run
 `.\lobbycli.exe probe`. It tests the relay alone with everything else out of
 the way. If the probe succeeds but Connect does not, the fault is the
 adapter rather than the network.
@@ -222,7 +222,7 @@ the app shows and what PC B's Dota says.
 **Logs.** The service writes to the Windows Event Log:
 
 ```powershell
-Get-EventLog -LogName Application -Source FinalLobbyNet -Newest 40
+Get-EventLog -LogName Application -Source LobbyBazNet -Newest 40
 ```
 
 The app prints to its own window; leave it open and read it there.
