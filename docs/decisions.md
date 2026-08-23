@@ -536,3 +536,216 @@ handshake stays silent, so the client can only report a timeout. "The tunnel
 did not come up" was true and useless — it named a symptom three layers away
 from the cause. The relay should say no, and the app should repeat what it
 said.
+
+---
+
+# Product decisions of 2026-08-24
+
+The owner answered the full decision suite in
+`docs/product-decisions-2026-08-23.md`. These entries record what was chosen
+and what it costs. Where an answer changes something already built, the
+consequence is written down rather than left to be discovered later.
+
+## D37 — Accounts are a username and a password, built so email and SMS can be added
+
+**Owner decision.** A player signs up with a username and a password. No
+email, no SMS, no third party — all three are unreliable domestically, and any
+of them would gate signup on something that can be blocked.
+
+The owner asked specifically for the **foundation and architecture** to
+support email and SMS later, so they can be switched on without rework. That
+shapes the schema now: an account carries a set of *verified contact methods*
+from the first migration, empty for everyone, rather than having contact
+columns bolted on afterwards.
+
+Password recovery follows the same rule: **recovery exists only where a
+verified contact method exists.** With none, a lost password means a lost
+account, and the signup screen must say so plainly rather than let people find
+out at the worst moment.
+
+This closes D31, which was explicitly a test-only arrangement.
+
+Existing test identities do **not** carry over. There are two, and they are
+ours.
+
+## D38 — A room seats 18, which no longer fits in a /28
+
+**Owner decision:** ten playing slots, **up to five observers**, and **three
+admin slots**. Eighteen seats.
+
+**This does not fit the addressing we built.** A /28 is sixteen addresses:
+`.0` network, `.1` relay, `.2`-`.11` the ten players, `.12`-`.14` three
+spectators, `.15` broadcast. Thirteen seats, and every address is already
+spoken for.
+
+Eighteen seats plus network, relay and broadcast needs twenty-one addresses,
+so each room moves to a **/27** — thirty usable. The layout becomes `.0`
+network, `.1` relay, `.2`-`.11` players, `.12`-`.16` observers, `.17`-`.19`
+admins, `.20`-`.30` spare, `.31` broadcast.
+
+**The cost is the room ceiling: 4096 becomes 2048**, because a /27 is twice
+the size of a /28 and `10.87.0.0/16` is fixed. At the 500-player launch target
+that is fifty concurrent rooms, so 2048 is forty times what is needed; even at
+1500 players it is 150. The ceiling is not a real constraint, and the spare
+addresses in each block leave room to raise the seat count again without
+another migration.
+
+Deliberately **not** done: widening beyond `10.87.0.0/16`. A larger private
+range risks colliding with whatever the player's own home network already
+uses, and 2048 rooms is well past any horizon we can see.
+
+## D39 — Kick blocks escalate: 1, 3, 5, 7 minutes, and so on
+
+**Owner decision.** The first kick from a room bars a player for one minute,
+the second for three, the third for five, each subsequent kick adding two more.
+
+The first block is now *shorter* than the five minutes it replaces, which is
+the point: most kicks are an argument rather than an abuser, and a one-minute
+cool-off ends the re-join fight without punishing somebody for the evening.
+Escalation is what deals with the person who keeps coming back.
+
+The count is per player per room and must **survive a coordinator restart**,
+or escalation resets on every deployment and means nothing. That makes it the
+first piece of room state that has to be persisted rather than held in memory,
+and it lands with the control plane.
+
+Worth stating plainly: escalation only bites once D37 is in. While identity is
+a name generated at install, a determined person reinstalls with a clean count.
+
+## D40 — The room outlives the match; it does not outlive the host
+
+**Owner decision**, replacing the earlier two-minute rule.
+
+- Host leaves, times out or crashes: the room closes after **one minute**.
+- The match ending does **nothing** to the room. The players stay together.
+
+This is GameRanger's behaviour and it is better than what we had. Previously a
+finished match left the room locked, waiting for the host to reopen it — which
+treats the end of a game as a problem to recover from. It is the normal case:
+ten people finish, and want to play again.
+
+The one minute still doubles as the host's window to reconnect and save the
+room. It sits inside the 120-second sticky-address window from the spec, so a
+host who returns in time keeps their address and the room never noticed they
+were gone.
+
+## D41 — All four kinds of room, and friends ship before launch
+
+**Owner decision:** public, password, friends-only and invite-only, as the
+original spec promised — and the friends system is built **before** launch
+rather than after, with add, remove, private chat, invite to lobby,
+online/offline, and in-game/not-in-game status.
+
+This resolves the dependency rather than dodging it. Friends-only and
+invite-only rooms are meaningless without a friends list, so choosing all four
+room types is choosing to build friends first. The owner chose both, and chose
+them consistently.
+
+The in-game indicator is worth calling out as nearly free: the service already
+knows whether Dota is running, because it launched it and watches its log.
+That signal exists today and only needs surfacing.
+
+## D42 — The lobby is a place, not a list
+
+**Owner decision**, specified in detail:
+
+1. Room list showing host name, description, minimum MMR, player count, status
+   (in game / not in game) and **ping**.
+2. Friends list down the right side, where the lobby chat sits today.
+3. Chat with tabs — lobby, friends, party — modelled on Dota 2's own main-menu
+   chat, and collapsible the same way.
+4. Profile, top right.
+5. A permanent left toolbar: Lobby, Room, **Tournaments**, Profile, connection
+   status.
+6. Room filter and search.
+7. A banner and advertising strip along the top.
+
+**Two of these need resolving before they are built.**
+
+**Ping cannot mean what it appears to mean.** Rooms are isolated from each
+other by design, and that isolation is enforced in three independent places, so
+a player sitting in the lobby has no path to the host of a room they have not
+joined and cannot measure a round trip to them. What *is* measurable, and
+genuinely more useful, is the **host's own latency to the relay** — the relay
+observes it already, and it differs meaningfully between rooms, because a host
+on a poor connection makes a poor game for everyone who joins them. That is
+what the column will show, labelled so nobody reads it as their own ping.
+
+**Tournaments contradicts the spec.** Section 12 lists tournaments among the
+things explicitly not being built. A toolbar entry is cheap; a tournament
+system is not. Recorded as an open question rather than assumed either way.
+
+## D43 — What an admin can do
+
+**Owner decision.** Kick, ban, mute, time out. Manage rooms: close one, change
+its host. Manage the banner strip: add, remove, edit. And mark a player with a
+visible status — the examples given were *Fake MMR*, *Verified*, *Pro Player*
+and *Noob*.
+
+Two notes, neither blocking.
+
+Changing a room's host is host migration under another name. D40 says a room
+dies a minute after its host does; an admin reassigning the host is the escape
+hatch for when that is the wrong outcome. The two are consistent, and it is one
+mechanism rather than two.
+
+**A public *Noob* label is a moderation tool pointed at the player.** *Fake
+MMR*, *Verified* and *Pro Player* each describe something checkable and defend
+the honest majority. *Noob* is an insult carrying staff authority, and it is
+the screenshot that circulates. Recommendation: keep the mechanism, which is
+genuinely useful, and let the labels that ship be ones a moderator could
+defend. The owner's call — flagged here rather than quietly dropped.
+
+Still unanswered, and it matters: **who the admins actually are.** The tooling
+is worth nothing without a named person whose job it is.
+
+## D44 — English first, Persian later — but the layout is built for it now
+
+**Owner decision**, against the recommendation, with a clear reason: ship,
+prove the product works, then translate.
+
+The recommendation was Persian first, because the audience is in Iran. The
+owner's reasoning is sound, and this is their call to make.
+
+**What engineering does about it is not optional.** Persian is written
+right-to-left, and retrofitting direction into a finished layout is the
+expensive path, because it touches every screen. So the interface is built
+direction-agnostic from the start: text through a lookup rather than typed into
+the markup, layout in logical properties that flip on their own, and no
+hard-coded left or right anywhere. Nothing about the English product changes.
+Adding Persian later becomes a translation file and a switch, instead of a
+rebuild.
+
+That is the difference between "later" costing a week and costing a month, and
+it costs nothing today.
+
+## D45 — A real desktop application, in the tray, that lets you look before you sign up
+
+**Owner decisions**, three that fit together:
+
+- **Tauri**, as the spec always said. Its own window and icon, no browser
+  chrome, no tab to close by mistake. The screens already written carry over.
+- **Minimise to the tray, and notify** when a room fills or a host starts. This
+  is why people left GameRanger running, and a lobby is worth nothing when
+  nobody is sitting in it.
+- **Browse before signing up.** A new player sees the lobby and its rooms
+  first, and is asked for an account only when they try to join one.
+
+The third carries a cost the owner accepted: anonymous browsers consume server
+capacity and are a rate-limiting problem in their own right. It buys the thing
+that matters more — somebody who downloads the app meets a living place rather
+than a signup form.
+
+## D46 — The product is called LobbyBaz
+
+**Owner decision.** "Final Lobby" was a working title.
+
+The rename is not cosmetic. It reaches the install directory, the Windows
+service name, the virtual adapter's name, the desktop shortcut, the entry in
+Add or Remove Programs, the installer filename, the Go module paths, and every
+document in the repository. It also has to *upgrade* the two existing installs
+rather than sit beside them: the installer must remove the old service and the
+old directory, the way it already handles the earlier per-user layout.
+
+Best done in one deliberate pass, and soon, while the number of places the old
+name appears is still small.

@@ -120,6 +120,32 @@ a floor that supports the model rather than confirming it.
 Still needing a person at each machine: the abandoned-slot question, kick
 timing, network-drop recovery, and chat across two screens.
 
+## Product direction settled, 2026-08-24
+
+The owner answered the full decision suite. Recorded as **D37-D46** in
+`docs/decisions.md`; the questions and their answers in the owner's own words
+are in `docs/product-decisions-2026-08-23.md`.
+
+The headline choices, and what they change:
+
+| Decision | Consequence for the build |
+|---|---|
+| Username + password, with the seams for email/SMS (D37) | Closes D31. First real schema. |
+| 18 seats per room: 10 players, 5 observers, 3 admins (D38) | **/28 no longer fits. Rooms move to /27**, ceiling 4096 -> 2048. |
+| Kick blocks escalate 1, 3, 5, 7 minutes (D39) | First room state that must be persisted across restarts. |
+| Room dies 1 minute after the host; a finished match does not close it (D40) | Replaces the 2-minute rule and the locked-after-match flow. |
+| All four room privacies, friends before launch (D41) | Friends system moves ahead of launch, not after. |
+| The lobby becomes a place: friends rail, tabbed chat, toolbar, ads (D42) | Largest single piece of new front-end work. |
+| Admin powers, including player labels (D43) | Needs a named human before it means anything. |
+| English first, Persian later (D44) | Layout built direction-agnostic now so Persian stays cheap. |
+| Tauri, tray, browse-before-signup (D45) | The prototype browser page is retired. |
+| Renamed **LobbyBaz** (D46) | Touches service name, install path, adapter, module paths, docs. |
+
+Two of these contradict what is already built or written, and are called out
+in their entries rather than left to be discovered: **the /27 migration**
+(D38) and **Tournaments**, which section 12 of the spec lists as explicitly
+out of scope (D42).
+
 ## Open questions
 
 1. **Can a new player take over an abandoned slot in a running Dota LAN match?**
@@ -133,3 +159,16 @@ timing, network-drop recovery, and chat across two screens.
    (`netservice/internal/adapter/bin/wintun.dll`, v0.14.1, Authenticode
    signature verified as WireGuard LLC). Confirm redistribution terms before
    shipping a public installer.
+4. **Is Tournaments a real feature or a placeholder?** D42 puts it in the
+   toolbar; spec section 12 lists it as explicitly not being built. A menu
+   entry is cheap and a tournament system is not. Owner.
+5. **Who are the admins?** D43 gives the role real powers. It needs a named
+   person before any of it means anything. Owner.
+6. **Uplink port speed.** Open since 2026-08-18. The last unknown in the
+   capacity plan, and every server cost figure rests on it. MobinHost.
+7. **When to buy the dedicated server.** No port conflict with the other
+   business on the box, but one uplink and one IP address are shared, so
+   filtering aimed at either side hits both. Owner.
+8. A refused handshake is silent, so the client can only report a timeout.
+   That is what turned the D36 ticket bug into an hour of investigation.
+   Engineering; needs a protocol change.
