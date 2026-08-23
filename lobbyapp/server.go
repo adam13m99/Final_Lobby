@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"io/fs"
 	"net/http"
 	"os"
@@ -40,6 +41,10 @@ type server struct {
 	// update is set when the server is publishing a build other than this
 	// one. The page offers it; nothing installs itself behind the player.
 	update *pendingUpdate
+
+	// connectErr carries why the last attempt to get onto the room's network
+	// failed, so a background attempt can still say so on screen.
+	connectErr string
 
 	diagMu   sync.Mutex
 	diagBusy bool
@@ -187,7 +192,13 @@ func (s *server) state(w http.ResponseWriter, r *http.Request) {
 	out["lobby_chat"] = append([]lobby.ChatMessage(nil), s.lobbyChat...)
 	out["room_chat"] = append([]lobby.ChatMessage(nil), s.roomChat...)
 	upd := s.update
+	connectErr := s.connectErr
 	s.mu.Unlock()
+	// Only worth showing while it is still true; the service is the authority
+	// on whether we are on the network.
+	if connectErr != "" && out["connected"] != true {
+		out["connect_error"] = connectErr
+	}
 	if upd != nil {
 		out["update"] = upd
 	}
@@ -354,6 +365,7 @@ func (s *server) createRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.storeRoom(info)
+	go s.autoConnect()
 	ok(w)
 }
 
@@ -371,6 +383,7 @@ func (s *server) joinRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.storeRoom(info)
+	go s.autoConnect()
 	ok(w)
 }
 
@@ -388,6 +401,7 @@ func (s *server) spectateRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.storeRoom(info)
+	go s.autoConnect()
 	ok(w)
 }
 
@@ -454,27 +468,24 @@ func (s *server) kick(w http.ResponseWriter, r *http.Request) {
 
 // --- network ------------------------------------------------------------
 
-func (s *server) connect(w http.ResponseWriter, r *http.Request) {
+// bringUpTunnel takes a fresh ticket and asks the service to connect.
+//
+// Shared by the Connect button and by joining a room. The ticket is always
+// refreshed rather than reused: the one stored at join expires after ten
+// minutes and a room waiting for players stays open far longer than that,
+// which is what made Connect stop working for the first two-PC test (D36).
+func (s *server) bringUpTunnel(ctx context.Context) error {
 	cfg := s.snapshot()
 	if cfg.RoomID == "" {
-		fail(w, "Join a room first.")
-		return
+		return errors.New("Join a room first.")
 	}
 
-	// Always take a fresh ticket. The one stored at join expires after ten
-	// minutes, and a room waiting for players is open for much longer than
-	// that, so reusing it meant Connect simply stopped working after a while
-	// with nothing on screen to explain why.
 	info, err := s.api().Refresh(cfg.RoomID, cfg.PlayerID)
 	if err != nil {
-		fail(w, err.Error())
-		return
+		return err
 	}
 	s.storeRoom(info)
 	cfg = s.snapshot()
-
-	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
-	defer cancel()
 
 	resp, err := ipc.Call(ctx, ipc.Request{
 		Op:          ipc.OpConnect,
@@ -488,13 +499,58 @@ func (s *server) connect(w http.ResponseWriter, r *http.Request) {
 		RoomID:      cfg.RoomID,
 	})
 	if err != nil {
+		return err
+	}
+	if resp.Err != "" {
+		return errors.New(resp.Err)
+	}
+	return nil
+}
+
+// autoConnect puts a player onto the room's network as soon as they are in
+// it, without waiting to be asked.
+//
+// Being in a room and being on the room's network were separate states and
+// nothing said the second one existed. The first two-PC test failed with
+// both players seated, Dota hosting a game, and no tunnel on either machine:
+// the address the joining player was told to use belonged to nobody. The
+// Launch Dota 2 button was correctly disabled, but a Dota player starts Dota
+// themselves, and then meets the failure minutes later as an error inside the
+// game with nothing connecting it to the cause.
+//
+// Runs in the background so joining a room stays instant. Failure is
+// reported on the room screen and the Connect button remains as a retry.
+func (s *server) autoConnect() {
+	s.mu.Lock()
+	s.connectErr = ""
+	s.mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	msg := ""
+	if err := s.bringUpTunnel(ctx); err != nil {
+		msg = err.Error()
+	}
+	s.mu.Lock()
+	s.connectErr = msg
+	s.mu.Unlock()
+}
+
+func (s *server) connect(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
+	defer cancel()
+
+	if err := s.bringUpTunnel(ctx); err != nil {
+		s.mu.Lock()
+		s.connectErr = err.Error()
+		s.mu.Unlock()
 		fail(w, err.Error())
 		return
 	}
-	if resp.Err != "" {
-		fail(w, resp.Err)
-		return
-	}
+	s.mu.Lock()
+	s.connectErr = ""
+	s.mu.Unlock()
 	ok(w)
 }
 

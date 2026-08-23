@@ -243,6 +243,43 @@ function renderRoom(r) {
   $("btn-disconnect").disabled = !state.connected;
   $("btn-play").disabled = !state.connected;
   $("btn-play").title = state.connected ? "" : "Connect first";
+
+  drawNetBanner();
+}
+
+// drawNetBanner says, in words and where it cannot be missed, whether this
+// player is actually on the room's network.
+//
+// Joining a room now connects on its own, so most of the time this reassures
+// rather than instructs. It matters when that fails: a player who starts Dota
+// themselves gets no other warning, and the failure would otherwise reach
+// them minutes later as an error inside the game.
+function drawNetBanner() {
+  const el = $("netbanner");
+  if (state.connected) {
+    el.hidden = false;
+    el.className = "netbanner ok";
+    el.textContent = "You are on the room's network" +
+      (state.virtual_ip ? " as " + state.virtual_ip : "") + ".";
+    return;
+  }
+  if (state.connect_error) {
+    el.hidden = false;
+    el.className = "netbanner bad";
+    el.textContent = "Could not get onto the room's network: " +
+      state.connect_error + " Press Connect to try again.";
+    return;
+  }
+  if (state.tunnel === "connecting") {
+    el.hidden = false;
+    el.className = "netbanner wait";
+    el.textContent = "Getting you onto the room's network...";
+    return;
+  }
+  el.hidden = false;
+  el.className = "netbanner bad";
+  el.textContent = "You are not on the room's network yet, so nobody can " +
+    "reach you and you cannot reach the host. Press Connect.";
 }
 
 function slotCard(index, member, canKick, spectator) {

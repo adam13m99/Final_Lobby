@@ -93,6 +93,11 @@
     </div>
 
     <div class="panel actions">
+      <!-- The network state has to be impossible to miss. The first two-PC
+           test failed because both players were in a room, neither was on
+           its network, and the only sign was a small pill in the header. -->
+      <div class="netbanner" id="netbanner" hidden></div>
+
       <div class="actionrow">
         <button class="primary big" id="btn-connect">Connect</button>
         <button class="ghost" id="btn-disconnect">Disconnect</button>
