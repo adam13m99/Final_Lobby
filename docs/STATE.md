@@ -146,6 +146,31 @@ in their entries rather than left to be discovered: **the /27 migration**
 (D38) and **Tournaments**, which section 12 of the spec lists as explicitly
 out of scope (D42).
 
+## LobbyBaz build, started 2026-08-24
+
+Plan: `docs/superpowers/plans/2026-08-24-lobbybaz-product.md`. Tasks tick
+there; this is the summary.
+
+| Task | State |
+|---|---|
+| T1 rename to LobbyBaz (D46) | **done** — `77d8a0d` |
+| T2 rooms move to a /27, 18 seats (D38) | **done** |
+| T3 room lifecycle: 1-minute host grace (D40) | **done** |
+| T4 kick escalation 1/3/5/7 min (D39) | **rules done**; persistence lands with T5 |
+| T5 accounts (D37) | not started |
+| T6 room privacy (D41) | not started |
+| T7 friends (D41) | not started |
+| T8 roles and moderation (D43, D47) | not started |
+| T9 interface built for translation (D44) | not started |
+| T10 the new lobby (D42) | not started |
+| T11 desktop application (D45) | not started |
+
+**"Spectator" is now two things.** An observer is an ordinary player choosing
+to watch; an admin is staff. They have separate seat counts, separate address
+ranges, and different rules: an observer may not enter a locked room, an admin
+may. `POST /v1/rooms/{id}/spectate` seats an **observer**; the admin seat is
+reached separately and arrives with T8.
+
 ## Open questions
 
 1. **Can a new player take over an abandoned slot in a running Dota LAN match?**

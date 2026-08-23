@@ -76,25 +76,25 @@ Recorded as **D50**.
 installer must stop and delete both, not sit beside them, or those machines
 end up with two services fighting over one virtual adapter.
 
-## T2 — Rooms move to a /27 *(D38)*
+## T2 — Rooms move to a /27 *(D38)* — **DONE**
 
-- [ ] `ipam`: `/28` → `/27`, `MaxRooms` 4096 → 2048
-- [ ] Seat layout: `.2`–`.11` players, `.12`–`.16` observers, `.17`–`.19` admins
-- [ ] `ObserverSlots = 5`, `AdminSlots = 3`, replacing `SpectatorSlots = 3`
-- [ ] Room state machine carries both seat kinds separately
-- [ ] Tests: full room of 18, boundary addresses, room index 2047
+- [x] `ipam`: `/28` → `/27`, `MaxRooms` 4096 → 2048
+- [x] Seat layout: `.2`–`.11` players, `.12`–`.16` observers, `.17`–`.19` admins
+- [x] `ObserverSlots = 5`, `AdminSlots = 3`, replacing `SpectatorSlots = 3`
+- [x] Room state machine carries both seat kinds separately
+- [x] Tests: full room of 18, boundary addresses, room index 2047
 
-## T3 — Room lifecycle *(D40)*
+## T3 — Room lifecycle *(D40)* — **DONE**
 
-- [ ] `HostGracePeriod` 2 min → 1 min
-- [ ] A finished match no longer closes or locks the room
-- [ ] Tests: match ends and the room survives with everyone still seated
+- [x] `HostGracePeriod` 2 min → 1 min
+- [x] A finished match no longer closes or locks the room
+- [x] Tests: match ends and the room survives with everyone still seated
 
-## T4 — Kick escalation *(D39)*
+## T4 — Kick escalation *(D39)* — **rules done, persistence pending**
 
-- [ ] Block is 1, 3, 5, 7… minutes — first offence 1, then +2 each time
+- [x] Block is 1, 3, 5, 7… minutes — first offence 1, then +2 each time
 - [ ] Count is per player per room and survives a coordinator restart
-- [ ] Tests: escalation sequence, and the count outliving a restart
+- [x] Tests: escalation sequence *(restart-survival test lands with T5, which brings the database)*
 
 ## T5 — Accounts *(D37)*
 

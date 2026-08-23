@@ -25,10 +25,17 @@ type Membership struct {
 	Subnet    netip.Prefix
 	IsHost    bool
 
-	// IsSpectator marks the reserved admin seat, which sits outside the ten
-	// playing slots and gets an address from the top of the room's block.
-	IsSpectator bool
+	// Kind is which seating area this membership belongs to. Observers and
+	// admins sit outside the ten playing slots and draw their addresses from
+	// separate ranges (D38).
+	Kind SeatKind
 }
+
+// IsSpectator reports whether this membership is anything other than a
+// playing slot. Kept because the client and the relay only care about
+// "playing or not"; the distinction between an observer and an admin is a
+// product concern, not a networking one.
+func (m Membership) IsSpectator() bool { return m.Kind != SeatPlayer }
 
 // Store holds every live room and serialises access to them.
 //
@@ -116,18 +123,21 @@ func (s *Store) Membership(roomID, playerID string) (Membership, error) {
 	if !ok {
 		return Membership{}, ErrNotFound
 	}
-	slot, spectator, seated := r.SlotOf(playerID)
+	slot, kind, seated := r.SlotOf(playerID)
 	if !seated {
 		return Membership{}, ErrNotMember
 	}
-	if spectator {
-		return spectatorMembershipFor(r, slot)
+	switch kind {
+	case SeatObserver:
+		return observerMembershipFor(r, slot)
+	case SeatAdmin:
+		return adminMembershipFor(r, slot)
 	}
 	return membershipFor(r, slot, playerID == r.HostID)
 }
 
-// JoinSpectator seats an admin in the reserved spectator area.
-func (s *Store) JoinSpectator(roomID, playerID string, now time.Time) (Membership, error) {
+// JoinObserver seats somebody who wants to watch without playing.
+func (s *Store) JoinObserver(roomID, playerID string, now time.Time) (Membership, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -135,11 +145,27 @@ func (s *Store) JoinSpectator(roomID, playerID string, now time.Time) (Membershi
 	if !ok {
 		return Membership{}, ErrNotFound
 	}
-	seat, err := r.JoinSpectator(playerID, now)
+	seat, err := r.JoinObserver(playerID, now)
 	if err != nil {
 		return Membership{}, err
 	}
-	return spectatorMembershipFor(r, seat)
+	return observerMembershipFor(r, seat)
+}
+
+// JoinAdmin seats a moderator in the reserved area outside the gallery.
+func (s *Store) JoinAdmin(roomID, playerID string, now time.Time) (Membership, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	r, ok := s.rooms[roomID]
+	if !ok {
+		return Membership{}, ErrNotFound
+	}
+	seat, err := r.JoinAdmin(playerID, now)
+	if err != nil {
+		return Membership{}, err
+	}
+	return adminMembershipFor(r, seat)
 }
 
 // Leave vacates a player's slot.
@@ -225,9 +251,22 @@ func (s *Store) Tick(now time.Time) []string {
 	return closed
 }
 
-// spectatorMembershipFor derives the addressing for the reserved admin seat.
-func spectatorMembershipFor(r *Room, seat int) (Membership, error) {
-	vip, err := ipam.SpectatorIP(r.Index, seat)
+// observerMembershipFor derives the addressing for a watcher's seat.
+func observerMembershipFor(r *Room, seat int) (Membership, error) {
+	return nonPlayingMembership(r, seat, SeatObserver)
+}
+
+// adminMembershipFor derives the addressing for a moderator's seat.
+func adminMembershipFor(r *Room, seat int) (Membership, error) {
+	return nonPlayingMembership(r, seat, SeatAdmin)
+}
+
+func nonPlayingMembership(r *Room, seat int, kind SeatKind) (Membership, error) {
+	addr := ipam.ObserverIP
+	if kind == SeatAdmin {
+		addr = ipam.AdminIP
+	}
+	vip, err := addr(r.Index, seat)
 	if err != nil {
 		return Membership{}, err
 	}
@@ -240,12 +279,12 @@ func spectatorMembershipFor(r *Room, seat int) (Membership, error) {
 		return Membership{}, err
 	}
 	return Membership{
-		RoomID:      r.ID,
-		Slot:        seat,
-		VirtualIP:   vip,
-		HostIP:      host,
-		Subnet:      subnet,
-		IsSpectator: true,
+		RoomID:    r.ID,
+		Slot:      seat,
+		VirtualIP: vip,
+		HostIP:    host,
+		Subnet:    subnet,
+		Kind:      kind,
 	}, nil
 }
 
@@ -270,5 +309,6 @@ func membershipFor(r *Room, slot int, isHost bool) (Membership, error) {
 		HostIP:    host,
 		Subnet:    subnet,
 		IsHost:    isHost,
+		Kind:      SeatPlayer,
 	}, nil
 }

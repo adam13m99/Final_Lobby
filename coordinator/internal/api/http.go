@@ -183,6 +183,8 @@ func (s *Server) authorised(r *http.Request) bool {
 
 // memberView is one seated player as the lobby draws them.
 type memberView struct {
+	// Seat is "player", "observer" or "admin" (D38).
+	Seat string `json:"seat,omitempty"`
 	PlayerID  string `json:"player_id"`
 	Nick      string `json:"nick"`
 	MMR       int    `json:"mmr"`
@@ -200,6 +202,8 @@ type roomView struct {
 	Members  []memberView `json:"members"`
 	Seats    int          `json:"seats"`
 	Free     int          `json:"free_slots"`
+	// Watchers is how many observer seats are taken, of ipam.ObserverSlots.
+	Watchers int `json:"watchers"`
 	AvgMMR   int          `json:"avg_mmr"`
 	Joinable bool         `json:"joinable"`
 	// Players is the bare ID list the first CLI was written against.
@@ -240,15 +244,32 @@ func (s *Server) view(r room.Room) roomView {
 		}
 		v.Members = append(v.Members, m)
 	}
-	for seat, id := range r.Spectators {
-		if id == "" {
-			continue
+	for _, group := range []struct {
+		ids  []string
+		kind room.SeatKind
+	}{
+		{r.Observers[:], room.SeatObserver},
+		{r.Admins[:], room.SeatAdmin},
+	} {
+		for seat, id := range group.ids {
+			if id == "" {
+				continue
+			}
+			m := memberView{
+				PlayerID:  id,
+				Slot:      seat,
+				Spectator: true,
+				Seat:      string(group.kind),
+				Nick:      id,
+			}
+			if p, ok := known[id]; ok {
+				m.Nick, m.MMR = p.Nick, p.MMR
+			}
+			if group.kind == room.SeatObserver {
+				v.Watchers++
+			}
+			v.Members = append(v.Members, m)
 		}
-		m := memberView{PlayerID: id, Slot: seat, Spectator: true, Nick: id}
-		if p, ok := known[id]; ok {
-			m.Nick, m.MMR = p.Nick, p.MMR
-		}
-		v.Members = append(v.Members, m)
 	}
 	if rated > 0 {
 		v.AvgMMR = sumMMR / rated
@@ -307,7 +328,7 @@ func (s *Server) issue(m room.Membership, playerID string) (connectInfo, error) 
 		RoomID:      m.RoomID,
 		Slot:        m.Slot,
 		IsHost:      m.IsHost,
-		IsSpectator: m.IsSpectator,
+		IsSpectator: m.IsSpectator(),
 		VirtualIP:   m.VirtualIP.String(),
 		HostIP:      m.HostIP.String(),
 		Subnet:      m.Subnet.String(),

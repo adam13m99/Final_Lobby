@@ -239,7 +239,7 @@ func (s *Server) spectateRoom(w http.ResponseWriter, r *http.Request) {
 	}
 	nick := s.seen(body.PlayerID, body.Nick)
 
-	m, err := s.rooms.JoinSpectator(r.PathValue("id"), body.PlayerID, s.now())
+	m, err := s.rooms.JoinObserver(r.PathValue("id"), body.PlayerID, s.now())
 	if err != nil {
 		writeErr(w, statusFor(err), err.Error())
 		return
@@ -249,8 +249,8 @@ func (s *Server) spectateRoom(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, "could not issue ticket")
 		return
 	}
-	s.chat.System(m.RoomID, nick+" is spectating", s.now())
-	s.log.Info("spectator joined", "room", m.RoomID, "player", body.PlayerID, "seat", m.Slot)
+	s.chat.System(m.RoomID, nick+" is watching", s.now())
+	s.log.Info("observer joined", "room", m.RoomID, "player", body.PlayerID, "seat", m.Slot)
 	writeJSON(w, http.StatusOK, info)
 }
 

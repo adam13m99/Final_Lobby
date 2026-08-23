@@ -130,10 +130,18 @@ This is sub-project one. It carries all the technical risk and is built first.
 
 ### 5.1 Virtual addressing
 
-The platform owns `10.87.0.0/16`. Each active room is allocated a **`/28`**,
-giving 4096 concurrent rooms of 14 usable addresses each.
+The platform owns `10.87.0.0/16`. Each active room is allocated a **`/27`**,
+giving 2048 concurrent rooms of 30 usable addresses each.
 
-Within a room's `/28`:
+> **Amended 2026-08-24 (D38).** This was a `/28` — sixteen addresses, thirteen
+> seats, every one spoken for. The owner's room is eighteen seats: ten
+> players, five observers, three admins. The block had to double. The cost is
+> the ceiling, 4096 rooms down to 2048, which is still forty times the
+> 500-player launch target. The eleven spare addresses are deliberate: this
+> resize touched every layer of the stack and the next change to the seat
+> count should not.
+
+Within a room's `/27`:
 
 | Address | Purpose |
 |---|---|
@@ -141,8 +149,10 @@ Within a room's `/28`:
 | `.1` | reserved (relay/gateway) |
 | `.2` | **host** — always deterministic |
 | `.3` – `.11` | playing slots 2–10 |
-| `.12` – `.14` | spectator / admin slots |
-| `.15` | broadcast |
+| `.12` – `.16` | observers |
+| `.17` – `.19` | admin seats |
+| `.20` – `.30` | spare, held for a future seat-count change |
+| `.31` | broadcast |
 
 The host's address being deterministic is what makes section 5.3 possible.
 

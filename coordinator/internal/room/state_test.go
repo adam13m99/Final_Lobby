@@ -72,17 +72,82 @@ func TestOnlyHostChangesStatus(t *testing.T) {
 	}
 }
 
-func TestKickedPlayerBlockedForFiveMinutes(t *testing.T) {
+// D39: the block escalates 1, 3, 5, 7... minutes. The first is short on
+// purpose - most kicks are an argument, not an abuser, and a minute ends the
+// re-join fight without taking somebody's evening. Escalation is what deals
+// with the person who keeps coming back.
+func TestKickBlockEscalates(t *testing.T) {
+	for n, want := range map[int]time.Duration{
+		1: 1 * time.Minute,
+		2: 3 * time.Minute,
+		3: 5 * time.Minute,
+		4: 7 * time.Minute,
+	} {
+		if got := room.KickBlockFor(n); got != want {
+			t.Errorf("KickBlockFor(%d) = %v, want %v", n, got, want)
+		}
+	}
+	// Defensive: a count below one must not produce a negative block, which
+	// would bar nobody and silently disable the whole mechanism.
+	if got := room.KickBlockFor(0); got != time.Minute {
+		t.Errorf("KickBlockFor(0) = %v, want 1m", got)
+	}
+}
+
+func TestFirstKickBlocksForOneMinute(t *testing.T) {
 	r := newRoom(t)
 	_, _ = r.Join("p2", t0)
 	if err := r.Kick("host-1", "p2", t0); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.Join("p2", t0.Add(4*time.Minute)); !errors.Is(err, room.ErrKickBlocked) {
-		t.Fatalf("at 4min err = %v, want ErrKickBlocked", err)
+	if _, err := r.Join("p2", t0.Add(30*time.Second)); !errors.Is(err, room.ErrKickBlocked) {
+		t.Fatalf("at 30s err = %v, want ErrKickBlocked", err)
 	}
-	if _, err := r.Join("p2", t0.Add(5*time.Minute+time.Second)); err != nil {
-		t.Fatalf("after 5min block expired, join failed: %v", err)
+	if _, err := r.Join("p2", t0.Add(time.Minute+time.Second)); err != nil {
+		t.Fatalf("after the 1-minute block expired, join failed: %v", err)
+	}
+}
+
+// The count is per player per room, so somebody kicked repeatedly from one
+// room is not punished in another - and two different pests do not share a
+// tally.
+func TestRepeatedKicksBlockForLonger(t *testing.T) {
+	r := newRoom(t)
+
+	kickAt := func(at time.Time) {
+		t.Helper()
+		if _, err := r.Join("pest", at); err != nil {
+			t.Fatalf("rejoin before kick failed: %v", err)
+		}
+		if err := r.Kick("host-1", "pest", at); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	kickAt(t0)
+	second := t0.Add(2 * time.Minute)
+	kickAt(second)
+	// Second kick: three minutes, so two is still barred.
+	if _, err := r.Join("pest", second.Add(2*time.Minute)); !errors.Is(err, room.ErrKickBlocked) {
+		t.Fatalf("second kick should block for 3min, got %v at 2min", err)
+	}
+	third := second.Add(3*time.Minute + time.Second)
+	kickAt(third)
+	// Third kick: five minutes.
+	if _, err := r.Join("pest", third.Add(4*time.Minute)); !errors.Is(err, room.ErrKickBlocked) {
+		t.Fatalf("third kick should block for 5min, got %v at 4min", err)
+	}
+	if _, err := r.Join("pest", third.Add(5*time.Minute+time.Second)); err != nil {
+		t.Fatalf("third block should have expired at 5min: %v", err)
+	}
+
+	// A different person starts at one minute, not at five.
+	_, _ = r.Join("newcomer", third)
+	if err := r.Kick("host-1", "newcomer", third); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Join("newcomer", third.Add(time.Minute+time.Second)); err != nil {
+		t.Fatalf("a first-time kick must only block for a minute: %v", err)
 	}
 }
 
@@ -107,18 +172,50 @@ func TestPlayerWhoLeftMayRejoinImmediately(t *testing.T) {
 	}
 }
 
-func TestHostDepartureClosesRoomAfterTwoMinutes(t *testing.T) {
+// D40: one minute, not two. GameRanger's behaviour but friendlier - a room
+// whose host has genuinely gone should not hold nine people staring at it.
+func TestHostDepartureClosesRoomAfterOneMinute(t *testing.T) {
 	r := newRoom(t)
 	_, _ = r.Join("p2", t0)
 	r.Leave("host-1", t0)
 
-	r.Tick(t0.Add(90 * time.Second))
+	r.Tick(t0.Add(30 * time.Second))
 	if r.Status == room.StatusClosed {
-		t.Fatal("room closed before the 2-minute grace expired")
+		t.Fatal("room closed before the 1-minute grace expired")
 	}
-	r.Tick(t0.Add(2*time.Minute + time.Second))
+	r.Tick(t0.Add(time.Minute + time.Second))
 	if r.Status != room.StatusClosed {
 		t.Fatalf("status = %q, want Closed after grace expiry", r.Status)
+	}
+}
+
+// D40: the host's absence is the only thing that ends a room. A match
+// finishing leaves everyone where they are, because the ten people who just
+// played are usually the ten who want to play again.
+func TestAFinishedMatchLeavesTheRoomAlone(t *testing.T) {
+	r := newRoom(t)
+	_, _ = r.Join("p2", t0)
+	if err := r.SetStatus("host-1", room.StatusLocked, t0); err != nil {
+		t.Fatal(err)
+	}
+
+	// An hour of match, then nothing happens to the room on its own.
+	for i := 1; i <= 60; i++ {
+		r.Tick(t0.Add(time.Duration(i) * time.Minute))
+	}
+	if r.Status == room.StatusClosed {
+		t.Fatal("the room closed while its host was still present")
+	}
+	if len(r.Occupants()) != 2 {
+		t.Fatalf("occupants = %v, want the host and p2 still seated", r.Occupants())
+	}
+
+	// And the host can open it again for the next game.
+	if err := r.SetStatus("host-1", room.StatusOpen, t0.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Join("p3", t0.Add(time.Hour)); err != nil {
+		t.Fatalf("a new player could not join the reopened room: %v", err)
 	}
 }
 

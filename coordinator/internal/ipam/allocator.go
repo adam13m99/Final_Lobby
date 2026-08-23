@@ -1,8 +1,16 @@
 // Package ipam allocates the virtual addresses used inside room networks.
 //
-// The platform owns 10.87.0.0/16 and gives every room a /28. Sixteen
+// The platform owns 10.87.0.0/16 and gives every room a /27. Thirty-two
 // addresses per room: .0 network, .1 reserved for the relay, .2-.11 the ten
-// player slots, .12-.14 spectator and admin slots, .15 broadcast.
+// player slots, .12-.16 five observers, .17-.19 three admin seats, .20-.30
+// spare, .31 broadcast.
+//
+// It was a /28 until 2026-08-24. Sixteen addresses held thirteen seats with
+// every one spoken for, and the owner's room is eighteen seats (D38), so the
+// block had to double. The cost is the room ceiling: 4096 became 2048, which
+// is still forty times the 500-player launch target. The eleven spare
+// addresses are deliberate - the last resize touched every layer of the
+// stack, and the next change to the seat count should not.
 package ipam
 
 import (
@@ -12,15 +20,27 @@ import (
 )
 
 const (
-	// MaxRooms is how many /28 blocks fit inside 10.87.0.0/16.
-	MaxRooms = 4096
+	// MaxRooms is how many /27 blocks fit inside 10.87.0.0/16.
+	MaxRooms = 2048
 	// PlayerSlots is fixed by Dota 2 itself.
 	PlayerSlots = 10
-	// SpectatorSlots covers admin observers.
-	SpectatorSlots = 3
+	// ObserverSlots is how many people may watch a room without playing.
+	ObserverSlots = 5
+	// AdminSlots sit outside both, so a full match plus a full gallery can
+	// never stop a moderator getting in.
+	AdminSlots = 3
 
-	playerBaseOffset    = 2
-	spectatorBaseOffset = 12
+	// SeatsPerRoom is what a room holds in total.
+	SeatsPerRoom = PlayerSlots + ObserverSlots + AdminSlots
+
+	// subnetBits is the prefix length of one room's block.
+	subnetBits = 27
+	// addressesPerRoom must stay 1<<(32-subnetBits).
+	addressesPerRoom = 32
+
+	playerBaseOffset   = 2
+	observerBaseOffset = playerBaseOffset + PlayerSlots     // 12
+	adminBaseOffset    = observerBaseOffset + ObserverSlots // 17
 )
 
 var (
@@ -28,13 +48,13 @@ var (
 	ErrSlotRange      = errors.New("ipam: slot index out of range")
 )
 
-// RoomSubnet returns the /28 belonging to roomIndex.
+// RoomSubnet returns the /27 belonging to roomIndex.
 func RoomSubnet(roomIndex int) (netip.Prefix, error) {
 	base, err := subnetBase(roomIndex)
 	if err != nil {
 		return netip.Prefix{}, err
 	}
-	return netip.PrefixFrom(base, 28), nil
+	return netip.PrefixFrom(base, subnetBits), nil
 }
 
 // HostIP returns the address the room's host always occupies. Clients are
@@ -51,21 +71,29 @@ func SlotIP(roomIndex, slot int) (netip.Addr, error) {
 	return offsetFrom(roomIndex, playerBaseOffset+slot)
 }
 
-// SpectatorIP returns the address for a spectator or admin slot.
-func SpectatorIP(roomIndex, index int) (netip.Addr, error) {
-	if index < 0 || index >= SpectatorSlots {
-		return netip.Addr{}, fmt.Errorf("%w: spectator slot %d", ErrSlotRange, index)
+// ObserverIP returns the address for someone watching without playing.
+func ObserverIP(roomIndex, index int) (netip.Addr, error) {
+	if index < 0 || index >= ObserverSlots {
+		return netip.Addr{}, fmt.Errorf("%w: observer slot %d", ErrSlotRange, index)
 	}
-	return offsetFrom(roomIndex, spectatorBaseOffset+index)
+	return offsetFrom(roomIndex, observerBaseOffset+index)
+}
+
+// AdminIP returns the address for a moderator's reserved seat.
+func AdminIP(roomIndex, index int) (netip.Addr, error) {
+	if index < 0 || index >= AdminSlots {
+		return netip.Addr{}, fmt.Errorf("%w: admin slot %d", ErrSlotRange, index)
+	}
+	return offsetFrom(roomIndex, adminBaseOffset+index)
 }
 
 func subnetBase(roomIndex int) (netip.Addr, error) {
 	if roomIndex < 0 || roomIndex >= MaxRooms {
 		return netip.Addr{}, fmt.Errorf("%w: %d", ErrRoomIndexRange, roomIndex)
 	}
-	third := byte(roomIndex >> 4)
-	fourth := byte((roomIndex & 0x0F) << 4)
-	return netip.AddrFrom4([4]byte{10, 87, third, fourth}), nil
+	// Each room is 32 addresses, so eight rooms fill one third-octet step.
+	offset := roomIndex * addressesPerRoom
+	return netip.AddrFrom4([4]byte{10, 87, byte(offset >> 8), byte(offset & 0xFF)}), nil
 }
 
 func offsetFrom(roomIndex, offset int) (netip.Addr, error) {

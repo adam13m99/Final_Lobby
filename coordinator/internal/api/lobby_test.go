@@ -308,7 +308,11 @@ func TestRenamingDoesNotTripTheMMRLimit(t *testing.T) {
 	}
 }
 
-func TestSpectatorGetsASeatOutsideThePlayingSlots(t *testing.T) {
+// /spectate seats an observer - an ordinary player choosing to watch (D38).
+// The admin seat is a different thing and is reached another way, so this
+// endpoint follows the observer rules: outside the playing slots, and refused
+// once a match has started.
+func TestObserverGetsASeatOutsideThePlayingSlots(t *testing.T) {
 	h := newHarness(t)
 	code, host := h.post(t, "/v1/rooms", map[string]any{"player_id": "alice", "nick": "Alice"})
 	if code != http.StatusCreated {
@@ -316,27 +320,45 @@ func TestSpectatorGetsASeatOutsideThePlayingSlots(t *testing.T) {
 	}
 	roomID := host["room_id"].(string)
 
+	code, spec := h.post(t, "/v1/rooms/"+roomID+"/spectate", map[string]any{
+		"player_id": "watcher", "nick": "Watcher",
+	})
+	if code != http.StatusOK {
+		t.Fatalf("spectate returned %d: %v", code, spec)
+	}
+	if spec["is_spectator"] != true {
+		t.Error("connect info did not mark the seat as a watching seat")
+	}
+	if spec["virtual_ip"] == host["virtual_ip"] {
+		t.Error("observer was given the host's address")
+	}
+
+	_, view := h.get(t, "/v1/rooms/"+roomID)
+	if free, _ := view["free_slots"].(float64); free != 9 {
+		t.Errorf("free_slots = %v; an observer must not consume a playing slot", free)
+	}
+	if w, _ := view["watchers"].(float64); w != 1 {
+		t.Errorf("watchers = %v, want 1", w)
+	}
+}
+
+// Wandering into a match already in progress is where scouting and griefing
+// start, so the gallery closes when the room locks.
+func TestObserverIsRefusedOnceTheMatchStarts(t *testing.T) {
+	h := newHarness(t)
+	_, host := h.post(t, "/v1/rooms", map[string]any{"player_id": "alice", "nick": "Alice"})
+	roomID := host["room_id"].(string)
+
 	if code, _ := h.post(t, "/v1/rooms/"+roomID+"/status", map[string]any{
 		"player_id": "alice", "status": "locked_in_game",
 	}); code != http.StatusOK {
 		t.Fatal("lock failed")
 	}
-	code, spec := h.post(t, "/v1/rooms/"+roomID+"/spectate", map[string]any{
-		"player_id": "admin", "nick": "Admin",
+	code, out := h.post(t, "/v1/rooms/"+roomID+"/spectate", map[string]any{
+		"player_id": "nosy", "nick": "Nosy",
 	})
-	if code != http.StatusOK {
-		t.Fatalf("spectate on a locked room returned %d: %v", code, spec)
-	}
-	if spec["is_spectator"] != true {
-		t.Error("connect info did not mark the seat as a spectator seat")
-	}
-	if spec["virtual_ip"] == host["virtual_ip"] {
-		t.Error("spectator was given the host's address")
-	}
-
-	_, view := h.get(t, "/v1/rooms/"+roomID)
-	if free, _ := view["free_slots"].(float64); free != 9 {
-		t.Errorf("free_slots = %v; a spectator must not consume a playing slot", free)
+	if code != http.StatusForbidden {
+		t.Fatalf("spectate on a locked room returned %d: %v; want 403", code, out)
 	}
 }
 
