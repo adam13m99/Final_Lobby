@@ -4,10 +4,14 @@
 starts until a real Dota 2 match has run between two physical PCs over our
 relay.
 
-- **Date run:**
-- **PC A (host):**
-- **PC B (client):**
-- **Run by:**
+- **Date run:** 2026-08-23
+- **PC A (host):** PC1, virtual address 10.87.0.2
+- **PC B (client):** PC2, virtual address 10.87.0.3
+- **Run by:** the owner, one person at each machine
+- **Build:** `2026.08.23-1739`
+
+**Result: a real Dota 2 match ran between two physical PCs over the relay.**
+The gate for the whole network core is passed.
 
 ---
 
@@ -72,13 +76,28 @@ the development machine.
 
 On **PC B**: join that room, press **Connect**, then **Launch Dota 2**.
 
-- [ ] **A real Dota 2 match started with both players in it**
-- **What each screen showed, and how long it took:**
-- **In-game ping shown for PC B:**
-- **Host's own ping (expected 0 — the host runs the match):**
+- [x] **A real Dota 2 match started with both players in it** — 2026-08-23
 
-If it fails, record exactly what Dota said. The error text matters more than
-anything else in this document.
+Done by hand rather than with the **Launch Dota 2** button: the host started
+Dota, ran `map dota gamemode 2` at the console, and PC2 joined with
+`connect 10.87.0.2`. Both players were in the same match and played.
+
+Relay counters during the match, which is the independent confirmation that
+the traffic really crossed our own network rather than some other path:
+
+```
+peers=2  forwarded=13162  dropped_queue=0  write_errors=0  auth_failed=0
+```
+
+- **In-game ping shown for PC B:** not recorded
+- **Host's own ping:** not recorded
+
+**The first attempt failed, and the reason matters more than the success.**
+Nobody had connected the tunnel. Both players were in the room, the host
+launched Dota and hosted a game, and PC2's `connect 10.87.0.2` went nowhere
+because no machine held that address — the virtual adapter did not exist on
+either PC. Nothing on either screen said so. See "Connect is a step people do
+not know exists" below.
 
 ### 2. Real bandwidth
 
@@ -89,8 +108,22 @@ Every capacity and cost figure we have rests on roughly 1.2 Mbps each way per
 ten-player game. Two players will use far less; what matters is the
 per-player rate, which we can multiply up.
 
-- **PC A (host) sent / received:**
-- **PC B (client) sent / received:**
+Measured on PC A's **Final Lobby** adapter during the match, over a 10-second
+sample, with **two** players connected:
+
+| Direction | Rate |
+|---|---|
+| PC A sent (host to one client) | **115 kbps** |
+| PC A received (one client to host) | **42 kbps** |
+
+**Read this as a floor, not an answer.** A two-player game carries far fewer
+entities than a ten-player one, so the per-client rate will rise. Taking the
+per-client figures at face value, a full game costs the host roughly
+9 x 115 kbps = **1.04 Mbps out** and 9 x 42 kbps = **378 kbps in**, against
+the 1.2 Mbps each way the capacity model assumes. The model is the right
+order of magnitude; it is not yet confirmed at ten players.
+
+- **Still to measure:** the same numbers in a game with more than two players.
 
 ### 3. Open question — can a stranger take an abandoned slot?
 
@@ -217,9 +250,35 @@ On the development machine, 2026-08-19 and 2026-08-23:
 
 ---
 
+## Connect is a step people do not know exists
+
+The single biggest finding of the session, and it is a design fault rather
+than a mistake by whoever was testing.
+
+Being in a room and being on the room's network are two different states, and
+only the second one carries any traffic. The app never says so. The room
+screen shows a small "tunnel off" pill, which is not a thing anyone reads
+while arranging a match with somebody on the phone.
+
+The **Launch Dota 2** button is correctly greyed out until the tunnel is up,
+so people who use it are safe. Anyone who starts Dota themselves — which is
+what a Dota player naturally does — gets no warning at all, and the failure
+surfaces minutes later as a connection error inside Dota, three layers away
+from its cause.
+
+Left as it is, every new player loses their first evening to this.
+
 ## Result
 
-- **Did a real Dota 2 match run between the two PCs?**
-- **Answer to the open question in case 3:**
-- **Measured per-player bandwidth:**
+- **Did a real Dota 2 match run between the two PCs?** **Yes** — 2026-08-23,
+  build `2026.08.23-1739`, confirmed independently by the relay forwarding
+  13,162 packets between two peers with no drops and no write errors.
+- **Answer to the open question in case 3:** not yet run.
+- **Measured per-player bandwidth:** 115 kbps out / 42 kbps in per client at
+  two players; see the caveat in section 2.
 - **What broke, and what we are doing about it:**
+  1. Tickets expired while players waited in the room, so Connect could never
+     succeed. Fixed the same day — D36, build `2026.08.23-1739`.
+  2. Nothing tells a player they must press Connect. Open; see above.
+  3. A relay that refuses a handshake stays silent, so the app can only
+     report a timeout. Open; see D36.

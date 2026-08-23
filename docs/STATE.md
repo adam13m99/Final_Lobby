@@ -76,7 +76,7 @@ Plan: `docs/superpowers/plans/2026-08-18-network-core.md`
 | 13 | Fail-closed lease watchdog | **done** | |
 | 14 | Dota 2 launch with argument allowlist | **done** | |
 | 15 | Load test harness | **done** | |
-| 16 | Physical two-PC acceptance test | **in progress** — first session 2026-08-23 found and fixed the expiring-ticket bug (D36); no Dota match run yet | |
+| 16 | Physical two-PC acceptance test | **gate passed** — a real Dota 2 match ran between two PCs over the relay, 2026-08-23, build `2026.08.23-1739`. Remaining cases (abandoned slot, kick timing, drop recovery) still to run | |
 
 ## Completed outside the plan
 
@@ -89,29 +89,46 @@ Plan: `docs/superpowers/plans/2026-08-18-network-core.md`
 | Implementation plan | `06e6a18` |
 | Git sync through server tunnel (GitHub is DPI-blocked locally) | `dd28c05` |
 
-## First two-PC session, 2026-08-23
+## First two-PC session, 2026-08-23 — the gate is passed
 
-Both machines installed from the link and reached the lobby. One created a
-room, the other joined, and neither could connect: **the ticket a player
-receives on joining expires after ten minutes, and nothing renewed it until
-after the tunnel was already up.** Any pair of people who spend more than ten
-minutes arranging a match hit it every time. See D36.
+**A real Dota 2 match ran between two physical PCs over our relay.** That was
+the condition for the whole network core, and for starting sub-project 2.
 
-Fixed by minting the ticket at Connect instead of at join
-(`POST /v1/rooms/{id}/connect`), deployed and published as `2026.08.23-1739`.
-Verified by connecting successfully with a deliberately invalid stored
-ticket, which failed reliably before the change.
+Independently confirmed on the relay rather than taken on trust: `peers=2`,
+**13,162 packets forwarded**, `dropped_queue=0`, `write_errors=0`,
+`auth_failed=0`.
 
-Still to run, and needing a person at each machine: the real Dota 2 match,
-bandwidth measurement, the abandoned-slot question, kick timing, network-drop
-recovery, and chat across two screens.
+Two things had to be fixed or understood to get there:
+
+1. **Tickets expired while players waited in the room** (D36). A ticket is
+   good for ten minutes and was issued at join, while the watchdog that
+   renews it only started once the tunnel was already up. Any pair of people
+   who spent more than ten minutes arranging a match hit it every time.
+   Fixed by minting the ticket when Connect is pressed; published as
+   `2026.08.23-1739`.
+2. **Nobody knew Connect was a step.** The first attempt failed with both
+   players in the room, Dota hosting, and no tunnel on either machine. This
+   is a design fault, not a testing mistake, and it is still open — see
+   `docs/testing/two-pc-acceptance.md`.
+
+First real bandwidth measurement, host side, two players: **115 kbps out,
+42 kbps in per client.** Extrapolated to ten players that is ~1.04 Mbps out
+and ~378 kbps in for the host, against the 1.2 Mbps each way the capacity
+model assumes. A two-player game is lighter than a full one, so treat this as
+a floor that supports the model rather than confirming it.
+
+Still needing a person at each machine: the abandoned-slot question, kick
+timing, network-drop recovery, and chat across two screens.
 
 ## Open questions
 
 1. **Can a new player take over an abandoned slot in a running Dota LAN match?**
    Reconnecting your own dropped player works; a different person filling the
    slot is unverified. The dynamic room flow depends on it. Answered by Task 16.
-2. Real per-player bandwidth — estimated, not measured. Task 15/16.
+2. Real per-player bandwidth at a **full** game — first measurement taken
+   2026-08-23 at two players (115 kbps out / 42 kbps in per client), which
+   supports the 1.2 Mbps model but does not confirm it. Needs a game with
+   more than two players.
 3. Wintun redistribution licence — the DLL is embedded in the binary
    (`netservice/internal/adapter/bin/wintun.dll`, v0.14.1, Authenticode
    signature verified as WireGuard LLC). Confirm redistribution terms before
