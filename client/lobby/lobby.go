@@ -39,9 +39,29 @@ type RoomView struct {
 	Members  []Member `json:"members"`
 	Seats    int      `json:"seats"`
 	Free     int      `json:"free_slots"`
+	Watchers int      `json:"watchers"`
 	AvgMMR   int      `json:"avg_mmr"`
 	Joinable bool     `json:"joinable"`
 	Players  []string `json:"players"`
+
+	// The door (D41). Privacy is "public", "password", "friends" or
+	// "invite"; NeedsPassword is what the lobby draws a padlock from. The
+	// password itself never crosses this boundary in either direction except
+	// as something the person typed.
+	Privacy       string `json:"privacy"`
+	NeedsPassword bool   `json:"needs_password"`
+	MinMMR        int    `json:"min_mmr"`
+}
+
+// RoomOptions is the door a host wants on a room, at creation or afterwards.
+type RoomOptions struct {
+	// Privacy is "public", "password", "friends" or "invite". Empty means
+	// public.
+	Privacy string
+	// Password is required when Privacy is "password" and ignored otherwise.
+	Password string
+	// MinMMR is the floor, or zero for none.
+	MinMMR int
 }
 
 type Client struct {
@@ -143,7 +163,17 @@ func friendly(code int, msg string) string {
 	case strings.Contains(msg, "locked"):
 		return "that room is locked and in game - ask the host to reopen it"
 	case strings.Contains(msg, "kicked"):
-		return "you were kicked from that room; you can return in 5 minutes"
+		return "you were kicked from that room; try again in a few minutes"
+	case strings.Contains(msg, "this room has a password"):
+		return "that room needs a password"
+	case strings.Contains(msg, "wrong room password"):
+		return "that password is not right"
+	case strings.Contains(msg, "friends may join"):
+		return "that room is for the host's friends only"
+	case strings.Contains(msg, "invitation only"):
+		return "that room is invitation only - ask the host for an invite"
+	case strings.Contains(msg, "MMR is below"):
+		return "your MMR is below what that room asks for"
 	case strings.Contains(msg, "no free player slot"):
 		return "that room is full"
 	case strings.Contains(msg, "already in this room"):
@@ -161,17 +191,62 @@ func friendly(code int, msg string) string {
 }
 
 func (c *Client) CreateRoom(playerID, nick, name string) (*ConnectInfo, error) {
+	return c.CreateRoomWith(playerID, nick, name, RoomOptions{})
+}
+
+// CreateRoomWith opens a room with its door already set.
+//
+// A host who wanted a private room gets one from the moment it exists.
+// Creating it public and locking it a second later is a second during which
+// anybody can walk in.
+func (c *Client) CreateRoomWith(playerID, nick, name string, opt RoomOptions) (*ConnectInfo, error) {
 	var info ConnectInfo
-	err := c.do("POST", "/v1/rooms",
-		map[string]string{"player_id": playerID, "nick": nick, "name": name}, &info)
+	err := c.do("POST", "/v1/rooms", map[string]any{
+		"player_id": playerID,
+		"nick":      nick,
+		"name":      name,
+		"privacy":   opt.Privacy,
+		"password":  opt.Password,
+		"min_mmr":   opt.MinMMR,
+	}, &info)
 	return &info, err
 }
 
 func (c *Client) JoinRoom(roomID, playerID, nick string) (*ConnectInfo, error) {
+	return c.JoinRoomWith(roomID, playerID, nick, "")
+}
+
+// JoinRoomWith joins a room, offering a password if it has one.
+func (c *Client) JoinRoomWith(roomID, playerID, nick, password string) (*ConnectInfo, error) {
 	var info ConnectInfo
 	err := c.do("POST", "/v1/rooms/"+roomID+"/join",
-		map[string]string{"player_id": playerID, "nick": nick}, &info)
+		map[string]string{"player_id": playerID, "nick": nick, "password": password}, &info)
 	return &info, err
+}
+
+// SetPrivacy changes a room's door. Host only.
+func (c *Client) SetPrivacy(roomID, playerID string, opt RoomOptions) (*RoomView, error) {
+	var rv RoomView
+	err := c.do("POST", "/v1/rooms/"+roomID+"/privacy", map[string]any{
+		"player_id": playerID,
+		"privacy":   opt.Privacy,
+		"password":  opt.Password,
+		"min_mmr":   opt.MinMMR,
+	}, &rv)
+	return &rv, err
+}
+
+// Invite opens an invite-only room to one person. Host only.
+func (c *Client) Invite(roomID, playerID, targetID string) error {
+	return c.do("POST", "/v1/rooms/"+roomID+"/invite",
+		map[string]any{"player_id": playerID, "target_id": targetID}, nil)
+}
+
+// Uninvite withdraws an invitation. It does not remove somebody already
+// seated; that is a kick.
+func (c *Client) Uninvite(roomID, playerID, targetID string) error {
+	return c.do("POST", "/v1/rooms/"+roomID+"/invite",
+		map[string]any{"player_id": playerID, "target_id": targetID, "withdraw": true}, nil)
 }
 
 // Refresh mints a new ticket for a player already seated in a room.

@@ -43,7 +43,7 @@ func TestRoomsGetDistinctSubnets(t *testing.T) {
 func TestJoinerLearnsTheHostAddress(t *testing.T) {
 	s := room.NewStore()
 	_, hostM, _ := s.Create("h1", "A", t0)
-	m, err := s.Join(hostM.RoomID, "p2", t0)
+	m, err := s.Join(hostM.RoomID, room.Anyone("p2"), t0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestJoinerLearnsTheHostAddress(t *testing.T) {
 
 func TestJoinUnknownRoom(t *testing.T) {
 	s := room.NewStore()
-	if _, err := s.Join("nope", "p", t0); !errors.Is(err, room.ErrNotFound) {
+	if _, err := s.Join("nope", room.Anyone("p"), t0); !errors.Is(err, room.ErrNotFound) {
 		t.Fatalf("err = %v, want ErrNotFound", err)
 	}
 }
@@ -82,7 +82,7 @@ func TestListHidesClosedRooms(t *testing.T) {
 func TestTickReportsRoomsThatJustClosed(t *testing.T) {
 	s := room.NewStore()
 	_, m, _ := s.Create("h1", "A", t0)
-	_, _ = s.Join(m.RoomID, "p2", t0)
+	_, _ = s.Join(m.RoomID, room.Anyone("p2"), t0)
 	_ = s.Leave(m.RoomID, "h1", t0)
 
 	if closed := s.Tick(t0.Add(time.Minute)); len(closed) != 0 {
@@ -126,7 +126,7 @@ func TestMembershipForSeatedPlayer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	joined, err := s.Join(host.RoomID, "p2", t0)
+	joined, err := s.Join(host.RoomID, room.Anyone("p2"), t0)
 	if err != nil {
 		t.Fatal(err)
 	}

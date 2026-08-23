@@ -29,6 +29,7 @@ type Server struct {
 	players  *player.Registry
 	chat     *chat.Board
 	accounts *account.Store
+	friends  Friends
 	diag     *diagLog
 	dl       *downloads
 	log      *slog.Logger
@@ -59,6 +60,11 @@ type Config struct {
 	Tickets *ticket.Store
 	Players *player.Registry
 	Chat    *chat.Board
+	// Friends answers whether two people are friends, for friends-only
+	// rooms (D41). Nil until T7 lands the friend graph; a friends-only room
+	// then admits nobody but its host, which is the honest failure.
+	Friends Friends
+
 	// Accounts is nil on a coordinator running without an account database:
 	// the loadtest harness and most tests have no use for one, and the
 	// room machinery predates it.
@@ -95,6 +101,7 @@ func New(cfg Config) *Server {
 		players:   cfg.Players,
 		chat:      cfg.Chat,
 		accounts:  cfg.Accounts,
+		friends:   cfg.Friends,
 		diag:      &diagLog{},
 		dl:        &downloads{dir: cfg.DistDir, key: cfg.DownloadKey},
 		log:       cfg.Logger,
@@ -158,6 +165,8 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /v1/rooms/{id}/leave", s.signedIn(s.limitManage, s.leaveRoom))
 	mux.HandleFunc("POST /v1/rooms/{id}/kick", s.signedIn(s.limitManage, s.kickPlayer))
 	mux.HandleFunc("POST /v1/rooms/{id}/status", s.signedIn(s.limitManage, s.setStatus))
+	mux.HandleFunc("POST /v1/rooms/{id}/privacy", s.signedIn(s.limitManage, s.setPrivacy))
+	mux.HandleFunc("POST /v1/rooms/{id}/invite", s.signedIn(s.limitManage, s.invite))
 	mux.HandleFunc("POST /v1/rooms/{id}/spectate", s.signedIn(s.limitJoin, s.spectateRoom))
 	mux.HandleFunc("POST /v1/rooms/{id}/connect", s.signedIn(s.limitRead, s.connectRoom))
 	mux.HandleFunc("POST /v1/lease/renew", s.signedIn(s.limitRead, s.renewLease))
@@ -237,6 +246,12 @@ type roomView struct {
 	Watchers int  `json:"watchers"`
 	AvgMMR   int  `json:"avg_mmr"`
 	Joinable bool `json:"joinable"`
+	// Privacy is the door (D41). NeedsPassword is separate because the lobby
+	// draws a padlock from it; the password itself is never in this view, and
+	// the room type keeps its hash unexported so it cannot accidentally be.
+	Privacy       string `json:"privacy"`
+	NeedsPassword bool   `json:"needs_password"`
+	MinMMR        int    `json:"min_mmr,omitempty"`
 	// Players is the bare ID list the first CLI was written against.
 	Players []string `json:"players"`
 }
@@ -246,11 +261,14 @@ type roomView struct {
 // something anyone can choose a game from.
 func (s *Server) view(r room.Room) roomView {
 	v := roomView{
-		ID:      r.ID,
-		Name:    r.Name,
-		Status:  string(r.Status),
-		HostID:  r.HostID,
-		Members: make([]memberView, 0, len(r.Slots)),
+		ID:            r.ID,
+		Name:          r.Name,
+		Status:        string(r.Status),
+		HostID:        r.HostID,
+		Privacy:       string(r.Privacy),
+		NeedsPassword: r.HasPassword(),
+		MinMMR:        r.MinMMR,
+		Members:       make([]memberView, 0, len(r.Slots)),
 	}
 	known := s.players.Lookup(r.Occupants())
 
@@ -375,6 +393,10 @@ func (s *Server) createRoom(w http.ResponseWriter, r *http.Request) {
 		PlayerID string `json:"player_id"`
 		Nick     string `json:"nick"`
 		Name     string `json:"name"`
+		// The door, if the host wants one from the start (D41).
+		Privacy  string `json:"privacy"`
+		Password string `json:"password"`
+		MinMMR   int    `json:"min_mmr"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -402,6 +424,29 @@ func (s *Server) createRoom(w http.ResponseWriter, r *http.Request) {
 	}
 	s.chat.System(m.RoomID, nick+" opened the room", s.now())
 	s.chat.System(chat.Lobby, nick+" opened \""+body.Name+"\"", s.now())
+	// A host who wanted a private room should get one from the moment it
+	// exists. Creating it public and locking it a second later is a second
+	// during which anybody can walk in.
+	if body.Privacy != "" || body.MinMMR > 0 {
+		p := room.Privacy(body.Privacy)
+		if body.Privacy == "" {
+			p = room.PrivacyPublic
+		}
+		if err := s.rooms.SetPrivacy(m.RoomID, body.PlayerID, p, body.Password, body.MinMMR, s.now()); err != nil {
+			// The room exists and the host is in it, but not with the door
+			// they asked for. Leaving it standing would put a public room
+			// where somebody asked for a private one, so it goes away now
+			// rather than lingering through the host's grace period.
+			_ = s.rooms.Close(m.RoomID, body.PlayerID)
+			s.tickets.RevokeRoom(m.RoomID)
+			if code, ok := doorStatus(err); ok {
+				writeErr(w, code, err.Error())
+				return
+			}
+			writeErr(w, statusFor(err), err.Error())
+			return
+		}
+	}
 	s.log.Info("room created", "room", m.RoomID, "host", body.PlayerID, "vip", m.VirtualIP)
 	writeJSON(w, http.StatusCreated, info)
 }
@@ -410,6 +455,9 @@ func (s *Server) joinRoom(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		PlayerID string `json:"player_id"`
 		Nick     string `json:"nick"`
+		// Password is the only thing at the door the person types. Everything
+		// else the door checks comes from the server's own records.
+		Password string `json:"password"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -422,7 +470,13 @@ func (s *Server) joinRoom(w http.ResponseWriter, r *http.Request) {
 	}
 	nick := s.seen(body.PlayerID, body.Nick)
 
-	m, err := s.rooms.Join(r.PathValue("id"), body.PlayerID, s.now())
+	id := r.PathValue("id")
+	rm, err := s.rooms.Get(id)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "that room has closed")
+		return
+	}
+	m, err := s.rooms.Join(id, s.applicant(r, rm, body.PlayerID, body.Password), s.now())
 	if err != nil {
 		writeErr(w, statusFor(err), err.Error())
 		return
@@ -598,6 +652,9 @@ func statusFor(err error) int {
 		return http.StatusConflict
 	case errors.Is(err, room.ErrAlreadyJoined):
 		return http.StatusConflict
+	}
+	if code, ok := doorStatus(err); ok {
+		return code
 	}
 	return http.StatusBadRequest
 }

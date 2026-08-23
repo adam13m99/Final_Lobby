@@ -260,6 +260,7 @@ func (s *Server) spectateRoom(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		PlayerID string `json:"player_id"`
 		Nick     string `json:"nick"`
+		Password string `json:"password"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -272,7 +273,13 @@ func (s *Server) spectateRoom(w http.ResponseWriter, r *http.Request) {
 	}
 	nick := s.seen(body.PlayerID, body.Nick)
 
-	m, err := s.rooms.JoinObserver(r.PathValue("id"), body.PlayerID, s.now())
+	id := r.PathValue("id")
+	rm, err := s.rooms.Get(id)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "that room has closed")
+		return
+	}
+	m, err := s.rooms.JoinObserver(id, s.applicant(r, rm, body.PlayerID, body.Password), s.now())
 	if err != nil {
 		writeErr(w, statusFor(err), err.Error())
 		return

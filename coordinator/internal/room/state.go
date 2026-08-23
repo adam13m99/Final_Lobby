@@ -92,6 +92,18 @@ type Room struct {
 	HostID string
 	Status Status
 
+	// Privacy is the door on the room (D41); see privacy.go.
+	Privacy Privacy
+	// MinMMR is the floor a player must declare to be let in. Zero is no
+	// floor. It is advisory in the sense that MMR is self-declared, and
+	// enforced in the sense that the coordinator, not the client, checks it.
+	MinMMR int
+	// passwordHash is unexported so a room can never be serialised with its
+	// password in it by somebody adding a field to a JSON view.
+	passwordHash string
+	// Invites is who the host has named, for an invite-only room.
+	Invites map[string]time.Time
+
 	Slots     [ipam.PlayerSlots]string
 	Observers [ipam.ObserverSlots]string
 	Admins    [ipam.AdminSlots]string
@@ -114,6 +126,8 @@ func NewRoom(id string, index int, hostID string, now time.Time) *Room {
 		Index:       index,
 		HostID:      hostID,
 		Status:      StatusOpen,
+		Privacy:     PrivacyPublic,
+		Invites:     make(map[string]time.Time),
 		KickedUntil: make(map[string]time.Time),
 		KickCount:   make(map[string]int),
 	}
@@ -122,6 +136,10 @@ func NewRoom(id string, index int, hostID string, now time.Time) *Room {
 }
 
 // admissible runs the checks that every kind of seat shares.
+//
+// A kick block is checked here, before the door, and is never bypassed - not
+// by a password, not by an invitation, not by being staff. The block is
+// enforced against identity, not against role.
 func (r *Room) admissible(playerID string, now time.Time) error {
 	if r.Status == StatusClosed {
 		return ErrRoomClosed
@@ -136,17 +154,24 @@ func (r *Room) admissible(playerID string, now time.Time) error {
 }
 
 // Join seats a player in the lowest free slot.
-func (r *Room) Join(playerID string, now time.Time) (int, error) {
+func (r *Room) Join(who Applicant, now time.Time) (int, error) {
+	playerID := who.ID
 	if err := r.admissible(playerID, now); err != nil {
 		return 0, err
 	}
 
 	// The host reclaiming their own room during the grace window is always
 	// allowed, even while the room is locked - otherwise a host who crashed
-	// mid-match would be locked out of the match they are running.
+	// mid-match would be locked out of the match they are running. They are
+	// also not asked for their own room's password.
 	isHostReturning := playerID == r.HostID && !r.HostGraceUntil.IsZero()
 	if r.Status == StatusLocked && !isHostReturning {
 		return 0, ErrRoomLocked
+	}
+	if !isHostReturning {
+		if err := r.knock(who); err != nil {
+			return 0, err
+		}
 	}
 
 	for i := range r.Slots {
@@ -166,12 +191,18 @@ func (r *Room) Join(playerID string, now time.Time) (int, error) {
 // Observers may not walk into a locked room. Watching is a social choice, and
 // letting people wander into a match already in progress is where scouting
 // and griefing start. An admin is a different case - see JoinAdmin.
-func (r *Room) JoinObserver(playerID string, now time.Time) (int, error) {
+func (r *Room) JoinObserver(who Applicant, now time.Time) (int, error) {
+	playerID := who.ID
 	if err := r.admissible(playerID, now); err != nil {
 		return 0, err
 	}
 	if r.Status == StatusLocked {
 		return 0, ErrRoomLocked
+	}
+	// The door applies to the gallery too. A friends-only room whose observer
+	// seats anybody can take is not a friends-only room.
+	if err := r.knock(who); err != nil {
+		return 0, err
 	}
 	for i := range r.Observers {
 		if r.Observers[i] == "" {

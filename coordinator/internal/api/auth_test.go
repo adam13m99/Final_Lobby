@@ -22,7 +22,23 @@ type authRig struct {
 	t   *testing.T
 	srv http.Handler
 	acc *account.Store
+	// friends is swappable so a test can install a graph after signing
+	// people up - their IDs are not known until then.
+	friends *swappableFriends
 }
+
+// swappableFriends lets a test install a friend graph after the server is
+// built. The real one arrives in T7.
+type swappableFriends struct{ inner Friends }
+
+func (f *swappableFriends) AreFriends(a, b string) (bool, error) {
+	if f.inner == nil {
+		return false, nil
+	}
+	return f.inner.AreFriends(a, b)
+}
+
+func (g *authRig) setFriends(f Friends) { g.friends.inner = f }
 
 func newAuthRig(t *testing.T) *authRig {
 	t.Helper()
@@ -33,7 +49,9 @@ func newAuthRig(t *testing.T) *authRig {
 	t.Cleanup(func() { _ = db.Close() })
 
 	acc := account.New(db)
+	friends := &swappableFriends{}
 	s := New(Config{
+		Friends:   friends,
 		Rooms:     room.NewStore(),
 		Tickets:   ticket.NewStore(),
 		Players:   player.NewRegistry(),
@@ -43,7 +61,7 @@ func newAuthRig(t *testing.T) *authRig {
 		RelayPub:  "00",
 		Now:       func() time.Time { return time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC) },
 	})
-	return &authRig{t: t, srv: s.Routes(), acc: acc}
+	return &authRig{t: t, srv: s.Routes(), acc: acc, friends: friends}
 }
 
 func (g *authRig) do(method, path, session string, body any) (*httptest.ResponseRecorder, map[string]any) {
@@ -305,7 +323,7 @@ func TestACoordinatorWithoutAccountsStillWorks(t *testing.T) {
 		RelayAddr: "127.0.0.1:443",
 		RelayPub:  "00",
 	})
-	g := &authRig{t: t, srv: s.Routes()}
+	g := &authRig{t: t, srv: s.Routes(), friends: &swappableFriends{}}
 
 	rec, _ := g.do(http.MethodPost, "/v1/rooms", "", map[string]any{
 		"player_id": "p_test", "nick": "tester", "name": "room",

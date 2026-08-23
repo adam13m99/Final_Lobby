@@ -121,7 +121,7 @@ func (s *Store) freeIndexLocked() (int, bool) {
 }
 
 // Join seats a player and returns what they need to connect.
-func (s *Store) Join(roomID, playerID string, now time.Time) (Membership, error) {
+func (s *Store) Join(roomID string, who Applicant, now time.Time) (Membership, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -129,11 +129,11 @@ func (s *Store) Join(roomID, playerID string, now time.Time) (Membership, error)
 	if !ok {
 		return Membership{}, ErrNotFound
 	}
-	slot, err := r.Join(playerID, now)
+	slot, err := r.Join(who, now)
 	if err != nil {
 		return Membership{}, err
 	}
-	return membershipFor(r, slot, playerID == r.HostID)
+	return membershipFor(r, slot, who.ID == r.HostID)
 }
 
 // Membership returns what an already-seated player needs in order to
@@ -167,7 +167,7 @@ func (s *Store) Membership(roomID, playerID string) (Membership, error) {
 }
 
 // JoinObserver seats somebody who wants to watch without playing.
-func (s *Store) JoinObserver(roomID, playerID string, now time.Time) (Membership, error) {
+func (s *Store) JoinObserver(roomID string, who Applicant, now time.Time) (Membership, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -175,7 +175,7 @@ func (s *Store) JoinObserver(roomID, playerID string, now time.Time) (Membership
 	if !ok {
 		return Membership{}, ErrNotFound
 	}
-	seat, err := r.JoinObserver(playerID, now)
+	seat, err := r.JoinObserver(who, now)
 	if err != nil {
 		return Membership{}, err
 	}
@@ -367,4 +367,60 @@ func newRoomID() string {
 		return "r" + time.Now().UTC().Format("20060102150405.000000000")
 	}
 	return "r" + hex.EncodeToString(b)
+}
+
+// SetPrivacy changes a room's door. Host only.
+func (s *Store) SetPrivacy(roomID, actorID string, p Privacy, password string, minMMR int, now time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r, ok := s.rooms[roomID]
+	if !ok {
+		return ErrNotFound
+	}
+	return r.SetPrivacy(actorID, p, password, minMMR, now)
+}
+
+// Invite admits one named person to an invite-only room. Host only.
+func (s *Store) Invite(roomID, actorID, targetID string, now time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r, ok := s.rooms[roomID]
+	if !ok {
+		return ErrNotFound
+	}
+	return r.Invite(actorID, targetID, now)
+}
+
+// Uninvite withdraws an invitation. Host only.
+func (s *Store) Uninvite(roomID, actorID, targetID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r, ok := s.rooms[roomID]
+	if !ok {
+		return ErrNotFound
+	}
+	return r.Uninvite(actorID, targetID)
+}
+
+// Close ends a room now, without waiting for the host's grace period.
+//
+// Two callers need it: a host who explicitly closes their own room, and the
+// coordinator undoing a half-made room - one that was created but could not
+// be given the door its host asked for. Leaving that one standing would put a
+// public room where somebody asked for a private one, which is the exact
+// opposite of what they wanted.
+func (s *Store) Close(roomID, actorID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r, ok := s.rooms[roomID]
+	if !ok {
+		return ErrNotFound
+	}
+	if actorID != "" && actorID != r.HostID {
+		return ErrNotHost
+	}
+	r.Status = StatusClosed
+	delete(s.indexes, r.Index)
+	delete(s.rooms, roomID)
+	return nil
 }

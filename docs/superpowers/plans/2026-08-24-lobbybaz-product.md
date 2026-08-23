@@ -122,11 +122,28 @@ end up with two services fighting over one virtual adapter.
 T10 lands the sign-in screen would lock the owner's two test PCs out of their
 own lobby. The switch is one flag; flip it in T10.
 
-## T6 — Room privacy *(D41)*
+## T6 — Room privacy *(D41)* — **done 2026-08-24**
 
-- [ ] Public, password, friends-only, invite-only
-- [ ] Minimum MMR admission *(D42 room list shows it)*
-- [ ] Tests: each privacy kind admits and refuses correctly
+- [x] Public, password, friends-only, invite-only —
+      `coordinator/internal/room/privacy.go`
+- [x] Minimum MMR admission, read from the account row and never from the
+      request *(D42 room list shows it)*
+- [x] Tests: each privacy kind admits and refuses correctly, at the room
+      layer and over HTTP
+
+Notes for whoever picks this up:
+
+- The door is one function, `Room.knock`. Everything it checks except the
+  typed password is established by the coordinator: MMR from the account row,
+  friendship from the friend graph, invitation from the room's own list. A
+  client can lie about none of it.
+- **The password hash is unexported** (`passwordHash`), so a room cannot be
+  serialised with its password in it by somebody adding a field to a view.
+- Staff walk past the door; nobody walks past a kick block.
+- Changing the door never evicts anybody already seated.
+- The friend graph is an interface, `api.Friends`, filled by T7. Without one,
+  a friends-only room refuses everybody but its host — it refuses rather than
+  quietly admitting everybody.
 
 ## T7 — Friends *(D41)*
 

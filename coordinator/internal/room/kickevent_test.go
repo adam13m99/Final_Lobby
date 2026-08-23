@@ -13,7 +13,7 @@ func TestKicksAreReportedForRecording(t *testing.T) {
 	s.OnKick(func(e KickEvent) { got = append(got, e) })
 
 	r, _, _ := s.Create("host", "test", when())
-	if _, err := s.Join(r.ID, "pest", when()); err != nil {
+	if _, err := s.Join(r.ID, Anyone("pest"), when()); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Kick(r.ID, "host", "pest", when()); err != nil {
@@ -23,7 +23,7 @@ func TestKicksAreReportedForRecording(t *testing.T) {
 	// The escalation is visible in the second kick, which is the whole reason
 	// the number is in the record.
 	later := when().Add(2 * time.Minute)
-	if _, err := s.Join(r.ID, "pest", later); err != nil {
+	if _, err := s.Join(r.ID, Anyone("pest"), later); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Kick(r.ID, "host", "pest", later); err != nil {
@@ -50,7 +50,7 @@ func TestARefusedKickIsNotRecorded(t *testing.T) {
 	s.OnKick(func(KickEvent) { recorded++ })
 
 	r, _, _ := s.Create("host", "test", when())
-	if _, err := s.Join(r.ID, "pest", when()); err != nil {
+	if _, err := s.Join(r.ID, Anyone("pest"), when()); err != nil {
 		t.Fatal(err)
 	}
 	// Only the host may kick. An attempt that fails must leave no trace, or

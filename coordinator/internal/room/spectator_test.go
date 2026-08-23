@@ -20,7 +20,7 @@ func TestAdminMayEnterALockedRoomButAnObserverMayNot(t *testing.T) {
 	if err := s.SetStatus(r.ID, "host", StatusLocked, when()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Join(r.ID, "player", when()); err != ErrRoomLocked {
+	if _, err := s.Join(r.ID, Anyone("player"), when()); err != ErrRoomLocked {
 		t.Fatalf("an ordinary player must be refused, got %v", err)
 	}
 
@@ -35,7 +35,7 @@ func TestAdminMayEnterALockedRoomButAnObserverMayNot(t *testing.T) {
 	}
 
 	// An observer wandering into a running match is how scouting starts.
-	if _, err := s.JoinObserver(r.ID, "nosy", when()); err != ErrRoomLocked {
+	if _, err := s.JoinObserver(r.ID, Anyone("nosy"), when()); err != ErrRoomLocked {
 		t.Fatalf("an observer must be refused from a locked room, got %v", err)
 	}
 }
@@ -46,7 +46,7 @@ func TestWatchingSeatsSitOutsideThePlayingSlots(t *testing.T) {
 
 	var taken []string
 	for i := 0; i < 3; i++ {
-		m, err := s.Join(r.ID, "p"+string(rune('a'+i)), when())
+		m, err := s.Join(r.ID, Anyone("p"+string(rune('a'+i))), when())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -54,7 +54,7 @@ func TestWatchingSeatsSitOutsideThePlayingSlots(t *testing.T) {
 	}
 	taken = append(taken, hostM.VirtualIP.String())
 
-	obs, err := s.JoinObserver(r.ID, "watcher", when())
+	obs, err := s.JoinObserver(r.ID, Anyone("watcher"), when())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,11 +86,11 @@ func TestWatchingSeatsAreFinite(t *testing.T) {
 	r, _, _ := s.Create("host", "test", when())
 
 	for i := 0; i < ipam.ObserverSlots; i++ {
-		if _, err := s.JoinObserver(r.ID, "obs"+string(rune('a'+i)), when()); err != nil {
+		if _, err := s.JoinObserver(r.ID, Anyone("obs"+string(rune('a'+i))), when()); err != nil {
 			t.Fatalf("observer seat %d: %v", i, err)
 		}
 	}
-	if _, err := s.JoinObserver(r.ID, "one-too-many", when()); err != ErrNoObserverSeat {
+	if _, err := s.JoinObserver(r.ID, Anyone("one-too-many"), when()); err != ErrNoObserverSeat {
 		t.Fatalf("got %v, want ErrNoObserverSeat", err)
 	}
 
@@ -123,14 +123,14 @@ func TestAFullRoomIsEighteenDistinctAddresses(t *testing.T) {
 	}
 
 	for i := 1; i < ipam.PlayerSlots; i++ {
-		m, err := s.Join(r.ID, "player"+string(rune('a'+i)), when())
+		m, err := s.Join(r.ID, Anyone("player"+string(rune('a'+i))), when())
 		if err != nil {
 			t.Fatalf("player %d: %v", i, err)
 		}
 		add(m, "player")
 	}
 	for i := 0; i < ipam.ObserverSlots; i++ {
-		m, err := s.JoinObserver(r.ID, "obs"+string(rune('a'+i)), when())
+		m, err := s.JoinObserver(r.ID, Anyone("obs"+string(rune('a'+i))), when())
 		if err != nil {
 			t.Fatalf("observer %d: %v", i, err)
 		}
@@ -163,13 +163,13 @@ func TestAFullRoomIsEighteenDistinctAddresses(t *testing.T) {
 func TestKickedPlayerCannotSneakBackIntoAnotherSeat(t *testing.T) {
 	s := NewStore()
 	r, _, _ := s.Create("host", "test", when())
-	if _, err := s.Join(r.ID, "pest", when()); err != nil {
+	if _, err := s.Join(r.ID, Anyone("pest"), when()); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Kick(r.ID, "host", "pest", when()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.JoinObserver(r.ID, "pest", when()); err != ErrKickBlocked {
+	if _, err := s.JoinObserver(r.ID, Anyone("pest"), when()); err != ErrKickBlocked {
 		t.Fatalf("the block must cover the observer gallery too, got %v", err)
 	}
 	// The block is enforced against identity, not against role: being staff
@@ -182,13 +182,13 @@ func TestKickedPlayerCannotSneakBackIntoAnotherSeat(t *testing.T) {
 func TestCannotHoldTwoSeatsAtOnce(t *testing.T) {
 	s := NewStore()
 	r, _, _ := s.Create("host", "test", when())
-	if _, err := s.JoinObserver(r.ID, "host", when()); err != ErrAlreadyJoined {
+	if _, err := s.JoinObserver(r.ID, Anyone("host"), when()); err != ErrAlreadyJoined {
 		t.Fatalf("playing host took an observer seat: %v", err)
 	}
 	if _, err := s.JoinAdmin(r.ID, "host", when()); err != ErrAlreadyJoined {
 		t.Fatalf("playing host took an admin seat: %v", err)
 	}
-	if _, err := s.JoinObserver(r.ID, "watcher", when()); err != nil {
+	if _, err := s.JoinObserver(r.ID, Anyone("watcher"), when()); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.JoinAdmin(r.ID, "watcher", when()); err != ErrAlreadyJoined {
@@ -200,8 +200,13 @@ func TestLeavingReleasesEverySeatKind(t *testing.T) {
 	s := NewStore()
 	r, _, _ := s.Create("host", "test", when())
 
+	// Both watching seats, driven through one shape so neither can be
+	// released correctly while the other quietly leaks.
 	for _, join := range []func(string, string, time.Time) (Membership, error){
-		s.JoinObserver, s.JoinAdmin,
+		func(id, who string, now time.Time) (Membership, error) {
+			return s.JoinObserver(id, Anyone(who), now)
+		},
+		s.JoinAdmin,
 	} {
 		if _, err := join(r.ID, "somebody", when()); err != nil {
 			t.Fatal(err)
@@ -221,8 +226,8 @@ func TestLeavingReleasesEverySeatKind(t *testing.T) {
 func TestSlotOfReportsWhichSeatingAreaSomebodyIsIn(t *testing.T) {
 	s := NewStore()
 	r, _, _ := s.Create("host", "test", when())
-	_, _ = s.Join(r.ID, "p1", when())
-	_, _ = s.JoinObserver(r.ID, "watcher", when())
+	_, _ = s.Join(r.ID, Anyone("p1"), when())
+	_, _ = s.JoinObserver(r.ID, Anyone("watcher"), when())
 	_, _ = s.JoinAdmin(r.ID, "admin", when())
 
 	got, _ := s.Get(r.ID)

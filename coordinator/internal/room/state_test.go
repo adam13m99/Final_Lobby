@@ -27,7 +27,7 @@ func TestHostOccupiesSlotZero(t *testing.T) {
 
 func TestJoinFillsLowestFreeSlot(t *testing.T) {
 	r := newRoom(t)
-	slot, err := r.Join("p2", t0)
+	slot, err := r.Join(room.Anyone("p2"), t0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,21 +41,21 @@ func TestLockedRoomRejectsNewPlayers(t *testing.T) {
 	if err := r.SetStatus("host-1", room.StatusLocked, t0); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.Join("p2", t0); !errors.Is(err, room.ErrRoomLocked) {
+	if _, err := r.Join(room.Anyone("p2"), t0); !errors.Is(err, room.ErrRoomLocked) {
 		t.Fatalf("err = %v, want ErrRoomLocked", err)
 	}
 }
 
 func TestHostCanReopenLockedRoomForReplacements(t *testing.T) {
 	r := newRoom(t)
-	_, _ = r.Join("p2", t0)
+	_, _ = r.Join(room.Anyone("p2"), t0)
 	_ = r.SetStatus("host-1", room.StatusLocked, t0)
 	r.Leave("p2", t0) // abandons mid-match
 
 	if err := r.SetStatus("host-1", room.StatusOpenToNew, t0); err != nil {
 		t.Fatal(err)
 	}
-	slot, err := r.Join("p3", t0)
+	slot, err := r.Join(room.Anyone("p3"), t0)
 	if err != nil {
 		t.Fatalf("replacement could not join: %v", err)
 	}
@@ -66,7 +66,7 @@ func TestHostCanReopenLockedRoomForReplacements(t *testing.T) {
 
 func TestOnlyHostChangesStatus(t *testing.T) {
 	r := newRoom(t)
-	_, _ = r.Join("p2", t0)
+	_, _ = r.Join(room.Anyone("p2"), t0)
 	if err := r.SetStatus("p2", room.StatusLocked, t0); !errors.Is(err, room.ErrNotHost) {
 		t.Fatalf("err = %v, want ErrNotHost", err)
 	}
@@ -96,14 +96,14 @@ func TestKickBlockEscalates(t *testing.T) {
 
 func TestFirstKickBlocksForOneMinute(t *testing.T) {
 	r := newRoom(t)
-	_, _ = r.Join("p2", t0)
+	_, _ = r.Join(room.Anyone("p2"), t0)
 	if err := r.Kick("host-1", "p2", t0); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.Join("p2", t0.Add(30*time.Second)); !errors.Is(err, room.ErrKickBlocked) {
+	if _, err := r.Join(room.Anyone("p2"), t0.Add(30*time.Second)); !errors.Is(err, room.ErrKickBlocked) {
 		t.Fatalf("at 30s err = %v, want ErrKickBlocked", err)
 	}
-	if _, err := r.Join("p2", t0.Add(time.Minute+time.Second)); err != nil {
+	if _, err := r.Join(room.Anyone("p2"), t0.Add(time.Minute+time.Second)); err != nil {
 		t.Fatalf("after the 1-minute block expired, join failed: %v", err)
 	}
 }
@@ -116,7 +116,7 @@ func TestRepeatedKicksBlockForLonger(t *testing.T) {
 
 	kickAt := func(at time.Time) {
 		t.Helper()
-		if _, err := r.Join("pest", at); err != nil {
+		if _, err := r.Join(room.Anyone("pest"), at); err != nil {
 			t.Fatalf("rejoin before kick failed: %v", err)
 		}
 		if err := r.Kick("host-1", "pest", at); err != nil {
@@ -128,33 +128,33 @@ func TestRepeatedKicksBlockForLonger(t *testing.T) {
 	second := t0.Add(2 * time.Minute)
 	kickAt(second)
 	// Second kick: three minutes, so two is still barred.
-	if _, err := r.Join("pest", second.Add(2*time.Minute)); !errors.Is(err, room.ErrKickBlocked) {
+	if _, err := r.Join(room.Anyone("pest"), second.Add(2*time.Minute)); !errors.Is(err, room.ErrKickBlocked) {
 		t.Fatalf("second kick should block for 3min, got %v at 2min", err)
 	}
 	third := second.Add(3*time.Minute + time.Second)
 	kickAt(third)
 	// Third kick: five minutes.
-	if _, err := r.Join("pest", third.Add(4*time.Minute)); !errors.Is(err, room.ErrKickBlocked) {
+	if _, err := r.Join(room.Anyone("pest"), third.Add(4*time.Minute)); !errors.Is(err, room.ErrKickBlocked) {
 		t.Fatalf("third kick should block for 5min, got %v at 4min", err)
 	}
-	if _, err := r.Join("pest", third.Add(5*time.Minute+time.Second)); err != nil {
+	if _, err := r.Join(room.Anyone("pest"), third.Add(5*time.Minute+time.Second)); err != nil {
 		t.Fatalf("third block should have expired at 5min: %v", err)
 	}
 
 	// A different person starts at one minute, not at five.
-	_, _ = r.Join("newcomer", third)
+	_, _ = r.Join(room.Anyone("newcomer"), third)
 	if err := r.Kick("host-1", "newcomer", third); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.Join("newcomer", third.Add(time.Minute+time.Second)); err != nil {
+	if _, err := r.Join(room.Anyone("newcomer"), third.Add(time.Minute+time.Second)); err != nil {
 		t.Fatalf("a first-time kick must only block for a minute: %v", err)
 	}
 }
 
 func TestOnlyHostMayKick(t *testing.T) {
 	r := newRoom(t)
-	_, _ = r.Join("p2", t0)
-	_, _ = r.Join("p3", t0)
+	_, _ = r.Join(room.Anyone("p2"), t0)
+	_, _ = r.Join(room.Anyone("p3"), t0)
 	if err := r.Kick("p2", "p3", t0); !errors.Is(err, room.ErrNotHost) {
 		t.Fatalf("err = %v, want ErrNotHost", err)
 	}
@@ -165,9 +165,9 @@ func TestOnlyHostMayKick(t *testing.T) {
 
 func TestPlayerWhoLeftMayRejoinImmediately(t *testing.T) {
 	r := newRoom(t)
-	_, _ = r.Join("p2", t0)
+	_, _ = r.Join(room.Anyone("p2"), t0)
 	r.Leave("p2", t0)
-	if _, err := r.Join("p2", t0.Add(time.Second)); err != nil {
+	if _, err := r.Join(room.Anyone("p2"), t0.Add(time.Second)); err != nil {
 		t.Fatalf("voluntary leaver could not rejoin: %v", err)
 	}
 }
@@ -176,7 +176,7 @@ func TestPlayerWhoLeftMayRejoinImmediately(t *testing.T) {
 // whose host has genuinely gone should not hold nine people staring at it.
 func TestHostDepartureClosesRoomAfterOneMinute(t *testing.T) {
 	r := newRoom(t)
-	_, _ = r.Join("p2", t0)
+	_, _ = r.Join(room.Anyone("p2"), t0)
 	r.Leave("host-1", t0)
 
 	r.Tick(t0.Add(30 * time.Second))
@@ -194,7 +194,7 @@ func TestHostDepartureClosesRoomAfterOneMinute(t *testing.T) {
 // played are usually the ten who want to play again.
 func TestAFinishedMatchLeavesTheRoomAlone(t *testing.T) {
 	r := newRoom(t)
-	_, _ = r.Join("p2", t0)
+	_, _ = r.Join(room.Anyone("p2"), t0)
 	if err := r.SetStatus("host-1", room.StatusLocked, t0); err != nil {
 		t.Fatal(err)
 	}
@@ -214,7 +214,7 @@ func TestAFinishedMatchLeavesTheRoomAlone(t *testing.T) {
 	if err := r.SetStatus("host-1", room.StatusOpen, t0.Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.Join("p3", t0.Add(time.Hour)); err != nil {
+	if _, err := r.Join(room.Anyone("p3"), t0.Add(time.Hour)); err != nil {
 		t.Fatalf("a new player could not join the reopened room: %v", err)
 	}
 }
@@ -222,7 +222,7 @@ func TestAFinishedMatchLeavesTheRoomAlone(t *testing.T) {
 func TestHostReturnWithinGraceSavesRoom(t *testing.T) {
 	r := newRoom(t)
 	r.Leave("host-1", t0)
-	if _, err := r.Join("host-1", t0.Add(30*time.Second)); err != nil {
+	if _, err := r.Join(room.Anyone("host-1"), t0.Add(30*time.Second)); err != nil {
 		t.Fatalf("host could not reclaim room: %v", err)
 	}
 	r.Tick(t0.Add(3 * time.Minute))
@@ -233,9 +233,9 @@ func TestHostReturnWithinGraceSavesRoom(t *testing.T) {
 
 func TestHostReturnsToSlotZeroSoTheAddressIsUnchanged(t *testing.T) {
 	r := newRoom(t)
-	_, _ = r.Join("p2", t0)
+	_, _ = r.Join(room.Anyone("p2"), t0)
 	r.Leave("host-1", t0)
-	slot, err := r.Join("host-1", t0.Add(10*time.Second))
+	slot, err := r.Join(room.Anyone("host-1"), t0.Add(10*time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -247,11 +247,11 @@ func TestHostReturnsToSlotZeroSoTheAddressIsUnchanged(t *testing.T) {
 
 func TestLockedRoomStillAdmitsTheReturningHost(t *testing.T) {
 	r := newRoom(t)
-	_, _ = r.Join("p2", t0)
+	_, _ = r.Join(room.Anyone("p2"), t0)
 	_ = r.SetStatus("host-1", room.StatusLocked, t0)
 	r.Leave("host-1", t0)
 
-	if _, err := r.Join("host-1", t0.Add(20*time.Second)); err != nil {
+	if _, err := r.Join(room.Anyone("host-1"), t0.Add(20*time.Second)); err != nil {
 		t.Fatalf("host locked out of their own match: %v", err)
 	}
 }
@@ -259,11 +259,11 @@ func TestLockedRoomStillAdmitsTheReturningHost(t *testing.T) {
 func TestRoomFullRejectsEleventhPlayer(t *testing.T) {
 	r := newRoom(t)
 	for i := 2; i <= 10; i++ {
-		if _, err := r.Join(string(rune('a'+i)), t0); err != nil {
+		if _, err := r.Join(room.Anyone(string(rune('a'+i))), t0); err != nil {
 			t.Fatalf("player %d could not join: %v", i, err)
 		}
 	}
-	if _, err := r.Join("overflow", t0); !errors.Is(err, room.ErrRoomFull) {
+	if _, err := r.Join(room.Anyone("overflow"), t0); !errors.Is(err, room.ErrRoomFull) {
 		t.Fatalf("err = %v, want ErrRoomFull", err)
 	}
 }
@@ -271,7 +271,7 @@ func TestRoomFullRejectsEleventhPlayer(t *testing.T) {
 func TestClosedRoomRejectsEverything(t *testing.T) {
 	r := newRoom(t)
 	_ = r.SetStatus("host-1", room.StatusClosed, t0)
-	if _, err := r.Join("p2", t0); !errors.Is(err, room.ErrRoomClosed) {
+	if _, err := r.Join(room.Anyone("p2"), t0); !errors.Is(err, room.ErrRoomClosed) {
 		t.Fatalf("err = %v, want ErrRoomClosed", err)
 	}
 }

@@ -158,12 +158,18 @@ there; this is the summary.
 | T3 room lifecycle: 1-minute host grace (D40) | **done** |
 | T4 kick escalation 1/3/5/7 min (D39) | **done** — as events, not live blocks (D52) |
 | T5 accounts (D37) | **done** — server and client library; **not switched on yet, see below** |
-| T6 room privacy (D41) | not started |
+| T6 room privacy (D41) | **done** — all four doors, plus an MMR floor |
 | T7 friends (D41) | not started |
 | T8 roles and moderation (D43, D47) | not started |
 | T9 interface built for translation (D44) | not started |
 | T10 the new lobby (D42) | not started |
 | T11 desktop application (D45) | not started |
+
+**Rooms have doors.** Public, password, friends-only, invite-only, plus an
+optional MMR floor (D41). The door is checked server-side from the server's own
+records — a client supplies only the password it was told to type. Staff walk
+past the door; nobody walks past a kick block. Friends-only rooms refuse
+everybody but the host until T7 lands the friend graph.
 
 **Accounts exist but are not switched on.** The coordinator takes a `-db`
 file; with one it has usernames, Argon2id passwords, sessions, durable MMR and
