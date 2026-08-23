@@ -15,6 +15,7 @@ type ConnectInfo struct {
 	RoomID      string `json:"room_id"`
 	Slot        int    `json:"slot"`
 	IsHost      bool   `json:"is_host"`
+	IsSpectator bool   `json:"is_spectator"`
 	VirtualIP   string `json:"virtual_ip"`
 	HostIP      string `json:"host_ip"`
 	Subnet      string `json:"subnet"`
@@ -25,12 +26,17 @@ type ConnectInfo struct {
 }
 
 type RoomView struct {
-	ID      string   `json:"id"`
-	Name    string   `json:"name"`
-	Status  string   `json:"status"`
-	HostID  string   `json:"host_id"`
-	Players []string `json:"players"`
-	Free    int      `json:"free_slots"`
+	ID       string   `json:"id"`
+	Name     string   `json:"name"`
+	Status   string   `json:"status"`
+	HostID   string   `json:"host_id"`
+	HostNick string   `json:"host_nick"`
+	Members  []Member `json:"members"`
+	Seats    int      `json:"seats"`
+	Free     int      `json:"free_slots"`
+	AvgMMR   int      `json:"avg_mmr"`
+	Joinable bool     `json:"joinable"`
+	Players  []string `json:"players"`
 }
 
 type Client struct {
@@ -94,7 +100,9 @@ func (c *Client) do(method, path string, body any, out any) error {
 func friendly(code int, msg string) string {
 	switch {
 	case code == http.StatusUnauthorized:
-		return "the coordinator rejected your token - check `lobbycli setup`"
+		return "this copy of the app was refused by the server; download it again from the link"
+	case code == http.StatusConflict && strings.Contains(msg, "MMR"):
+		return "MMR can only be changed once a week"
 	case code == http.StatusTooManyRequests:
 		return "you are going too fast; wait a couple of seconds and try again"
 	case strings.Contains(msg, "locked"):
@@ -107,19 +115,25 @@ func friendly(code int, msg string) string {
 		return "you are already in that room"
 	case strings.Contains(msg, "only the host"):
 		return "only the host can do that"
+	case strings.Contains(msg, "no free spectator seat"):
+		return "all the spectator seats in that room are taken"
+	case strings.Contains(msg, "not in that room"):
+		return "you have to be in a room to talk in it"
 	}
 	return msg
 }
 
-func (c *Client) CreateRoom(playerID, name string) (*ConnectInfo, error) {
+func (c *Client) CreateRoom(playerID, nick, name string) (*ConnectInfo, error) {
 	var info ConnectInfo
-	err := c.do("POST", "/v1/rooms", map[string]string{"player_id": playerID, "name": name}, &info)
+	err := c.do("POST", "/v1/rooms",
+		map[string]string{"player_id": playerID, "nick": nick, "name": name}, &info)
 	return &info, err
 }
 
-func (c *Client) JoinRoom(roomID, playerID string) (*ConnectInfo, error) {
+func (c *Client) JoinRoom(roomID, playerID, nick string) (*ConnectInfo, error) {
 	var info ConnectInfo
-	err := c.do("POST", "/v1/rooms/"+roomID+"/join", map[string]string{"player_id": playerID}, &info)
+	err := c.do("POST", "/v1/rooms/"+roomID+"/join",
+		map[string]string{"player_id": playerID, "nick": nick}, &info)
 	return &info, err
 }
 

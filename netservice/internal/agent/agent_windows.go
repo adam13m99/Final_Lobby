@@ -74,6 +74,9 @@ func (a *Agent) status() ipc.Response {
 	defer a.mu.Unlock()
 
 	resp := ipc.Response{RoomID: a.roomID, State: "idle"}
+	if _, err := dota.FindInstall(); err == nil {
+		resp.DotaFound = true
+	}
 	if a.adapter != nil {
 		resp.AdapterName = a.adapter.Name()
 	}

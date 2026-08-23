@@ -17,7 +17,9 @@ ExecStart=/opt/finallobby/coordinator \
     -listen 0.0.0.0:7001 \
     -relay-addr 87.107.110.199:443 \
     -relay-pub /etc/finallobby/relay.pub \
-    -auth-token-file /etc/finallobby/api.token
+    -auth-token-file /etc/finallobby/api.token \
+    -dist-dir /var/lib/finallobby/dist \
+    -download-key-file /etc/finallobby/download.key
 
 Restart=always
 RestartSec=2s
@@ -34,6 +36,10 @@ RestrictNamespaces=true
 LockPersonality=true
 MemoryDenyWriteExecute=true
 ReadOnlyPaths=/etc/finallobby
+# The published installer lives here. ProtectSystem=strict makes everything
+# read-only, and the coordinator only ever reads it - scripts/publish.sh is
+# what writes, over SSH as root.
+ReadOnlyPaths=/var/lib/finallobby
 
 LimitNOFILE=65535
 

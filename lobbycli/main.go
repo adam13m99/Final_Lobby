@@ -121,6 +121,10 @@ func cmdSetup(args []string) error {
 	if err != nil {
 		return err
 	}
+	// The build already knows its server and this installation already has
+	// an ID, so setup usually only has to be told a name. The flags remain
+	// for pointing a developer build at something else.
+	cfg.Prepare()
 	if *coordinator != "" {
 		cfg.Coordinator = *coordinator
 	}
@@ -133,11 +137,11 @@ func cmdSetup(args []string) error {
 	if *nick != "" {
 		cfg.Nick = *nick
 	}
-	if cfg.Nick == "" {
-		cfg.Nick = cfg.PlayerID
+	if cfg.Coordinator == "" {
+		return fmt.Errorf("this build has no server stamped into it; pass -coordinator")
 	}
-	if cfg.Coordinator == "" || cfg.PlayerID == "" {
-		return fmt.Errorf("-coordinator and -player are both required")
+	if cfg.Nick == "" {
+		return fmt.Errorf("pass -nick to choose the name other players see")
 	}
 	if err := cfg.Save(); err != nil {
 		return err
@@ -187,7 +191,7 @@ func cmdCreate(args []string) error {
 	if err := cfg.RequireLogin(); err != nil {
 		return err
 	}
-	info, err := lobby.New(cfg.Coordinator, cfg.AuthToken).CreateRoom(cfg.PlayerID, *name)
+	info, err := lobby.New(cfg.Coordinator, cfg.AuthToken).CreateRoom(cfg.PlayerID, cfg.Nick, *name)
 	if err != nil {
 		return err
 	}
@@ -211,7 +215,7 @@ func cmdJoin(args []string) error {
 	if err := cfg.RequireLogin(); err != nil {
 		return err
 	}
-	info, err := lobby.New(cfg.Coordinator, cfg.AuthToken).JoinRoom(args[0], cfg.PlayerID)
+	info, err := lobby.New(cfg.Coordinator, cfg.AuthToken).JoinRoom(args[0], cfg.PlayerID, cfg.Nick)
 	if err != nil {
 		return err
 	}

@@ -13,9 +13,13 @@ secrets/
 # ─── Build output ───
 /target/
 dist/
-build/
-out/
-artifacts/
+# Anchored, all of them. An unanchored "build/" also matches
+# client/build/, which is a real Go package holding the values stamped in at
+# link time - it was silently excluded until somebody noticed the app could
+# not find its own server.
+/build/
+/out/
+/artifacts/
 /bin/
 *.exe
 *.dll

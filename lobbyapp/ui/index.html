@@ -2,117 +2,188 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Final Lobby</title>
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
 
-<header>
-  <div class="brand">
-    <span class="mark"></span>
+<!-- First run. The only thing we ever ask for. -->
+<div id="namegate" class="gate hidden">
+  <form class="gate-card" id="nameform">
     <h1>Final Lobby</h1>
-  </div>
-  <div class="status" id="status-bar">
-    <span class="pill" id="pill-service">service</span>
-    <span class="pill" id="pill-tunnel">tunnel</span>
-    <span class="who" id="who"></span>
+    <p class="muted">Pick the name other players will see.</p>
+    <input id="nameinput" maxlength="20" placeholder="Your name" autocomplete="off" required>
+    <label class="field">
+      <span>Your MMR <em>(optional, changeable once a week)</em></span>
+      <input id="mmrinput" type="number" min="0" max="15000" placeholder="e.g. 3200" autocomplete="off">
+    </label>
+    <button class="primary" type="submit">Start playing</button>
+    <p class="gate-err" id="nameerr"></p>
+  </form>
+</div>
+
+<header id="top">
+  <div class="brand">FINAL&nbsp;LOBBY</div>
+
+  <nav class="tabs">
+    <button class="tab active" data-screen="lobby">Lobby</button>
+    <button class="tab" data-screen="room" id="roomtab" disabled>Room</button>
+    <button class="tab" data-screen="checks">Diagnostics</button>
+  </nav>
+
+  <div class="status">
+    <span class="pill" id="p-service">service</span>
+    <span class="pill" id="p-tunnel">tunnel</span>
+    <span class="pill quiet" id="p-online">&mdash;</span>
+    <button class="me" id="mebtn"><span id="menick">&mdash;</span><small id="memmr"></small></button>
   </div>
 </header>
 
+<div id="banner" class="banner hidden"></div>
+<div id="update" class="banner update hidden"></div>
+
 <main>
 
-  <!-- First run --------------------------------------------------------->
-  <section id="view-setup" class="card hidden">
-    <h2>Set up Final Lobby</h2>
-    <p class="muted">You only do this once. Ask whoever runs the server for the
-    address and access code.</p>
-
-    <label>Server address
-      <input id="in-coordinator" placeholder="http://87.107.110.199:7001" autocomplete="off">
-    </label>
-    <label>Access code
-      <input id="in-token" placeholder="paste the code" autocomplete="off">
-    </label>
-    <label>Your player name
-      <input id="in-player" placeholder="e.g. arman" autocomplete="off">
-      <small>Must be different from everyone else's.</small>
-    </label>
-    <label>In-game nickname <span class="muted">(optional)</span>
-      <input id="in-nick" placeholder="shown in Dota" autocomplete="off">
-    </label>
-
-    <button class="primary" id="btn-setup">Save and continue</button>
-  </section>
-
-  <!-- Room list --------------------------------------------------------->
-  <section id="view-lobby" class="hidden">
-    <div class="row-between">
-      <h2>Open rooms</h2>
-      <div class="actions">
-        <input id="in-roomname" placeholder="Room name" autocomplete="off">
-        <button class="primary" id="btn-create">Create room</button>
+<!-- ------------------------------------------------------------ LOBBY -->
+<section id="screen-lobby" class="screen">
+  <div class="col-main">
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Rooms</h2>
+        <form id="createform" class="inline">
+          <input id="roomname" maxlength="40" placeholder="Name your room" autocomplete="off">
+          <button class="primary" type="submit">Create room</button>
+        </form>
       </div>
+      <div id="roomlist" class="roomlist"></div>
     </div>
-    <div id="rooms"></div>
-  </section>
+  </div>
 
-  <!-- In a room --------------------------------------------------------->
-  <section id="view-room" class="hidden">
-    <div class="card">
-      <div class="row-between">
+  <div class="col-side">
+    <div class="panel chatpanel">
+      <div class="panel-head"><h2>Lobby chat</h2></div>
+      <div class="chatlog" id="lobbylog"></div>
+      <form class="chatbox" id="lobbychatform">
+        <input id="lobbychatinput" maxlength="300" placeholder="Say something" autocomplete="off">
+        <button type="submit">Send</button>
+      </form>
+    </div>
+  </div>
+</section>
+
+<!-- ------------------------------------------------------------- ROOM -->
+<section id="screen-room" class="screen hidden">
+  <div class="col-main">
+    <div class="panel">
+      <div class="panel-head">
         <div>
           <h2 id="room-name">Room</h2>
-          <p class="muted" id="room-sub"></p>
+          <p class="muted small" id="room-sub"></p>
         </div>
-        <span class="badge" id="room-status">open</span>
+        <span class="badge" id="room-status"></span>
       </div>
 
-      <div class="net">
-        <div><span class="label">Your address</span><span class="value" id="my-ip">—</span></div>
-        <div><span class="label">Host address</span><span class="value" id="host-ip">—</span></div>
-        <div><span class="label">Adapter</span><span class="value" id="adapter">—</span></div>
-      </div>
+      <div class="slots" id="slots"></div>
 
-      <div class="controls">
-        <button class="primary" id="btn-connect">Connect</button>
-        <button class="primary" id="btn-play" disabled>Launch Dota 2</button>
-        <select id="in-mode">
-          <option value="1">All Pick</option>
-          <option value="23">Turbo</option>
-          <option value="2">Captain's Mode</option>
-          <option value="5">All Random</option>
-          <option value="3">Random Draft</option>
-          <option value="4">Single Draft</option>
-          <option value="18">Ability Draft</option>
-        </select>
-        <select id="in-team">
-          <option value="good">Radiant</option>
-          <option value="bad">Dire</option>
-        </select>
-        <span class="spacer"></span>
-        <button id="btn-leave" class="danger">Leave room</button>
-      </div>
-
-      <div class="controls host-only hidden" id="host-controls">
-        <button id="btn-lock">Lock — match starting</button>
-        <button id="btn-open">Reopen for a replacement</button>
+      <div class="specrow">
+        <h3>Spectators <em>reserved for admins</em></h3>
+        <div class="spectators" id="spectators"></div>
       </div>
     </div>
 
-    <div class="card">
-      <h3>Players</h3>
-      <ul id="players"></ul>
+    <div class="panel actions">
+      <div class="actionrow">
+        <button class="primary big" id="btn-connect">Connect</button>
+        <button class="ghost" id="btn-disconnect">Disconnect</button>
+        <span class="net" id="netinfo"></span>
+      </div>
+
+      <div class="actionrow">
+        <label class="field inline-field">
+          <span>Game mode</span>
+          <select id="mode">
+            <option value="1">All Pick</option>
+            <option value="2">Captains Mode</option>
+            <option value="3">Random Draft</option>
+            <option value="4">Single Draft</option>
+            <option value="5">All Random</option>
+            <option value="22">Ranked All Pick</option>
+          </select>
+        </label>
+        <label class="field inline-field">
+          <span>Team</span>
+          <select id="team">
+            <option value="good">Radiant</option>
+            <option value="bad">Dire</option>
+          </select>
+        </label>
+        <button class="launch big" id="btn-play">Launch Dota 2</button>
+      </div>
+
+      <div class="actionrow hostonly" id="hostcontrols">
+        <button id="btn-lock">Lock &mdash; match starting</button>
+        <button id="btn-reopen">Reopen for a replacement</button>
+        <button id="btn-open">Open to everyone</button>
+      </div>
+
+      <div class="actionrow">
+        <button class="danger ghost" id="btn-leave">Leave room</button>
+        <button class="ghost" id="btn-tolobby">Back to lobby</button>
+      </div>
     </div>
-  </section>
+  </div>
+
+  <div class="col-side">
+    <div class="panel chatpanel">
+      <div class="panel-head"><h2>Room chat</h2></div>
+      <div class="chatlog" id="roomlog"></div>
+      <form class="chatbox" id="roomchatform">
+        <input id="roomchatinput" maxlength="300" placeholder="Say something" autocomplete="off">
+        <button type="submit">Send</button>
+      </form>
+    </div>
+  </div>
+</section>
+
+<!-- ------------------------------------------------------ DIAGNOSTICS -->
+<section id="screen-checks" class="screen hidden">
+  <div class="panel wide">
+    <div class="panel-head">
+      <div>
+        <h2>Diagnostics</h2>
+        <p class="muted small">Checks this machine and sends the results to the server.</p>
+      </div>
+      <button class="primary" id="btn-diag">Run checks</button>
+    </div>
+    <div id="diaglist" class="diaglist">
+      <p class="muted pad">Nothing run yet. For the most useful result, join a room and connect first, then run this on both PCs.</p>
+    </div>
+    <p class="muted small pad" id="diagwhen"></p>
+  </div>
+</section>
 
 </main>
 
-<div id="toast" class="toast hidden"></div>
-
-<footer>
-  <span class="muted" id="foot">Prototype client · leave the black window open while you play</span>
-</footer>
+<!-- Profile editor -->
+<div id="profilegate" class="gate hidden">
+  <form class="gate-card" id="profileform">
+    <h1>Your profile</h1>
+    <label class="field">
+      <span>Name</span>
+      <input id="p-nick" maxlength="20" autocomplete="off" required>
+    </label>
+    <label class="field">
+      <span>MMR <em id="mmrnote"></em></span>
+      <input id="p-mmr" type="number" min="0" max="15000" autocomplete="off">
+    </label>
+    <div class="gate-actions">
+      <button class="primary" type="submit">Save</button>
+      <button type="button" class="ghost" id="p-cancel">Cancel</button>
+    </div>
+    <p class="gate-err" id="profileerr"></p>
+  </form>
+</div>
 
 <script src="app.js"></script>
 </body>

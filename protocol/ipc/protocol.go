@@ -59,6 +59,10 @@ type Response struct {
 	AdapterName string `json:"adapter,omitempty"`
 	Connected   bool   `json:"connected"`
 	DotaRunning bool   `json:"dota_running,omitempty"`
+	// DotaFound reports whether the service can locate a Dota 2 install.
+	// The app shows this in its diagnostics, so a missing game is named as
+	// the problem rather than surfacing later as a launch failure.
+	DotaFound bool `json:"dota_found,omitempty"`
 
 	// Launch
 	DotaPath string   `json:"dota_path,omitempty"`

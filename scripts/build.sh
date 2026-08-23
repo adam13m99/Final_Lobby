@@ -15,6 +15,44 @@ cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 mkdir -p bin
 FAIL=0
 
+# Client binaries are stamped with the server they belong to, so a player
+# never types an address or an access code. scripts/publish.sh sets these
+# from the real server; building by hand leaves them empty, which the app
+# reports as a developer build rather than failing mysteriously.
+: "${FL_VERSION:=dev}"
+: "${FL_COORDINATOR:=}"
+: "${FL_AUTH_TOKEN:=}"
+: "${FL_DOWNLOAD_BASE:=}"
+
+stamp() {
+  printf -- '-X finallobby/client/build.Version=%s ' "$FL_VERSION"
+  printf -- '-X finallobby/client/build.Coordinator=%s ' "$FL_COORDINATOR"
+  printf -- '-X finallobby/client/build.AuthToken=%s ' "$FL_AUTH_TOKEN"
+  printf -- '-X finallobby/client/build.DownloadBase=%s' "$FL_DOWNLOAD_BASE"
+}
+
+# pack compresses a built executable into the installer's payload. The
+# installer embeds whatever is sitting there when it is built, so this always
+# runs immediately before it.
+pack() {
+  local name="$1"
+  # A failed build a moment ago would otherwise be papered over by an old
+  # binary still sitting in bin/, and the installer would ship the last
+  # version that happened to compile. That is exactly the class of mistake
+  # that had us testing a stale build for twenty minutes once already.
+  if [ "$FAIL" -ne 0 ]; then
+    printf '  SKIP  payload/%s (an earlier build failed)' "$name"; echo
+    return
+  fi
+  if [ ! -f "bin/$name" ]; then
+    printf '  FAIL  payload/%s (not built)' "$name"; echo
+    FAIL=1
+    return
+  fi
+  gzip -9 -c "bin/$name" > "installer/payload/$name.gz"
+  printf '  OK    installer/payload/%s.gz (%s)' "$name" "$(du -h "installer/payload/$name.gz" | cut -f1)"; echo
+}
+
 build() { # module  outfile  goos  pkg
   local mod="$1" out="$2" goos="$3" pkg="$4"
   if ! ls "$mod/$pkg"/*.go >/dev/null 2>&1; then
@@ -22,7 +60,7 @@ build() { # module  outfile  goos  pkg
     return 0
   fi
   if (cd "$mod" && CGO_ENABLED=0 GOOS="$goos" GOARCH=amd64 \
-        go build -trimpath -o "../bin/$out" "./$pkg"); then
+        go build -trimpath -ldflags "-s -w $(stamp)" -o "../bin/$out" "./$pkg"); then
     printf '  OK    bin/%s\n' "$out"
   else
     printf '  FAIL  bin/%s\n' "$out"
@@ -39,7 +77,22 @@ case "$target" in
   all|lobbyapp)    build lobbyapp    lobbyapp.exe   windows . ;;&
   all|lobbycli)    build lobbycli    lobbycli.exe   windows . ;;&
   all|loadtest)    build loadtest    loadtest       linux   . ;;&
-  all|relay|coordinator|netservice|lobbyapp|lobbycli|loadtest) ;;
+  all|installer)
+    # The installer carries the other three inside it, so they are built and
+    # packed first regardless of which target was asked for.
+    build netservice netservice.exe windows cmd/netservice
+    build lobbyapp   lobbyapp.exe   windows .
+    build lobbycli   lobbycli.exe   windows .
+    pack netservice.exe
+    pack lobbyapp.exe
+    pack lobbycli.exe
+    if [ "$FAIL" -ne 0 ]; then
+      printf '  SKIP  bin/FinalLobby-Setup.exe (its payload is incomplete)'; echo
+    else
+      build installer FinalLobby-Setup.exe windows .
+    fi
+    ;;&
+  all|relay|coordinator|netservice|lobbyapp|lobbycli|loadtest|installer) ;;
   *) echo "unknown target: $target" >&2; exit 2 ;;
 esac
 

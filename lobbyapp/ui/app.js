@@ -1,243 +1,434 @@
-'use strict';
+// Final Lobby - prototype UI.
+//
+// The page is a renderer. It polls one endpoint, draws what came back, and
+// posts actions. It holds no state of its own beyond which screen is showing
+// and what the player is halfway through typing, so a refresh never loses
+// anything and there is no second copy of the truth to drift.
 
-// The session token arrives in the URL. Keep it in memory and strip it from
-// the address bar so it does not linger in browser history.
-const TOKEN = new URLSearchParams(location.search).get('t') || '';
-history.replaceState(null, '', location.pathname);
+const TOKEN = new URLSearchParams(location.search).get("t") || "";
+const POLL_MS = 2000;
+
+let state = {};
+let screen = "lobby";
+let busy = false;
 
 const $ = (id) => document.getElementById(id);
 
-let state = {};
-let busy = false;
+// --------------------------------------------------------------- plumbing
 
 async function api(path, body) {
   const res = await fetch(path, {
-    method: body === undefined ? 'GET' : 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Lobby-Token': TOKEN },
+    method: body === undefined ? "GET" : "POST",
+    headers: { "X-Lobby-Token": TOKEN, "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || ('request failed: ' + res.status));
+  let data = {};
+  try { data = await res.json(); } catch (_) { /* empty body */ }
+  if (!res.ok) throw new Error(data.error || res.statusText);
   return data;
 }
 
-let toastTimer;
-function toast(msg, kind) {
-  const t = $('toast');
-  t.textContent = msg;
-  t.className = 'toast ' + (kind || '');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.add('hidden'), kind === 'err' ? 8000 : 4000);
-}
-
-// act wraps a button action: it disables the UI, reports failures in plain
-// language, and refreshes when done. Every button goes through it, so no
-// action can leave the page in a stale state.
-async function act(fn, okMsg) {
+// act runs an action, shows any error in the banner, and refreshes at once
+// rather than waiting for the next poll - a button that appears to do
+// nothing for two seconds gets pressed again.
+async function act(fn) {
   if (busy) return;
   busy = true;
-  document.body.style.cursor = 'progress';
   try {
     await fn();
-    if (okMsg) toast(okMsg, 'ok');
+    banner("");
     await refresh();
   } catch (e) {
-    toast(e.message, 'err');
+    banner(e.message);
   } finally {
     busy = false;
-    document.body.style.cursor = '';
   }
 }
 
-// --- rendering ----------------------------------------------------------
-
-function renderPills() {
-  const svc = $('pill-service');
-  if (state.service) {
-    svc.textContent = 'service running';
-    svc.className = 'pill ok';
-  } else {
-    svc.textContent = 'service not running';
-    svc.className = 'pill bad';
-  }
-
-  const tun = $('pill-tunnel');
-  const s = state.tunnel || 'idle';
-  tun.textContent = 'tunnel ' + s;
-  tun.className = 'pill ' + (state.connected ? 'ok' : (s === 'connecting' ? 'warn' : ''));
-
-  $('who').textContent = state.player ? (state.player + (state.nick && state.nick !== state.player ? ' (' + state.nick + ')' : '')) : '';
+function banner(msg) {
+  const b = $("banner");
+  b.textContent = msg;
+  b.classList.toggle("hidden", !msg);
 }
 
-function show(view) {
-  for (const v of ['view-setup', 'view-lobby', 'view-room']) {
-    $(v).classList.toggle('hidden', v !== view);
-  }
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
-function renderRooms() {
-  const box = $('rooms');
-  const rooms = state.rooms || [];
-  if (!rooms.length) {
-    box.innerHTML = '<div class="empty">No rooms yet. Create one and tell your friend its name.</div>';
-    return;
-  }
-  box.innerHTML = '';
-  for (const r of rooms) {
-    const el = document.createElement('div');
-    el.className = 'room';
-
-    const left = document.createElement('div');
-    const name = document.createElement('div');
-    name.className = 'name';
-    name.textContent = r.name || r.id;
-    const meta = document.createElement('div');
-    meta.className = 'meta';
-    const players = (r.players || []).join(', ') || 'empty';
-    meta.textContent = players + ' · ' + r.free_slots + ' free · host ' + r.host_id;
-    left.append(name, meta);
-
-    const right = document.createElement('div');
-    right.style.display = 'flex';
-    right.style.gap = '8px';
-    right.style.alignItems = 'center';
-
-    const badge = document.createElement('span');
-    badge.className = 'badge ' + (r.status === 'open' ? 'open' : 'locked');
-    badge.textContent = r.status.replace(/_/g, ' ');
-    right.append(badge);
-
-    const joinable = r.status === 'open' || r.status === 'open_to_new_players';
-    if (joinable && r.free_slots > 0) {
-      const btn = document.createElement('button');
-      btn.className = 'primary';
-      btn.textContent = 'Join';
-      btn.onclick = () => act(() => api('/api/rooms/join', { room_id: r.id }), 'Joined ' + (r.name || r.id));
-      right.append(btn);
-    }
-
-    el.append(left, right);
-    box.append(el);
-  }
-}
-
-function renderRoom() {
-  const room = state.room || {};
-  $('room-name').textContent = room.name || state.room_id;
-  $('room-sub').textContent = state.is_host ? 'You are the host' : 'Host: ' + (room.host_id || '—');
-
-  const badge = $('room-status');
-  badge.textContent = (room.status || '').replace(/_/g, ' ');
-  badge.className = 'badge ' + (room.status === 'open' ? 'open' : 'locked');
-
-  $('my-ip').textContent = state.virtual_ip || '—';
-  $('host-ip').textContent = state.host_ip || '—';
-  $('adapter').textContent = state.adapter || '—';
-
-  $('btn-connect').textContent = state.connected ? 'Reconnect' : 'Connect';
-  $('btn-play').disabled = !state.connected;
-  $('btn-play').title = state.connected ? '' : 'Connect first';
-  $('host-controls').classList.toggle('hidden', !state.is_host);
-
-  const list = $('players');
-  list.innerHTML = '';
-  for (const p of (room.players || [])) {
-    const li = document.createElement('li');
-    const left = document.createElement('span');
-    left.textContent = p;
-    if (p === room.host_id) {
-      const tag = document.createElement('span');
-      tag.className = 'tag';
-      tag.textContent = 'host';
-      left.append(tag);
-    }
-    if (p === state.player) {
-      const tag = document.createElement('span');
-      tag.className = 'tag';
-      tag.textContent = 'you';
-      left.append(tag);
-    }
-    li.append(left);
-
-    if (state.is_host && p !== state.player) {
-      const btn = document.createElement('button');
-      btn.className = 'danger';
-      btn.textContent = 'Kick';
-      btn.onclick = () => act(() => api('/api/rooms/kick', { target: p }), p + ' removed for 5 minutes');
-      li.append(btn);
-    }
-    list.append(li);
-  }
-}
+// ----------------------------------------------------------------- render
 
 function render() {
-  renderPills();
+  const s = state;
 
-  if (state.service_error) $('foot').textContent = state.service_error;
-  else if (state.coordinator_error) $('foot').textContent = 'Server: ' + state.coordinator_error;
-  else if (state.tunnel_error) $('foot').textContent = 'Tunnel: ' + state.tunnel_error;
-  else $('foot').textContent = 'Prototype client · leave the black window open while you play';
+  // Header pills.
+  pill("p-service", s.service, s.service ? "service running" : "service down");
+  const tun = s.connected ? "ok" : (s.tunnel === "connecting" ? "wait" : null);
+  pill("p-tunnel", tun, s.connected ? "tunnel connected"
+    : s.tunnel === "connecting" ? "connecting" : "tunnel off");
+  $("p-online").textContent = (s.online ?? 0) + " online";
 
-  if (!state.configured) { show('view-setup'); return; }
-  if (state.room_id) { show('view-room'); renderRoom(); return; }
-  show('view-lobby');
-  renderRooms();
+  $("menick").textContent = s.nick || "…";
+  $("memmr").textContent = s.mmr ? s.mmr + " MMR" : "no MMR set";
+
+  // First run asks for a name and nothing else.
+  $("namegate").classList.toggle("hidden", !!s.named);
+
+  // Problems worth interrupting for.
+  banner(s.service_error || s.coordinator_error || s.tunnel_error ||
+    (s.room_gone ? "That room has closed." : "") ||
+    (s.removed ? "You are no longer in that room." : "") ||
+    (s.build_warning || ""));
+
+  renderUpdate(s.update);
+
+  const inRoom = !!s.room_id && !!s.room;
+  $("roomtab").disabled = !inRoom;
+  if (!inRoom && screen === "room") show("lobby");
+
+  renderRooms(s.rooms || []);
+  renderChat("lobbylog", s.lobby_chat || []);
+
+  if (inRoom) {
+    renderRoom(s.room);
+    renderChat("roomlog", s.room_chat || []);
+  }
+  renderDiag();
 }
+
+function pill(id, ok, text) {
+  const el = $(id);
+  el.textContent = text;
+  el.className = "pill " + (ok === "wait" ? "wait" : ok ? "ok" : "bad");
+}
+
+function renderUpdate(u) {
+  const el = $("update");
+  if (!u) { el.classList.add("hidden"); return; }
+  el.classList.remove("hidden");
+  if (u.error) {
+    el.innerHTML = `<span>An update (${esc(u.version)}) could not be downloaded: ${esc(u.error)}</span>`;
+  } else if (u.ready) {
+    el.innerHTML = `<span>Version ${esc(u.version)} is ready. Installing takes a few seconds and reopens the app.</span>`;
+    const b = document.createElement("button");
+    b.textContent = "Install now";
+    b.onclick = () => act(() => api("/api/update", {}));
+    el.appendChild(b);
+  } else {
+    el.innerHTML = `<span>Downloading version ${esc(u.version)}…</span>`;
+  }
+}
+
+// ------------------------------------------------------------- room list
+
+function renderRooms(rooms) {
+  const box = $("roomlist");
+  if (!rooms.length) {
+    box.innerHTML = `<p class="muted pad">No rooms yet. Create one and the other player will see it.</p>`;
+    return;
+  }
+  box.innerHTML = "";
+  for (const r of rooms) box.appendChild(roomCard(r));
+}
+
+function roomCard(r) {
+  const el = document.createElement("div");
+  el.className = "room";
+
+  const players = (r.members || [])
+    .filter((m) => !m.spectator)
+    .map((m) => `<span class="tag ${m.is_host ? "host" : ""}">${esc(m.nick)}${
+      m.mmr ? " &middot; " + m.mmr : ""}</span>`)
+    .join("");
+
+  el.innerHTML = `
+    <div>
+      <div class="room-title">
+        <strong>${esc(r.name)}</strong>
+        ${statusBadge(r.status)}
+      </div>
+      <div class="room-meta">
+        ${r.seats}/10 players &middot; host ${esc(r.host_nick)}${
+          r.avg_mmr ? " &middot; average " + r.avg_mmr + " MMR" : ""}
+      </div>
+      <div class="room-players">${players}</div>
+    </div>
+    <div class="room-actions"></div>`;
+
+  const actions = el.querySelector(".room-actions");
+  const mine = r.id === state.room_id;
+
+  if (mine) {
+    const open = document.createElement("button");
+    open.textContent = "Open";
+    open.className = "primary";
+    open.onclick = () => show("room");
+    actions.appendChild(open);
+  } else {
+    const join = document.createElement("button");
+    join.textContent = "Join";
+    join.className = "primary";
+    join.disabled = !r.joinable || !!state.room_id;
+    join.title = state.room_id ? "Leave your current room first"
+      : r.joinable ? "" : "This room is not accepting players";
+    join.onclick = () => act(() => api("/api/rooms/join", { room_id: r.id }));
+    actions.appendChild(join);
+
+    const spec = document.createElement("button");
+    spec.textContent = "Spectate";
+    spec.className = "ghost";
+    spec.disabled = !!state.room_id;
+    spec.title = "Admin seat, outside the ten playing slots";
+    spec.onclick = () => act(() => api("/api/rooms/spectate", { room_id: r.id }));
+    actions.appendChild(spec);
+  }
+  return el;
+}
+
+function statusClass(status) {
+  if (status === "locked_in_game" || status === "closed") return "badge locked";
+  if (status === "open_to_new_players") return "badge replace";
+  return "badge";
+}
+
+function statusLabel(status) {
+  if (status === "locked_in_game") return "In game";
+  if (status === "open_to_new_players") return "Needs a player";
+  if (status === "closed") return "Closed";
+  return "Open";
+}
+
+function statusBadge(status) {
+  return `<span class="${statusClass(status)}">${statusLabel(status)}</span>`;
+}
+
+// ------------------------------------------------------------------ room
+
+function renderRoom(r) {
+  $("room-name").textContent = r.name;
+  $("room-sub").textContent =
+    `${r.seats}/10 players · host ${r.host_nick}` +
+    (r.avg_mmr ? ` · average ${r.avg_mmr} MMR` : "");
+  const badge = $("room-status");
+  badge.className = statusClass(r.status);
+  badge.textContent = statusLabel(r.status);
+
+  const iAmHost = !!state.is_host;
+  $("hostcontrols").classList.toggle("hidden", !iAmHost);
+
+  // Ten playing slots, always all ten, so an empty seat is visible as a
+  // space somebody could take rather than as an absence.
+  const seated = {};
+  for (const m of r.members || []) if (!m.spectator) seated[m.slot] = m;
+
+  const box = $("slots");
+  box.innerHTML = "";
+  for (let i = 0; i < 10; i++) box.appendChild(slotCard(i, seated[i], iAmHost));
+
+  const specs = (r.members || []).filter((m) => m.spectator);
+  const sbox = $("spectators");
+  sbox.innerHTML = specs.length ? "" :
+    `<p class="muted small">Nobody is spectating.</p>`;
+  for (const m of specs) sbox.appendChild(slotCard(m.slot, m, false, true));
+
+  // Network facts, shown plainly. During testing these are the numbers
+  // somebody will be asked about.
+  const bits = [];
+  if (state.virtual_ip) bits.push("you " + state.virtual_ip);
+  if (state.host_ip) bits.push("host " + state.host_ip);
+  if (state.adapter) bits.push(state.adapter);
+  $("netinfo").textContent = bits.join("  ·  ");
+
+  $("btn-connect").disabled = !!state.connected;
+  $("btn-disconnect").disabled = !state.connected;
+  $("btn-play").disabled = !state.connected;
+  $("btn-play").title = state.connected ? "" : "Connect first";
+}
+
+function slotCard(index, member, canKick, spectator) {
+  const el = document.createElement("div");
+  const mine = member && member.player_id === state.player_id;
+  el.className = "slot" + (member ? "" : " empty") + (mine ? " you" : "");
+
+  const label = spectator ? "S" + (index + 1) : index + 1;
+  el.innerHTML = `<div class="slot-num">${label}</div><div class="slot-body"></div>`;
+  const body = el.querySelector(".slot-body");
+
+  if (!member) {
+    body.innerHTML = `<div class="slot-name muted">Empty</div>`;
+    return el;
+  }
+  body.innerHTML = `
+    <div class="slot-name">${esc(member.nick)}${mine ? " (you)" : ""}</div>
+    <div class="slot-sub">${member.is_host ? "Host · " : ""}${
+      member.mmr ? member.mmr + " MMR" : "no MMR set"}</div>`;
+
+  if (canKick && !member.is_host && !mine) {
+    const b = document.createElement("button");
+    b.textContent = "Kick";
+    b.title = "Removes them and bars them from this room for 5 minutes";
+    b.onclick = () => act(() => api("/api/rooms/kick", { target: member.player_id }));
+    el.appendChild(b);
+  }
+  return el;
+}
+
+// ------------------------------------------------------------------ chat
+
+function renderChat(id, msgs) {
+  const log = $(id);
+  // Only redraw when something changed, or the log scrolls away from under
+  // the reader every two seconds.
+  const sig = msgs.length ? msgs[msgs.length - 1].id + ":" + msgs.length : "0";
+  if (log.dataset.sig === sig) return;
+  log.dataset.sig = sig;
+
+  const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+  log.innerHTML = msgs.map((m) => {
+    if (m.system) return `<div class="msg system">${esc(m.text)}</div>`;
+    const self = m.player_id === state.player_id;
+    return `<div class="msg"><span class="who${self ? " self" : ""}">${
+      esc(m.nick)}:</span> ${esc(m.text)}</div>`;
+  }).join("");
+  if (atBottom) log.scrollTop = log.scrollHeight;
+}
+
+// ----------------------------------------------------------- diagnostics
+
+function renderDiag() {
+  $("btn-diag").disabled = !!state.diag_running;
+  $("btn-diag").textContent = state.diag_running ? "Running…" : "Run checks";
+
+  const checks = state.diagnostics;
+  if (!checks) return;
+
+  const box = $("diaglist");
+  box.innerHTML = checks.map((c) => `
+    <div class="check ${c.ok ? "ok" : "bad"}">
+      <div class="mark">${c.ok ? "✓" : "✗"}</div>
+      <div class="body">
+        <div class="name">${esc(c.name)}</div>
+        ${c.detail ? `<div class="detail">${esc(c.detail)}</div>` : ""}
+      </div>
+      ${c.ms ? `<div class="ms">${c.ms} ms</div>` : ""}
+    </div>`).join("");
+
+  if (state.diag_at) {
+    const when = new Date(state.diag_at);
+    $("diagwhen").textContent = "Last run " + when.toLocaleTimeString() +
+      ", and sent to the server.";
+  }
+}
+
+// --------------------------------------------------------------- screens
+
+function show(name) {
+  screen = name;
+  for (const el of document.querySelectorAll(".screen")) el.classList.add("hidden");
+  $("screen-" + name).classList.remove("hidden");
+  for (const t of document.querySelectorAll(".tab")) {
+    t.classList.toggle("active", t.dataset.screen === name);
+  }
+}
+
+document.querySelectorAll(".tab").forEach((t) => {
+  t.onclick = () => show(t.dataset.screen);
+});
+
+// ---------------------------------------------------------------- events
+
+$("nameform").onsubmit = async (e) => {
+  e.preventDefault();
+  const mmr = $("mmrinput").value;
+  try {
+    await api("/api/profile", {
+      nick: $("nameinput").value,
+      mmr: mmr === "" ? null : Number(mmr),
+    });
+    $("nameerr").textContent = "";
+    await refresh();
+  } catch (err) {
+    $("nameerr").textContent = err.message;
+  }
+};
+
+$("mebtn").onclick = () => {
+  $("p-nick").value = state.nick || "";
+  $("p-mmr").value = state.mmr || "";
+  $("mmrnote").textContent = state.mmr_locked_until
+    ? "changeable again " + new Date(state.mmr_locked_until).toLocaleDateString()
+    : "changeable once a week";
+  $("profileerr").textContent = "";
+  $("profilegate").classList.remove("hidden");
+};
+$("p-cancel").onclick = () => $("profilegate").classList.add("hidden");
+
+$("profileform").onsubmit = async (e) => {
+  e.preventDefault();
+  const mmr = $("p-mmr").value;
+  try {
+    await api("/api/profile", {
+      nick: $("p-nick").value,
+      mmr: mmr === "" ? null : Number(mmr),
+    });
+    $("profilegate").classList.add("hidden");
+    await refresh();
+  } catch (err) {
+    $("profileerr").textContent = err.message;
+  }
+};
+
+$("createform").onsubmit = (e) => {
+  e.preventDefault();
+  const name = $("roomname").value;
+  act(async () => {
+    await api("/api/rooms/create", { name });
+    $("roomname").value = "";
+    show("room");
+  });
+};
+
+function wireChat(formID, inputID, channel) {
+  $(formID).onsubmit = (e) => {
+    e.preventDefault();
+    const text = $(inputID).value.trim();
+    if (!text) return;
+    $(inputID).value = "";
+    act(() => api("/api/chat", { channel, text }));
+  };
+}
+wireChat("lobbychatform", "lobbychatinput", "lobby");
+wireChat("roomchatform", "roomchatinput", "room");
+
+$("btn-connect").onclick = () => act(() => api("/api/connect", {}));
+$("btn-disconnect").onclick = () => act(() => api("/api/disconnect", {}));
+$("btn-leave").onclick = () => act(async () => {
+  await api("/api/rooms/leave", {});
+  show("lobby");
+});
+$("btn-tolobby").onclick = () => show("lobby");
+
+$("btn-lock").onclick = () => act(() => api("/api/rooms/status", { status: "locked_in_game" }));
+$("btn-reopen").onclick = () => act(() => api("/api/rooms/status", { status: "open_to_new_players" }));
+$("btn-open").onclick = () => act(() => api("/api/rooms/status", { status: "open" }));
+
+$("btn-play").onclick = () => act(() => api("/api/play", {
+  mode: Number($("mode").value),
+  team: $("team").value,
+}));
+
+$("btn-diag").onclick = () => act(() => api("/api/diagnose", {}));
+
+// ----------------------------------------------------------------- poll
 
 async function refresh() {
   try {
-    const next = await api('/api/state');
-    if (state.room_id && next.room_gone) toast('That room has closed.', 'err');
-    state = next;
+    state = await api("/api/state");
     render();
   } catch (e) {
-    $('pill-service').textContent = 'app not responding';
-    $('pill-service').className = 'pill bad';
+    banner("The app stopped responding: " + e.message);
   }
 }
 
-// --- wiring -------------------------------------------------------------
-
-$('btn-setup').onclick = () => act(async () => {
-  await api('/api/setup', {
-    coordinator: $('in-coordinator').value.trim(),
-    token: $('in-token').value.trim(),
-    player: $('in-player').value.trim(),
-    nick: $('in-nick').value.trim(),
-  });
-}, 'Ready to play');
-
-$('btn-create').onclick = () => act(() =>
-  api('/api/rooms/create', { name: $('in-roomname').value.trim() }), 'Room created');
-
-$('btn-connect').onclick = () => act(async () => {
-  await api('/api/connect', {});
-  // Connecting is asynchronous inside the service; wait for it to land so
-  // the button does not appear to do nothing.
-  for (let i = 0; i < 30; i++) {
-    await new Promise((r) => setTimeout(r, 500));
-    const s = await api('/api/state');
-    if (s.connected) return;
-    if (s.tunnel_error) throw new Error(s.tunnel_error);
-  }
-  throw new Error('The tunnel did not come up. Check that the server is reachable.');
-}, 'Connected');
-
-$('btn-play').onclick = () => act(async () => {
-  const r = await api('/api/play', {
-    mode: parseInt($('in-mode').value, 10),
-    team: $('in-team').value,
-  });
-  toast(r.role === 'host'
-    ? 'Dota is starting. When the map has loaded, lock the room.'
-    : 'Dota is starting and will connect to the host.', 'ok');
-});
-
-$('btn-leave').onclick = () => act(() => api('/api/rooms/leave', {}), 'Left the room');
-$('btn-lock').onclick = () => act(() => api('/api/rooms/status', { status: 'locked_in_game' }), 'Room locked');
-$('btn-open').onclick = () => act(() => api('/api/rooms/status', { status: 'open_to_new_players' }), 'Room reopened');
-
-$('in-roomname').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btn-create').click(); });
-
 refresh();
-setInterval(() => { if (!busy) refresh(); }, 2500);
+setInterval(refresh, POLL_MS);
