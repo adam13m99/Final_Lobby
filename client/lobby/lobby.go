@@ -186,6 +186,18 @@ func friendly(code int, msg string) string {
 		return "no player has that username - check the spelling"
 	case strings.Contains(msg, "friends list holds at most"):
 		return "your friends list is full"
+	case strings.Contains(msg, "that is for admins"):
+		return "that is for admins"
+	case strings.Contains(msg, "only the head admin"):
+		return "only the head admin can do that"
+	case strings.Contains(msg, "say why"):
+		return "give a reason - an unexplained sanction cannot be reviewed"
+	case strings.Contains(msg, "your account is banned"),
+		strings.Contains(msg, "you are in a timeout"),
+		strings.Contains(msg, "you are muted"):
+		// Already written for a player to read, and it carries the reason a
+		// moderator gave. Passing it through is the whole point.
+		return msg
 	case strings.Contains(msg, "no free player slot"):
 		return "that room is full"
 	case strings.Contains(msg, "already in this room"):

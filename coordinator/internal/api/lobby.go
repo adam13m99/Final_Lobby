@@ -252,6 +252,17 @@ func (s *Server) postChat(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// A mute stops somebody talking without stopping them playing. Most of
+	// what makes a lobby unpleasant is said rather than done, and taking away
+	// somebody's voice is a smaller thing than taking away their game.
+	if rest := s.restricted(body.PlayerID); rest.Muted {
+		msg := "you are muted: " + rest.Reason
+		if !rest.Until.IsZero() {
+			msg += " (until " + rest.Until.Format("15:04") + ")"
+		}
+		writeErr(w, http.StatusForbidden, msg)
+		return
+	}
 	nick := s.seen(body.PlayerID, body.Nick)
 	m, err := s.chat.Post(body.Channel, body.PlayerID, nick, body.Text, s.now())
 	if err != nil {
@@ -276,6 +287,10 @@ func (s *Server) spectateRoom(w http.ResponseWriter, r *http.Request) {
 	body.PlayerID = s.actor(r, body.PlayerID)
 	if body.PlayerID == "" {
 		writeErr(w, http.StatusBadRequest, "player_id is required")
+		return
+	}
+	if why, yes := s.barred(body.PlayerID); yes {
+		writeErr(w, http.StatusForbidden, why)
 		return
 	}
 	nick := s.seen(body.PlayerID, body.Nick)

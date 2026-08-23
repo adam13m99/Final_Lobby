@@ -82,6 +82,9 @@ var (
 	ErrAlreadyJoined  = errors.New("room: already in this room")
 	ErrNoObserverSeat = errors.New("room: no free observer seat")
 	ErrNoAdminSeat    = errors.New("room: no free admin seat")
+	// ErrNotMemberOfRoom is returned when somebody is asked to take a role in
+	// a room they are not playing in.
+	ErrNotMemberOfRoom = errors.New("room: they are not playing in that room")
 )
 
 // Room is one lobby. Not safe for concurrent use; the store serialises access.
@@ -342,4 +345,50 @@ func (r *Room) Tick(now time.Time) {
 	if !r.HostGraceUntil.IsZero() && now.After(r.HostGraceUntil) {
 		r.Status = StatusClosed
 	}
+}
+
+// SetHost moves the room to a new host.
+//
+// This is host migration under another name (D43). D40 says a room dies a
+// minute after its host does; an admin reassigning the host is the escape
+// hatch for when that is the wrong outcome - the ten people in the lobby want
+// to keep playing and the person who opened it has gone.
+//
+// **It does not rescue a match in progress**, and nothing here pretends
+// otherwise: the Dota server was running on the old host's PC and it is gone.
+// What this saves is the room, the people in it, and the arrangement they
+// made to play together.
+//
+// Mechanically it is a swap. The host always occupies slot 0, because slot 0
+// is the address every client was told to connect to (ipam.HostIP). So the new
+// host takes slot 0 and whoever was sitting there takes theirs. Both change
+// address, so both need a fresh ticket - the caller is responsible for
+// revoking the old ones, which is why the swapped IDs come back.
+func (r *Room) SetHost(newHostID string) (moved []string, err error) {
+	if r.Status == StatusClosed {
+		return nil, ErrRoomClosed
+	}
+	if newHostID == r.HostID {
+		return nil, nil
+	}
+
+	slot, kind, seated := r.SlotOf(newHostID)
+	if !seated || kind != SeatPlayer {
+		// A watcher cannot become the host: the host is the person whose PC
+		// runs the game, and somebody in the observer gallery is not playing.
+		return nil, ErrNotMemberOfRoom
+	}
+
+	previous := r.Slots[0]
+	r.Slots[0], r.Slots[slot] = newHostID, previous
+	r.HostID = newHostID
+
+	// The room has a host again, so it is no longer counting down to closure.
+	r.HostGraceUntil = time.Time{}
+
+	moved = []string{newHostID}
+	if previous != "" && previous != newHostID {
+		moved = append(moved, previous)
+	}
+	return moved, nil
 }

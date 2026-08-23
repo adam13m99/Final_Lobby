@@ -424,3 +424,15 @@ func (s *Store) Close(roomID, actorID string) error {
 	delete(s.rooms, roomID)
 	return nil
 }
+
+// SetHost moves a room to a new host and returns everybody whose address
+// changed, so their tickets can be revoked and reissued.
+func (s *Store) SetHost(roomID, newHostID string) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r, ok := s.rooms[roomID]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	return r.SetHost(newHostID)
+}

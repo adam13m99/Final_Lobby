@@ -160,10 +160,17 @@ there; this is the summary.
 | T5 accounts (D37) | **done** — server and client library; **not switched on yet, see below** |
 | T6 room privacy (D41) | **done** — all four doors, plus an MMR floor |
 | T7 friends (D41) | **done** — graph, blocks, private chat, invites, presence |
-| T8 roles and moderation (D43, D47) | not started |
+| T8 roles and moderation (D43, D47) | **done** — roles, sanctions, labels, banners, audit log |
 | T9 interface built for translation (D44) | not started |
 | T10 the new lobby (D42) | not started |
 | T11 desktop application (D45) | not started |
+
+**Moderation exists, and the head admin is set at deployment.** Pass
+`-head-admin <account-id>` to the coordinator once; there is exactly one, and
+only they appoint or remove admins (D47). Every role, sanction and label is a
+row with an author and a timestamp, and every action is written to an audit log
+readable by admin or by subject. A ban drops every session and empties the
+seat; a timeout bars joining; a mute bars chat and nothing else.
 
 **Friends exist.** Requests, accepts, removals, blocks, durable private
 messages, room invitations, and presence including a real in-game light

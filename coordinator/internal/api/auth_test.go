@@ -11,6 +11,7 @@ import (
 
 	"lobbybaz/coordinator/internal/account"
 	"lobbybaz/coordinator/internal/chat"
+	"lobbybaz/coordinator/internal/moderation"
 	"lobbybaz/coordinator/internal/player"
 	"lobbybaz/coordinator/internal/room"
 	"lobbybaz/coordinator/internal/social"
@@ -24,6 +25,7 @@ type authRig struct {
 	srv http.Handler
 	acc *account.Store
 	soc *social.Store
+	mod *moderation.Store
 	// friends is swappable so a test can install a graph after signing
 	// people up - their IDs are not known until then.
 	friends *swappableFriends
@@ -52,20 +54,24 @@ func newAuthRig(t *testing.T) *authRig {
 
 	acc := account.New(db)
 	soc := social.New(db)
+	mod := moderation.New(db)
+	kicks := store.NewKicks(db)
 	friends := &swappableFriends{}
 	s := New(Config{
-		Friends:   friends,
-		Rooms:     room.NewStore(),
-		Tickets:   ticket.NewStore(),
-		Players:   player.NewRegistry(),
-		Chat:      chat.NewBoard(),
-		Accounts:  acc,
-		Social:    soc,
-		RelayAddr: "127.0.0.1:443",
-		RelayPub:  "00",
-		Now:       func() time.Time { return time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC) },
+		Friends:    friends,
+		Rooms:      room.NewStore(),
+		Tickets:    ticket.NewStore(),
+		Players:    player.NewRegistry(),
+		Chat:       chat.NewBoard(),
+		Accounts:   acc,
+		Social:     soc,
+		Moderation: mod,
+		Kicks:      kicks,
+		RelayAddr:  "127.0.0.1:443",
+		RelayPub:   "00",
+		Now:        func() time.Time { return time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC) },
 	})
-	return &authRig{t: t, srv: s.Routes(), acc: acc, soc: soc, friends: friends}
+	return &authRig{t: t, srv: s.Routes(), acc: acc, soc: soc, mod: mod, friends: friends}
 }
 
 func (g *authRig) do(method, path, session string, body any) (*httptest.ResponseRecorder, map[string]any) {
@@ -316,9 +322,10 @@ func TestABannedAccountLosesItsSessionImmediately(t *testing.T) {
 	}
 }
 
-// The coordinator still has to run without a database - the loadtest harness
-// drives it with generated IDs and has no accounts to sign in with.
-func TestACoordinatorWithoutAccountsStillWorks(t *testing.T) {
+// newPlainRig is a coordinator with no database at all: no accounts, no
+// friends, no moderation. The loadtest harness runs it this way.
+func newPlainRig(t *testing.T) *authRig {
+	t.Helper()
 	s := New(Config{
 		Rooms:     room.NewStore(),
 		Tickets:   ticket.NewStore(),
@@ -327,7 +334,13 @@ func TestACoordinatorWithoutAccountsStillWorks(t *testing.T) {
 		RelayAddr: "127.0.0.1:443",
 		RelayPub:  "00",
 	})
-	g := &authRig{t: t, srv: s.Routes(), friends: &swappableFriends{}}
+	return &authRig{t: t, srv: s.Routes(), friends: &swappableFriends{}}
+}
+
+// The coordinator still has to run without a database - the loadtest harness
+// drives it with generated IDs and has no accounts to sign in with.
+func TestACoordinatorWithoutAccountsStillWorks(t *testing.T) {
+	g := newPlainRig(t)
 
 	rec, _ := g.do(http.MethodPost, "/v1/rooms", "", map[string]any{
 		"player_id": "p_test", "nick": "tester", "name": "room",

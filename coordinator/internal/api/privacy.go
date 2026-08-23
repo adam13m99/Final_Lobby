@@ -16,6 +16,27 @@ type Friends interface {
 	AreFriends(a, b string) (bool, error)
 }
 
+// barred reports whether a sanction stops somebody joining a room, and says
+// so in words a player can act on.
+//
+// It is checked here rather than inside the room package because a sanction is
+// platform-wide and a room knows nothing about it. The room's own door (D41)
+// and its kick block are separate and both still apply.
+func (s *Server) barred(playerID string) (string, bool) {
+	rest := s.restricted(playerID)
+	switch {
+	case rest.Banned:
+		return "your account is banned: " + rest.Reason, true
+	case rest.Timeout:
+		msg := "you are in a timeout: " + rest.Reason
+		if !rest.Until.IsZero() {
+			msg += " (until " + rest.Until.Format("15:04") + ")"
+		}
+		return msg, true
+	}
+	return "", false
+}
+
 // applicant assembles what the door needs to know about somebody.
 //
 // Every field except the password is established here, from the server's own

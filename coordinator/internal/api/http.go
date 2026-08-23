@@ -17,6 +17,7 @@ import (
 
 	"lobbybaz/coordinator/internal/account"
 	"lobbybaz/coordinator/internal/chat"
+	"lobbybaz/coordinator/internal/moderation"
 	"lobbybaz/coordinator/internal/player"
 	"lobbybaz/coordinator/internal/room"
 	"lobbybaz/coordinator/internal/social"
@@ -32,6 +33,8 @@ type Server struct {
 	accounts *account.Store
 	social   *social.Store
 	friends  Friends
+	mod      *moderation.Store
+	kicks    Kicks
 	diag     *diagLog
 	dl       *downloads
 	log      *slog.Logger
@@ -62,6 +65,15 @@ type Config struct {
 	Tickets *ticket.Store
 	Players *player.Registry
 	Chat    *chat.Board
+	// Moderation is staff: roles, sanctions, labels, banners and the audit
+	// log. Nil disables every moderation endpoint rather than leaving them
+	// open, which is the only safe direction for that default to fall.
+	Moderation *moderation.Store
+
+	// Kicks is the durable kick log, for the "kicked N times this week"
+	// figure on a player's record. Optional.
+	Kicks Kicks
+
 	// Social is the friend graph. Nil runs the coordinator without a
 	// friends list, which is what the loadtest harness wants.
 	Social *social.Store
@@ -109,6 +121,8 @@ func New(cfg Config) *Server {
 		accounts:  cfg.Accounts,
 		social:    cfg.Social,
 		friends:   cfg.Friends,
+		mod:       cfg.Moderation,
+		kicks:     cfg.Kicks,
 		diag:      &diagLog{},
 		dl:        &downloads{dir: cfg.DistDir, key: cfg.DownloadKey},
 		log:       cfg.Logger,
@@ -168,6 +182,24 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /v1/friends/messages", s.authenticated(s.limitChat, s.privateMessages))
 	mux.HandleFunc("POST /v1/friends/invite", s.authenticated(s.limitManage, s.inviteFriend))
 	mux.HandleFunc("POST /v1/friends/invitations/seen", s.authenticated(s.limitManage, s.seenInvitations))
+
+	// Moderation (D43, D47). Every one of these checks the acting admin from
+	// the session, and every one writes down what was done.
+	mux.HandleFunc("GET /v1/admin/staff", s.authenticated(s.limitRead, s.staffList))
+	mux.HandleFunc("POST /v1/admin/staff", s.authenticated(s.limitManage, s.setRole))
+	mux.HandleFunc("POST /v1/admin/sanction", s.authenticated(s.limitManage, s.sanction))
+	mux.HandleFunc("POST /v1/admin/sanction/lift", s.authenticated(s.limitManage, s.liftSanction))
+	mux.HandleFunc("GET /v1/admin/players/{id}", s.authenticated(s.limitRead, s.playerRecord))
+	mux.HandleFunc("POST /v1/admin/label", s.authenticated(s.limitManage, s.labelPlayer))
+	mux.HandleFunc("GET /v1/admin/labels", s.limited(s.limitRead, s.labelSet))
+	mux.HandleFunc("POST /v1/admin/rooms/{id}/close", s.authenticated(s.limitManage, s.closeRoom))
+	mux.HandleFunc("POST /v1/admin/rooms/{id}/host", s.authenticated(s.limitManage, s.changeHost))
+	mux.HandleFunc("POST /v1/admin/banners", s.authenticated(s.limitManage, s.editBanner))
+	mux.HandleFunc("GET /v1/admin/log", s.authenticated(s.limitRead, s.auditLog))
+
+	// The banner strip is open to everybody, including somebody who has not
+	// signed in: an announcement about signing up is precisely for them.
+	mux.HandleFunc("GET /v1/banners", s.limited(s.limitRead, s.banners))
 
 	// Reading the room list needs no account. D45: somebody who has just
 	// installed the app should see what is going on before deciding whether
@@ -423,6 +455,10 @@ func (s *Server) createRoom(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "player_id is required")
 		return
 	}
+	if why, yes := s.barred(body.PlayerID); yes {
+		writeErr(w, http.StatusForbidden, why)
+		return
+	}
 	nick := s.seen(body.PlayerID, body.Nick)
 	if body.Name == "" {
 		body.Name = nick + "'s room"
@@ -482,6 +518,10 @@ func (s *Server) joinRoom(w http.ResponseWriter, r *http.Request) {
 	body.PlayerID = s.actor(r, body.PlayerID)
 	if body.PlayerID == "" {
 		writeErr(w, http.StatusBadRequest, "player_id is required")
+		return
+	}
+	if why, yes := s.barred(body.PlayerID); yes {
+		writeErr(w, http.StatusForbidden, why)
 		return
 	}
 	nick := s.seen(body.PlayerID, body.Nick)

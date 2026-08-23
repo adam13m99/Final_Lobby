@@ -23,6 +23,7 @@ import (
 	"lobbybaz/coordinator/internal/account"
 	"lobbybaz/coordinator/internal/api"
 	"lobbybaz/coordinator/internal/chat"
+	"lobbybaz/coordinator/internal/moderation"
 	"lobbybaz/coordinator/internal/player"
 	"lobbybaz/coordinator/internal/room"
 	"lobbybaz/coordinator/internal/social"
@@ -38,6 +39,7 @@ func main() {
 	authFile := flag.String("auth-token-file", "", "file holding the shared bearer token for the player API (empty = open)")
 	distDir := flag.String("dist-dir", "", "directory holding the published installer and version.json (empty = serve no downloads)")
 	dlKeyFile := flag.String("download-key-file", "", "file holding the unguessable path segment the download is served under")
+	headAdmin := flag.String("head-admin", "", "account id to make head admin (D47: done once, at deployment)")
 	dbPath := flag.String("db", "", "SQLite file holding accounts and kick history (empty = run without accounts)")
 	debug := flag.Bool("debug", false, "verbose logging")
 	flag.Parse()
@@ -100,6 +102,8 @@ func main() {
 	var (
 		accounts *account.Store
 		friends  *social.Store
+		mod      *moderation.Store
+		kickLog  api.Kicks
 	)
 	rooms := room.NewStore()
 	if *dbPath != "" {
@@ -112,16 +116,30 @@ func main() {
 		version, _ := store.Version(db)
 		accounts = account.New(db)
 		friends = social.New(db)
+		mod = moderation.New(db)
 
 		// Every kick is written down, so a moderator can see a pattern that
 		// outlives the room it happened in (D52). Recording never blocks the
 		// kick: a host removing a griefer must not fail because a disk did.
 		kicks := store.NewKicks(db)
+		kickLog = kicks
 		rooms.OnKick(func(e room.KickEvent) {
 			if err := kicks.Record(e.RoomID, e.ActorID, e.TargetID, e.KickNumber, e.BlockedFor, e.At); err != nil {
 				log.Error("could not record a kick", "room", e.RoomID, "target", e.TargetID, "err", err)
 			}
 		})
+		// D47: the head admin is bootstrapped at deployment, not through the
+		// app. A self-service path to the most privileged role in the system
+		// is a door with no purpose.
+		if *headAdmin != "" {
+			if err := mod.BootstrapHeadAdmin(*headAdmin, time.Now()); err != nil {
+				log.Error("cannot make that account the head admin", "account", *headAdmin, "err", err)
+				os.Exit(1)
+			}
+			log.Info("head admin", "account", *headAdmin)
+		} else if head, _ := mod.HeadAdmin(); head == "" {
+			log.Warn("there is no head admin - nobody can appoint moderators; pass -head-admin once with an account id")
+		}
 		log.Info("database ready", "file", *dbPath, "schema", version)
 	} else {
 		log.Warn("running without a database - no accounts, and a client's claimed player_id is taken at face value")
@@ -138,6 +156,8 @@ func main() {
 		Chat:        board,
 		Accounts:    accounts,
 		Social:      friends,
+		Moderation:  mod,
+		Kicks:       kickLog,
 		Friends:     friendsOrNil(friends),
 		RelayAddr:   *relayAddr,
 		RelayPub:    pub,

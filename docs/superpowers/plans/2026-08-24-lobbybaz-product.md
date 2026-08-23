@@ -175,16 +175,45 @@ Notes for whoever picks this up:
   and passing the pointer straight through would panic the first time somebody
   opened a friends-only room on a coordinator with no database.
 
-## T8 — Roles and moderation *(D43, D47)*
+## T8 — Roles and moderation *(D43, D47)* — **done 2026-08-24**
 
-- [ ] Role grants are records with an author and a timestamp, not booleans
-- [ ] Exactly one head admin; only they appoint or remove admins
-- [ ] Kick, ban, mute, timeout
-- [ ] Close a room, change its host
-- [ ] Player labels
-- [ ] Banner strip: add, remove, edit
-- [ ] Every admin action attributed to the admin who took it
-- [ ] Tests: an admin cannot appoint another admin; every action is attributed
+- [x] Role grants are records with an author and a timestamp, not booleans
+- [x] Exactly one head admin; only they appoint or remove admins
+- [x] Kick (T4), ban, mute, timeout — and each one actually stops what it
+      says: a ban drops every session and empties the seat, a timeout bars
+      joining, a mute bars chat and nothing else
+- [x] Close a room, change its host
+- [x] Player labels, from a fixed set
+- [x] Banner strip: add, remove, edit, and prepare-before-publishing
+- [x] Every admin action attributed to the admin who took it
+- [x] Tests: an admin cannot appoint another admin; every action is attributed
+
+Notes for whoever picks this up:
+
+- **The head admin is bootstrapped with `-head-admin <account-id>`, once, at
+  deployment.** D47: a self-service path to the most privileged role in the
+  system is a door with no purpose. Running it twice for the same person is
+  harmless; a second, different head admin is refused.
+- **Nothing is a boolean on an account.** A grant, a ban, a label — each is a
+  row with an author and a timestamp, and lifting one stamps it rather than
+  deleting it. A moderation table you can erase by undoing things is not a
+  record.
+- **Staff cannot be used against each other.** An ordinary admin cannot
+  sanction another admin or the head admin; only the head admin can. Otherwise
+  one compromised or angry admin could remove the team.
+- **Banner text must be rendered as text, never as HTML** — it is content one
+  person writes and everybody's client displays. Links are restricted to http
+  and https server-side, because this is a desktop application and a
+  `javascript:` link in it is a way to run something on a player's machine.
+- Changing a room's host is a slot swap: the host is always slot 0, because
+  slot 0 is the address every client was told to connect to. Both swapped
+  players change address, so both tickets are revoked and reissued at Connect.
+  **It does not rescue a match in progress** — the Dota server was on the old
+  host's PC.
+- The *Noob* label ships because the owner asked for it. The concern recorded
+  in D43 stands, and removing it is a one-line change to
+  `moderation.KnownLabels` — which is why the set lives on the server and the
+  client asks for it.
 
 ## T9 — Interface built for translation *(D44)*
 

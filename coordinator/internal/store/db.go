@@ -187,7 +187,10 @@ var migrations = []string{
 // for length; the index in this slice is still the version number, so nothing
 // may be inserted in the middle.
 func all() []string {
-	return append(append([]string{}, migrations...), socialMigrations...)
+	out := append([]string{}, migrations...)
+	out = append(out, socialMigrations...)
+	out = append(out, moderationMigrations...)
+	return out
 }
 
 // Migrate brings an open database up to the current schema version.
@@ -234,12 +237,78 @@ func Version(db *sql.DB) (int, error) {
 
 // splitStatements breaks a migration into individual statements, because the
 // driver executes one at a time.
+//
+// It has to understand comments and string literals, not just semicolons. The
+// migrations here are heavily commented on purpose - the reasoning behind a
+// schema is worth more than the schema - and the first version of this split
+// on every ";" it saw, which turned a semicolon inside an explanatory comment
+// into a syntax error at startup. That is a failure mode that only appears
+// when somebody writes a good comment.
 func splitStatements(script string) []string {
-	var out []string
-	for _, part := range strings.Split(script, ";") {
-		if trimmed := strings.TrimSpace(part); trimmed != "" {
+	const (
+		lineComment = "--"
+		newline     = "\n"
+		quote       = "'"
+		semicolon   = ";"
+	)
+	var (
+		out []string
+		cur strings.Builder
+		i   int
+		n   = len(script)
+	)
+	at := func(k int) string {
+		if k >= n {
+			return ""
+		}
+		return script[k : k+1]
+	}
+	flush := func() {
+		if trimmed := strings.TrimSpace(cur.String()); trimmed != "" {
 			out = append(out, trimmed)
 		}
+		cur.Reset()
 	}
+
+	for i < n {
+		switch {
+		case strings.HasPrefix(script[i:], lineComment):
+			// A line comment runs to the newline, semicolons and all.
+			end := strings.Index(script[i:], newline)
+			if end < 0 {
+				i = n
+				continue
+			}
+			cur.WriteString(script[i : i+end+1])
+			i += end + 1
+
+		case at(i) == quote:
+			// A single-quoted literal, in which '' is an escaped quote.
+			cur.WriteString(quote)
+			i++
+			for i < n {
+				cur.WriteString(at(i))
+				if at(i) == quote {
+					i++
+					if at(i) == quote {
+						cur.WriteString(quote)
+						i++
+						continue
+					}
+					break
+				}
+				i++
+			}
+
+		case at(i) == semicolon:
+			flush()
+			i++
+
+		default:
+			cur.WriteString(at(i))
+			i++
+		}
+	}
+	flush()
 	return out
 }
