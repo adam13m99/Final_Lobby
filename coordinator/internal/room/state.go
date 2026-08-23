@@ -37,12 +37,13 @@ const (
 )
 
 var (
-	ErrRoomLocked    = errors.New("room: locked, no new players")
-	ErrRoomFull      = errors.New("room: no free player slot")
-	ErrKickBlocked   = errors.New("room: player was kicked recently")
-	ErrNotHost       = errors.New("room: only the host may do that")
-	ErrRoomClosed    = errors.New("room: closed")
-	ErrAlreadyJoined = errors.New("room: already in this room")
+	ErrRoomLocked      = errors.New("room: locked, no new players")
+	ErrRoomFull        = errors.New("room: no free player slot")
+	ErrKickBlocked     = errors.New("room: player was kicked recently")
+	ErrNotHost         = errors.New("room: only the host may do that")
+	ErrRoomClosed      = errors.New("room: closed")
+	ErrAlreadyJoined   = errors.New("room: already in this room")
+	ErrNoSpectatorSeat = errors.New("room: no free spectator seat")
 )
 
 // Room is one lobby. Not safe for concurrent use; the store serialises access.
@@ -106,6 +107,81 @@ func (r *Room) Join(playerID string, now time.Time) (int, error) {
 		}
 	}
 	return 0, ErrRoomFull
+}
+
+// JoinSpectator seats an admin in the reserved spectator area, outside the
+// ten playing slots.
+//
+// A spectator may enter a locked room. That is the whole point of the seat:
+// an admin is called in precisely when a match is already running and
+// something has gone wrong in it. A kicked player is still barred.
+func (r *Room) JoinSpectator(playerID string, now time.Time) (int, error) {
+	if r.Status == StatusClosed {
+		return 0, ErrRoomClosed
+	}
+	if until, ok := r.KickedUntil[playerID]; ok && now.Before(until) {
+		return 0, ErrKickBlocked
+	}
+	for _, occupant := range r.Slots {
+		if occupant == playerID {
+			return 0, ErrAlreadyJoined
+		}
+	}
+	for _, occupant := range r.Spectators {
+		if occupant == playerID {
+			return 0, ErrAlreadyJoined
+		}
+	}
+	for i := range r.Spectators {
+		if r.Spectators[i] == "" {
+			r.Spectators[i] = playerID
+			return i, nil
+		}
+	}
+	return 0, ErrNoSpectatorSeat
+}
+
+// Occupants lists every player ID seated in the room, players first.
+func (r *Room) Occupants() []string {
+	out := make([]string, 0, len(r.Slots)+len(r.Spectators))
+	for _, id := range r.Slots {
+		if id != "" {
+			out = append(out, id)
+		}
+	}
+	for _, id := range r.Spectators {
+		if id != "" {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+// Seats reports how many playing slots are taken.
+func (r *Room) Seats() int {
+	n := 0
+	for _, id := range r.Slots {
+		if id != "" {
+			n++
+		}
+	}
+	return n
+}
+
+// SlotOf finds where a player is sitting. Returns the slot index, whether
+// they are a spectator, and whether they are seated at all.
+func (r *Room) SlotOf(playerID string) (int, bool, bool) {
+	for i, id := range r.Slots {
+		if id == playerID {
+			return i, false, true
+		}
+	}
+	for i, id := range r.Spectators {
+		if id == playerID {
+			return i, true, true
+		}
+	}
+	return 0, false, false
 }
 
 // Leave vacates a player's slot. If the host leaves, the grace timer starts.

@@ -18,6 +18,8 @@ import (
 	"time"
 
 	"finallobby/coordinator/internal/api"
+	"finallobby/coordinator/internal/chat"
+	"finallobby/coordinator/internal/player"
 	"finallobby/coordinator/internal/room"
 	"finallobby/coordinator/internal/ticket"
 )
@@ -28,6 +30,8 @@ func main() {
 	relayPubFile := flag.String("relay-pub", "/etc/finallobby/relay.pub", "file holding the relay public key")
 	tickEvery := flag.Duration("tick", 10*time.Second, "how often room timers advance")
 	authFile := flag.String("auth-token-file", "", "file holding the shared bearer token for the player API (empty = open)")
+	distDir := flag.String("dist-dir", "", "directory holding the published installer and version.json (empty = serve no downloads)")
+	dlKeyFile := flag.String("download-key-file", "", "file holding the unguessable path segment the download is served under")
 	debug := flag.Bool("debug", false, "verbose logging")
 	flag.Parse()
 
@@ -65,22 +69,52 @@ func main() {
 		log.Warn("no auth token configured - the player API is open to anyone who can reach it")
 	}
 
+	var downloadKey string
+	if *dlKeyFile != "" {
+		raw, err := os.ReadFile(*dlKeyFile)
+		if err != nil {
+			log.Error("cannot read the download key", "file", *dlKeyFile, "err", err)
+			os.Exit(1)
+		}
+		downloadKey = strings.TrimSpace(string(raw))
+		// The key is the only thing standing in front of the download, since
+		// a browser cannot send a bearer token. Short enough to guess is the
+		// same as absent.
+		if len(downloadKey) < 12 {
+			log.Error("download key is too short to be unguessable", "len", len(downloadKey))
+			os.Exit(1)
+		}
+	}
+	if *distDir != "" && downloadKey == "" {
+		log.Error("a dist directory was given with no download key; refusing to publish a build at a guessable path")
+		os.Exit(1)
+	}
+
 	rooms := room.NewStore()
 	tickets := ticket.NewStore()
+	players := player.NewRegistry()
+	board := chat.NewBoard()
 
 	srv := api.New(api.Config{
-		Rooms:     rooms,
-		Tickets:   tickets,
-		RelayAddr: *relayAddr,
-		RelayPub:  pub,
-		Logger:    log,
-		AuthToken: authToken,
+		Rooms:       rooms,
+		Tickets:     tickets,
+		Players:     players,
+		Chat:        board,
+		RelayAddr:   *relayAddr,
+		RelayPub:    pub,
+		Logger:      log,
+		AuthToken:   authToken,
+		DistDir:     *distDir,
+		DownloadKey: downloadKey,
 	})
+	if *distDir != "" {
+		log.Info("serving downloads", "dir", *distDir, "path", "/d/"+downloadKey+"/")
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	go runTimers(ctx, rooms, tickets, *tickEvery, log)
+	go runTimers(ctx, rooms, tickets, board, *tickEvery, log)
 
 	httpSrv := &http.Server{
 		Addr:              *listen,
@@ -108,7 +142,7 @@ func main() {
 
 // runTimers advances room state and clears expired tickets. Rooms close on a
 // timer, so something has to be turning the handle.
-func runTimers(ctx context.Context, rooms *room.Store, tickets *ticket.Store, every time.Duration, log *slog.Logger) {
+func runTimers(ctx context.Context, rooms *room.Store, tickets *ticket.Store, board *chat.Board, every time.Duration, log *slog.Logger) {
 	t := time.NewTicker(every)
 	defer t.Stop()
 	for {
@@ -122,6 +156,9 @@ func runTimers(ctx context.Context, rooms *room.Store, tickets *ticket.Store, ev
 			// The room is over; nobody in it should keep network access.
 			log.Info("room closed", "room", id)
 			revokeRoom(tickets, id)
+			// The conversation goes with the room. Without this every
+			// finished match leaks its chat for as long as the process runs.
+			board.Drop(id)
 		}
 		tickets.Purge(now)
 	}

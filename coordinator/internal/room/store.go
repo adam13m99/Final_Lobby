@@ -23,6 +23,10 @@ type Membership struct {
 	HostIP    netip.Addr
 	Subnet    netip.Prefix
 	IsHost    bool
+
+	// IsSpectator marks the reserved admin seat, which sits outside the ten
+	// playing slots and gets an address from the top of the room's block.
+	IsSpectator bool
 }
 
 // Store holds every live room and serialises access to them.
@@ -92,6 +96,22 @@ func (s *Store) Join(roomID, playerID string, now time.Time) (Membership, error)
 		return Membership{}, err
 	}
 	return membershipFor(r, slot, playerID == r.HostID)
+}
+
+// JoinSpectator seats an admin in the reserved spectator area.
+func (s *Store) JoinSpectator(roomID, playerID string, now time.Time) (Membership, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	r, ok := s.rooms[roomID]
+	if !ok {
+		return Membership{}, ErrNotFound
+	}
+	seat, err := r.JoinSpectator(playerID, now)
+	if err != nil {
+		return Membership{}, err
+	}
+	return spectatorMembershipFor(r, seat)
 }
 
 // Leave vacates a player's slot.
@@ -175,6 +195,30 @@ func (s *Store) Tick(now time.Time) []string {
 		}
 	}
 	return closed
+}
+
+// spectatorMembershipFor derives the addressing for the reserved admin seat.
+func spectatorMembershipFor(r *Room, seat int) (Membership, error) {
+	vip, err := ipam.SpectatorIP(r.Index, seat)
+	if err != nil {
+		return Membership{}, err
+	}
+	host, err := ipam.HostIP(r.Index)
+	if err != nil {
+		return Membership{}, err
+	}
+	subnet, err := ipam.RoomSubnet(r.Index)
+	if err != nil {
+		return Membership{}, err
+	}
+	return Membership{
+		RoomID:      r.ID,
+		Slot:        seat,
+		VirtualIP:   vip,
+		HostIP:      host,
+		Subnet:      subnet,
+		IsSpectator: true,
+	}, nil
 }
 
 // membershipFor derives the addressing a seated player needs.

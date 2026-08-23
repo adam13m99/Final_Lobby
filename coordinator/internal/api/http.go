@@ -15,6 +15,8 @@ import (
 	"strings"
 	"time"
 
+	"finallobby/coordinator/internal/chat"
+	"finallobby/coordinator/internal/player"
 	"finallobby/coordinator/internal/room"
 	"finallobby/coordinator/internal/ticket"
 )
@@ -23,6 +25,10 @@ import (
 type Server struct {
 	rooms   *room.Store
 	tickets *ticket.Store
+	players *player.Registry
+	chat    *chat.Board
+	diag    *diagLog
+	dl      *downloads
 	log     *slog.Logger
 
 	// relayAddr and relayPub are handed to clients so they know where to
@@ -34,7 +40,8 @@ type Server struct {
 	limitJoin   *Limiter
 	limitManage *Limiter
 	limitRead   *Limiter
-	now       func() time.Time
+	limitChat   *Limiter
+	now         func() time.Time
 
 	// authToken gates the player-facing API during the test phase. There
 	// are no accounts yet (sub-project 2), and the coordinator has to be
@@ -45,13 +52,21 @@ type Server struct {
 
 // Config configures the API server.
 type Config struct {
-	Rooms     *room.Store
-	Tickets   *ticket.Store
-	RelayAddr string
-	RelayPub  string
-	Logger    *slog.Logger
-	Now       func() time.Time
-	AuthToken string
+	Rooms   *room.Store
+	Tickets *ticket.Store
+	Players *player.Registry
+	Chat    *chat.Board
+
+	// DistDir holds the published installer and its manifest. Empty means
+	// this coordinator serves no downloads.
+	DistDir string
+	// DownloadKey is the unguessable path segment the download lives under.
+	DownloadKey string
+	RelayAddr   string
+	RelayPub    string
+	Logger      *slog.Logger
+	Now         func() time.Time
+	AuthToken   string
 }
 
 func New(cfg Config) *Server {
@@ -61,9 +76,19 @@ func New(cfg Config) *Server {
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
+	if cfg.Players == nil {
+		cfg.Players = player.NewRegistry()
+	}
+	if cfg.Chat == nil {
+		cfg.Chat = chat.NewBoard()
+	}
 	return &Server{
 		rooms:     cfg.Rooms,
 		tickets:   cfg.Tickets,
+		players:   cfg.Players,
+		chat:      cfg.Chat,
+		diag:      &diagLog{},
+		dl:        &downloads{dir: cfg.DistDir, key: cfg.DownloadKey},
 		log:       cfg.Logger,
 		relayAddr: cfg.RelayAddr,
 		relayPub:  cfg.RelayPub,
@@ -76,6 +101,10 @@ func New(cfg Config) *Server {
 		limitJoin:   NewLimiter(0.5, 5),
 		limitManage: NewLimiter(2, 15),
 		limitRead:   NewLimiter(5, 30),
+		// Chat is per-player-visible and abusable, but a burst is normal:
+		// somebody types three short lines in a row. One a second sustained,
+		// ten in hand.
+		limitChat: NewLimiter(1, 10),
 		now:       cfg.Now,
 		authToken: cfg.AuthToken,
 	}
@@ -100,11 +129,25 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /v1/rooms/{id}/leave", s.limited(s.limitManage, s.leaveRoom))
 	mux.HandleFunc("POST /v1/rooms/{id}/kick", s.limited(s.limitManage, s.kickPlayer))
 	mux.HandleFunc("POST /v1/rooms/{id}/status", s.limited(s.limitManage, s.setStatus))
+	mux.HandleFunc("POST /v1/rooms/{id}/spectate", s.limited(s.limitJoin, s.spectateRoom))
 	mux.HandleFunc("POST /v1/lease/renew", s.limited(s.limitRead, s.renewLease))
+
+	// One call per poll. The client asks for everything it draws at once:
+	// who it is, what rooms exist, who is in them, and both chat channels.
+	// Five separate polls would be five times the request rate for exactly
+	// the same screen.
+	mux.HandleFunc("POST /v1/sync", s.limited(s.limitRead, s.sync))
+	mux.HandleFunc("POST /v1/me", s.limited(s.limitManage, s.updateMe))
+	mux.HandleFunc("POST /v1/chat", s.limited(s.limitChat, s.postChat))
+	mux.HandleFunc("POST /v1/diag", s.limited(s.limitManage, s.postDiag))
+	mux.HandleFunc("GET /v1/diag", s.limited(s.limitRead, s.listDiag))
 
 	// The relay asks about tickets here. Not rate limited: throttling the
 	// relay would throttle every player behind it.
 	mux.HandleFunc("POST /internal/validate-ticket", s.validateTicket)
+
+	// The download pages. Unauthenticated by necessity - see download.go.
+	s.downloadRoutes(mux)
 
 	return logRequests(s.log, mux)
 }
@@ -137,24 +180,83 @@ func (s *Server) authorised(r *http.Request) bool {
 
 // --- player-facing endpoints -------------------------------------------
 
-type roomView struct {
-	ID      string   `json:"id"`
-	Name    string   `json:"name"`
-	Status  string   `json:"status"`
-	HostID  string   `json:"host_id"`
-	Players []string `json:"players"`
-	Free    int      `json:"free_slots"`
+// memberView is one seated player as the lobby draws them.
+type memberView struct {
+	PlayerID  string `json:"player_id"`
+	Nick      string `json:"nick"`
+	MMR       int    `json:"mmr"`
+	Slot      int    `json:"slot"`
+	IsHost    bool   `json:"is_host"`
+	Spectator bool   `json:"spectator"`
 }
 
-func view(r room.Room) roomView {
-	v := roomView{ID: r.ID, Name: r.Name, Status: string(r.Status), HostID: r.HostID}
-	for _, p := range r.Slots {
-		if p == "" {
+type roomView struct {
+	ID       string       `json:"id"`
+	Name     string       `json:"name"`
+	Status   string       `json:"status"`
+	HostID   string       `json:"host_id"`
+	HostNick string       `json:"host_nick"`
+	Members  []memberView `json:"members"`
+	Seats    int          `json:"seats"`
+	Free     int          `json:"free_slots"`
+	AvgMMR   int          `json:"avg_mmr"`
+	Joinable bool         `json:"joinable"`
+	// Players is the bare ID list the first CLI was written against.
+	Players []string `json:"players"`
+}
+
+// view renders a room for the lobby, resolving every seated ID to the name
+// and MMR that player declared. A room list showing raw player IDs is not
+// something anyone can choose a game from.
+func (s *Server) view(r room.Room) roomView {
+	v := roomView{
+		ID:      r.ID,
+		Name:    r.Name,
+		Status:  string(r.Status),
+		HostID:  r.HostID,
+		Members: make([]memberView, 0, len(r.Slots)),
+	}
+	known := s.players.Lookup(r.Occupants())
+
+	sumMMR, rated := 0, 0
+	for slot, id := range r.Slots {
+		if id == "" {
 			v.Free++
 			continue
 		}
-		v.Players = append(v.Players, p)
+		v.Players = append(v.Players, id)
+		v.Seats++
+		m := memberView{PlayerID: id, Slot: slot, IsHost: id == r.HostID, Nick: id}
+		if p, ok := known[id]; ok {
+			m.Nick, m.MMR = p.Nick, p.MMR
+			if p.MMR > 0 {
+				sumMMR += p.MMR
+				rated++
+			}
+		}
+		if m.IsHost {
+			v.HostNick = m.Nick
+		}
+		v.Members = append(v.Members, m)
 	}
+	for seat, id := range r.Spectators {
+		if id == "" {
+			continue
+		}
+		m := memberView{PlayerID: id, Slot: seat, Spectator: true, Nick: id}
+		if p, ok := known[id]; ok {
+			m.Nick, m.MMR = p.Nick, p.MMR
+		}
+		v.Members = append(v.Members, m)
+	}
+	if rated > 0 {
+		v.AvgMMR = sumMMR / rated
+	}
+	if v.HostNick == "" {
+		v.HostNick = r.HostID
+	}
+	v.Joinable = v.Free > 0 &&
+		(r.Status == room.StatusOpen || r.Status == room.StatusOpenToNew)
 	return v
 }
 
@@ -162,7 +264,7 @@ func (s *Server) listRooms(w http.ResponseWriter, r *http.Request) {
 	rooms := s.rooms.List()
 	out := make([]roomView, 0, len(rooms))
 	for _, rm := range rooms {
-		out = append(out, view(rm))
+		out = append(out, s.view(rm))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"rooms": out})
 }
@@ -173,21 +275,22 @@ func (s *Server) getRoom(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "no such room")
 		return
 	}
-	writeJSON(w, http.StatusOK, view(rm))
+	writeJSON(w, http.StatusOK, s.view(rm))
 }
 
 // connectInfo is everything a client needs to get onto the network.
 type connectInfo struct {
-	RoomID     string `json:"room_id"`
-	Slot       int    `json:"slot"`
-	IsHost     bool   `json:"is_host"`
-	VirtualIP  string `json:"virtual_ip"`
-	HostIP     string `json:"host_ip"`
-	Subnet     string `json:"subnet"`
-	Ticket     string `json:"ticket"`
-	RelayAddr  string `json:"relay_addr"`
-	RelayPub   string `json:"relay_pub"`
-	ConnectStr string `json:"dota_connect"`
+	RoomID      string `json:"room_id"`
+	Slot        int    `json:"slot"`
+	IsHost      bool   `json:"is_host"`
+	IsSpectator bool   `json:"is_spectator,omitempty"`
+	VirtualIP   string `json:"virtual_ip"`
+	HostIP      string `json:"host_ip"`
+	Subnet      string `json:"subnet"`
+	Ticket      string `json:"ticket"`
+	RelayAddr   string `json:"relay_addr"`
+	RelayPub    string `json:"relay_pub"`
+	ConnectStr  string `json:"dota_connect"`
 }
 
 func (s *Server) issue(m room.Membership, playerID string) (connectInfo, error) {
@@ -200,22 +303,24 @@ func (s *Server) issue(m room.Membership, playerID string) (connectInfo, error) 
 		return connectInfo{}, err
 	}
 	return connectInfo{
-		RoomID:     m.RoomID,
-		Slot:       m.Slot,
-		IsHost:     m.IsHost,
-		VirtualIP:  m.VirtualIP.String(),
-		HostIP:     m.HostIP.String(),
-		Subnet:     m.Subnet.String(),
-		Ticket:     tok,
-		RelayAddr:  s.relayAddr,
-		RelayPub:   s.relayPub,
-		ConnectStr: m.HostIP.String() + ":27015",
+		RoomID:      m.RoomID,
+		Slot:        m.Slot,
+		IsHost:      m.IsHost,
+		IsSpectator: m.IsSpectator,
+		VirtualIP:   m.VirtualIP.String(),
+		HostIP:      m.HostIP.String(),
+		Subnet:      m.Subnet.String(),
+		Ticket:      tok,
+		RelayAddr:   s.relayAddr,
+		RelayPub:    s.relayPub,
+		ConnectStr:  m.HostIP.String() + ":27015",
 	}, nil
 }
 
 func (s *Server) createRoom(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		PlayerID string `json:"player_id"`
+		Nick     string `json:"nick"`
 		Name     string `json:"name"`
 	}
 	if !decode(w, r, &body) {
@@ -225,8 +330,9 @@ func (s *Server) createRoom(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "player_id is required")
 		return
 	}
+	nick := s.seen(body.PlayerID, body.Nick)
 	if body.Name == "" {
-		body.Name = body.PlayerID + "'s room"
+		body.Name = nick + "'s room"
 	}
 
 	_, m, err := s.rooms.Create(body.PlayerID, body.Name, s.now())
@@ -239,6 +345,8 @@ func (s *Server) createRoom(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, "could not issue ticket")
 		return
 	}
+	s.chat.System(m.RoomID, nick+" opened the room", s.now())
+	s.chat.System(chat.Lobby, nick+" opened \""+body.Name+"\"", s.now())
 	s.log.Info("room created", "room", m.RoomID, "host", body.PlayerID, "vip", m.VirtualIP)
 	writeJSON(w, http.StatusCreated, info)
 }
@@ -246,6 +354,7 @@ func (s *Server) createRoom(w http.ResponseWriter, r *http.Request) {
 func (s *Server) joinRoom(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		PlayerID string `json:"player_id"`
+		Nick     string `json:"nick"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -254,6 +363,7 @@ func (s *Server) joinRoom(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "player_id is required")
 		return
 	}
+	nick := s.seen(body.PlayerID, body.Nick)
 
 	m, err := s.rooms.Join(r.PathValue("id"), body.PlayerID, s.now())
 	if err != nil {
@@ -265,6 +375,7 @@ func (s *Server) joinRoom(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, "could not issue ticket")
 		return
 	}
+	s.chat.System(m.RoomID, nick+" joined", s.now())
 	s.log.Info("player joined", "room", m.RoomID, "player", body.PlayerID, "slot", m.Slot)
 	writeJSON(w, http.StatusOK, info)
 }
@@ -284,6 +395,7 @@ func (s *Server) leaveRoom(w http.ResponseWriter, r *http.Request) {
 	// Revoking here is what actually removes network access; the room
 	// bookkeeping alone would leave the tunnel up.
 	s.tickets.RevokePlayerRoom(body.PlayerID, id)
+	s.chat.System(id, s.nickOf(body.PlayerID)+" left", s.now())
 	s.log.Info("player left", "room", id, "player", body.PlayerID)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
@@ -302,6 +414,7 @@ func (s *Server) kickPlayer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.tickets.RevokePlayerRoom(body.TargetID, id)
+	s.chat.System(id, s.nickOf(body.TargetID)+" was removed by the host", s.now())
 	s.log.Info("player kicked", "room", id, "by", body.PlayerID, "target", body.TargetID)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
@@ -326,6 +439,7 @@ func (s *Server) setStatus(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, statusFor(err), err.Error())
 		return
 	}
+	s.chat.System(id, statusAnnouncement(st), s.now())
 	s.log.Info("room status changed", "room", id, "status", st)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "status": body.Status})
 }
