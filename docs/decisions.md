@@ -864,3 +864,82 @@ replace it.
 Revisit when the platform moves to its own server (D49). That migration
 rebuilds the filesystem layout anyway, and is the natural moment to make the
 names match.
+
+---
+
+## D52 — A kick is a live block *and* a durable event, and they are stored differently
+
+**2026-08-24, technical.**
+
+T4 left a note: the escalating kick block (D39) has to survive a coordinator
+restart, "or the escalation resets on every deployment and means nothing." The
+first draft of the schema followed that literally, with a `room_kicks` table
+holding room, player, count, and blocked-until.
+
+It would have been dead weight, and briefly dangerous. Two facts kill it:
+
+1. **A block belongs to a room, and rooms live in memory.** A coordinator
+   restart ends every room. On the next start the persisted block would key
+   into a room that no longer exists, and it would bar nobody from anything.
+2. **Room IDs were being reused.** They were `r<unix-seconds mod 100000>-<n>`
+   with `n` restarting from zero on every launch. So the persisted block could
+   key into a *different* room that happened to take the same ID, and bar an
+   innocent person from a room they had never been in.
+
+So the storage splits along the line the data actually falls on:
+
+- **The live block stays in memory**, with the room it belongs to. When the
+  room ends, so does the block. That is correct rather than a limitation: the
+  block exists to stop a re-join fight in a room that is currently happening.
+- **Every kick is written down as an event** — `kick_events`: room, actor,
+  target, which kick it was, how long it barred them, when. This is the part
+  that is still true months later, and it is what a moderator needs when
+  somebody says "he keeps doing this" (T8).
+
+Recording never blocks the kick. If the write fails it is logged and the kick
+proceeds; a moderation record that could stop a host removing a griefer would
+be worse than a missing row.
+
+**Room IDs are now sixteen random hex characters and are never reused.** That
+is a fix worth having on its own: chat logs, kick records, admin actions (T8)
+and tournament results (T12) are all keyed by room ID, and every one of them
+would have been corruptible by ID reuse.
+
+---
+
+## D53 — The session decides who you are; `player_id` in a request body is ignored
+
+**2026-08-24, technical, following from D37.**
+
+Until now every request carried the player's own ID in its body and the
+coordinator believed it. Anybody who could reach the API could act as anybody
+else by typing their ID: kick from a room they did not host, chat as them,
+take their seat, change their declared MMR. That was acceptable when the only
+two clients were the owner's own PCs, and it is not acceptable with real
+players.
+
+With accounts enabled:
+
+- A session token travels in `X-LobbyBaz-Session`. Not a cookie — the client
+  is a desktop application, not a browser, and there is no origin to scope a
+  cookie to.
+- Every acting endpoint (create, join, leave, kick, status, spectate,
+  connect, sync, chat, profile) requires a valid session and takes the
+  actor from it. The body's `player_id` is **ignored**, not rejected: a
+  mismatch is far more likely to be an old client than an attack, and
+  refusing it would break every installed copy on the day the coordinator
+  is upgraded.
+- **Reading the room list stays open.** D45 wants somebody who just installed
+  the app to see what is going on before deciding whether to sign up. A lobby
+  that is empty until you have an account looks dead.
+
+A coordinator started without `-db` runs exactly as before: no accounts, and
+the body's `player_id` taken at face value. That mode exists for the loadtest
+harness, which drives the API with thousands of generated identities and has
+no business signing each of them up. **It is not a mode to run players on**,
+and the coordinator logs a warning saying so at startup.
+
+The escalating sign-in limiter is the tightest of the four tiers: a guess
+every five seconds, five in hand, per address. Somebody who mistypes their
+password twice never notices it; somebody working a word list gets roughly
+seventeen thousand attempts a day, against an Argon2id hash costing 64 MiB.

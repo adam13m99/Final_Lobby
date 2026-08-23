@@ -7,8 +7,13 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
+
+// SessionHeader carries the signed-in session. It must match the coordinator's
+// constant of the same name.
+const SessionHeader = "X-LobbyBaz-Session"
 
 // connectInfo mirrors what the coordinator returns from create and join.
 type ConnectInfo struct {
@@ -43,6 +48,25 @@ type Client struct {
 	base  string
 	token string
 	http  *http.Client
+
+	// mu guards session, which is replaced whenever somebody signs in or out
+	// and read on every request from whichever goroutine is polling.
+	mu      sync.RWMutex
+	session string
+}
+
+// Account is who the coordinator says you are.
+type Account struct {
+	PlayerID      string `json:"player_id"`
+	Username      string `json:"username"`
+	DisplayName   string `json:"display_name"`
+	MMR           int    `json:"mmr"`
+	Session       string `json:"session"`
+	TermsVersion  string `json:"terms_version"`
+	TermsAccepted bool   `json:"terms_accepted"`
+	// CanRecover is false for every account today. The sign-up screen has to
+	// say so before somebody chooses a password, not after they forget it.
+	CanRecover bool `json:"can_recover_password"`
 }
 
 func New(coordinator, token string) *Client {
@@ -72,6 +96,9 @@ func (c *Client) do(method, path string, body any, out any) error {
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
+	if sess := c.Session(); sess != "" {
+		req.Header.Set(SessionHeader, sess)
+	}
 
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -99,8 +126,16 @@ func (c *Client) do(method, path string, body any, out any) error {
 // friendly turns the API's terse errors into something a person can act on.
 func friendly(code int, msg string) string {
 	switch {
+	case code == http.StatusUnauthorized && strings.Contains(msg, "sign in"):
+		return "you have been signed out - sign in again"
+	case code == http.StatusUnauthorized && strings.Contains(msg, "username or password"):
+		return "that username and password do not match"
 	case code == http.StatusUnauthorized:
 		return "this copy of the app was refused by the server; download it again from the link"
+	case code == http.StatusForbidden:
+		return msg
+	case code == http.StatusConflict && strings.Contains(msg, "username"):
+		return "that username is taken - choose another"
 	case code == http.StatusConflict && strings.Contains(msg, "MMR"):
 		return "MMR can only be changed once a week"
 	case code == http.StatusTooManyRequests:
@@ -176,4 +211,102 @@ func (c *Client) Kick(roomID, playerID, targetID string) error {
 func (c *Client) SetStatus(roomID, playerID, status string) error {
 	return c.do("POST", "/v1/rooms/"+roomID+"/status",
 		map[string]string{"player_id": playerID, "status": status}, nil)
+}
+
+// --- accounts -----------------------------------------------------------
+
+// Session returns the session token this client is carrying, if any.
+func (c *Client) Session() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.session
+}
+
+// UseSession installs a session token, normally one restored from disk after
+// a restart. Call Whoami afterwards to find out whether it is still good.
+func (c *Client) UseSession(token string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.session = token
+}
+
+func (c *Client) setSession(token string) {
+	if token == "" {
+		return
+	}
+	c.UseSession(token)
+}
+
+// SignUp creates an account and signs in as it. termsVersion must be the
+// version the person was actually shown - the coordinator refuses anything
+// else, so a client cannot accept on somebody's behalf by sending a constant.
+func (c *Client) SignUp(username, displayName, password, device, termsVersion string) (*Account, error) {
+	var a Account
+	err := c.do("POST", "/v1/auth/signup", map[string]string{
+		"username":             username,
+		"display_name":         displayName,
+		"password":             password,
+		"device":               device,
+		"accept_terms_version": termsVersion,
+	}, &a)
+	if err != nil {
+		return nil, err
+	}
+	c.setSession(a.Session)
+	return &a, nil
+}
+
+// SignIn exchanges a username and password for a session.
+func (c *Client) SignIn(username, password, device string) (*Account, error) {
+	var a Account
+	err := c.do("POST", "/v1/auth/login", map[string]string{
+		"username": username,
+		"password": password,
+		"device":   device,
+	}, &a)
+	if err != nil {
+		return nil, err
+	}
+	c.setSession(a.Session)
+	return &a, nil
+}
+
+// Whoami reports who the current session belongs to. An error means the
+// session is gone and the person has to sign in again.
+func (c *Client) Whoami() (*Account, error) {
+	var a Account
+	if err := c.do("GET", "/v1/auth/me", nil, &a); err != nil {
+		return nil, err
+	}
+	return &a, nil
+}
+
+// SignOut ends this device's session. The local token is cleared whatever the
+// server says: a client that keeps a token the person asked it to forget is
+// worse than one that fails to tell the server.
+func (c *Client) SignOut() error {
+	err := c.do("POST", "/v1/auth/logout", nil, nil)
+	c.mu.Lock()
+	c.session = ""
+	c.mu.Unlock()
+	return err
+}
+
+// ChangePassword replaces the password and adopts the session it returns,
+// since changing a password signs every device out including this one.
+func (c *Client) ChangePassword(current, next string) (*Account, error) {
+	var a Account
+	if err := c.do("POST", "/v1/auth/password", map[string]string{
+		"current_password": current,
+		"new_password":     next,
+	}, &a); err != nil {
+		return nil, err
+	}
+	c.setSession(a.Session)
+	return &a, nil
+}
+
+// AcceptTerms records agreement to a version of the terms.
+func (c *Client) AcceptTerms(version string) error {
+	return c.do("POST", "/v1/terms/accept", map[string]string{"version": version}, nil)
 }

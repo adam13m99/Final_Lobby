@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"lobbybaz/coordinator/internal/account"
 	"lobbybaz/coordinator/internal/chat"
 	"lobbybaz/coordinator/internal/player"
 	"lobbybaz/coordinator/internal/room"
@@ -23,13 +24,14 @@ import (
 
 // Server wires the room store and ticket store behind HTTP.
 type Server struct {
-	rooms   *room.Store
-	tickets *ticket.Store
-	players *player.Registry
-	chat    *chat.Board
-	diag    *diagLog
-	dl      *downloads
-	log     *slog.Logger
+	rooms    *room.Store
+	tickets  *ticket.Store
+	players  *player.Registry
+	chat     *chat.Board
+	accounts *account.Store
+	diag     *diagLog
+	dl       *downloads
+	log      *slog.Logger
 
 	// relayAddr and relayPub are handed to clients so they know where to
 	// connect and which key to expect. Shipping the key here rather than
@@ -41,6 +43,7 @@ type Server struct {
 	limitManage *Limiter
 	limitRead   *Limiter
 	limitChat   *Limiter
+	limitAuth   *Limiter
 	now         func() time.Time
 
 	// authToken gates the player-facing API during the test phase. There
@@ -56,6 +59,10 @@ type Config struct {
 	Tickets *ticket.Store
 	Players *player.Registry
 	Chat    *chat.Board
+	// Accounts is nil on a coordinator running without an account database:
+	// the loadtest harness and most tests have no use for one, and the
+	// room machinery predates it.
+	Accounts *account.Store
 
 	// DistDir holds the published installer and its manifest. Empty means
 	// this coordinator serves no downloads.
@@ -87,6 +94,7 @@ func New(cfg Config) *Server {
 		tickets:   cfg.Tickets,
 		players:   cfg.Players,
 		chat:      cfg.Chat,
+		accounts:  cfg.Accounts,
 		diag:      &diagLog{},
 		dl:        &downloads{dir: cfg.DistDir, key: cfg.DownloadKey},
 		log:       cfg.Logger,
@@ -105,6 +113,13 @@ func New(cfg Config) *Server {
 		// somebody types three short lines in a row. One a second sustained,
 		// ten in hand.
 		limitChat: NewLimiter(1, 10),
+		// Signing in is the one place where an attacker gets something for
+		// repeating themselves, so it is the tightest tier: a guess every
+		// five seconds, five in hand. A person who mistypes their password
+		// twice never notices; somebody working through a word list gets
+		// roughly seventeen thousand attempts a day from one address, against
+		// an Argon2id hash.
+		limitAuth: NewLimiter(0.2, 5),
 		now:       cfg.Now,
 		authToken: cfg.AuthToken,
 	}
@@ -122,25 +137,39 @@ func (s *Server) Routes() http.Handler {
 		})
 	})
 
+	// Accounts. Signing up and signing in cannot require a session, for the
+	// obvious reason; everything below them does.
+	mux.HandleFunc("POST /v1/auth/signup", s.limited(s.limitAuth, s.signUp))
+	mux.HandleFunc("POST /v1/auth/login", s.limited(s.limitAuth, s.signIn))
+	mux.HandleFunc("POST /v1/auth/logout", s.authenticated(s.limitManage, s.signOut))
+	mux.HandleFunc("GET /v1/auth/me", s.authenticated(s.limitRead, s.whoami))
+	mux.HandleFunc("POST /v1/auth/password", s.authenticated(s.limitAuth, s.changePassword))
+	mux.HandleFunc("POST /v1/terms/accept", s.authenticated(s.limitManage, s.acceptTerms))
+
+	// Reading the room list needs no account. D45: somebody who has just
+	// installed the app should see what is going on before deciding whether
+	// to sign up - a lobby that is empty until you have an account looks
+	// dead, and asking for a password before showing anything is how a new
+	// player decides not to bother.
 	mux.HandleFunc("GET /v1/rooms", s.limited(s.limitRead, s.listRooms))
-	mux.HandleFunc("POST /v1/rooms", s.limited(s.limitJoin, s.createRoom))
+	mux.HandleFunc("POST /v1/rooms", s.signedIn(s.limitJoin, s.createRoom))
 	mux.HandleFunc("GET /v1/rooms/{id}", s.limited(s.limitRead, s.getRoom))
-	mux.HandleFunc("POST /v1/rooms/{id}/join", s.limited(s.limitJoin, s.joinRoom))
-	mux.HandleFunc("POST /v1/rooms/{id}/leave", s.limited(s.limitManage, s.leaveRoom))
-	mux.HandleFunc("POST /v1/rooms/{id}/kick", s.limited(s.limitManage, s.kickPlayer))
-	mux.HandleFunc("POST /v1/rooms/{id}/status", s.limited(s.limitManage, s.setStatus))
-	mux.HandleFunc("POST /v1/rooms/{id}/spectate", s.limited(s.limitJoin, s.spectateRoom))
-	mux.HandleFunc("POST /v1/rooms/{id}/connect", s.limited(s.limitRead, s.connectRoom))
-	mux.HandleFunc("POST /v1/lease/renew", s.limited(s.limitRead, s.renewLease))
+	mux.HandleFunc("POST /v1/rooms/{id}/join", s.signedIn(s.limitJoin, s.joinRoom))
+	mux.HandleFunc("POST /v1/rooms/{id}/leave", s.signedIn(s.limitManage, s.leaveRoom))
+	mux.HandleFunc("POST /v1/rooms/{id}/kick", s.signedIn(s.limitManage, s.kickPlayer))
+	mux.HandleFunc("POST /v1/rooms/{id}/status", s.signedIn(s.limitManage, s.setStatus))
+	mux.HandleFunc("POST /v1/rooms/{id}/spectate", s.signedIn(s.limitJoin, s.spectateRoom))
+	mux.HandleFunc("POST /v1/rooms/{id}/connect", s.signedIn(s.limitRead, s.connectRoom))
+	mux.HandleFunc("POST /v1/lease/renew", s.signedIn(s.limitRead, s.renewLease))
 
 	// One call per poll. The client asks for everything it draws at once:
 	// who it is, what rooms exist, who is in them, and both chat channels.
 	// Five separate polls would be five times the request rate for exactly
 	// the same screen.
-	mux.HandleFunc("POST /v1/sync", s.limited(s.limitRead, s.sync))
-	mux.HandleFunc("POST /v1/me", s.limited(s.limitManage, s.updateMe))
-	mux.HandleFunc("POST /v1/chat", s.limited(s.limitChat, s.postChat))
-	mux.HandleFunc("POST /v1/diag", s.limited(s.limitManage, s.postDiag))
+	mux.HandleFunc("POST /v1/sync", s.signedIn(s.limitRead, s.sync))
+	mux.HandleFunc("POST /v1/me", s.signedIn(s.limitManage, s.updateMe))
+	mux.HandleFunc("POST /v1/chat", s.signedIn(s.limitChat, s.postChat))
+	mux.HandleFunc("POST /v1/diag", s.signedIn(s.limitManage, s.postDiag))
 	mux.HandleFunc("GET /v1/diag", s.limited(s.limitRead, s.listDiag))
 
 	// The relay asks about tickets here. Not rate limited: throttling the
@@ -164,7 +193,9 @@ func (s *Server) limited(l *Limiter, next http.HandlerFunc) http.HandlerFunc {
 			writeErr(w, http.StatusTooManyRequests, "slow down")
 			return
 		}
-		next(w, r)
+		// Resolved after the rate limiter, so an unauthenticated flood cannot
+		// make us hash and look up a session for every request.
+		next(w, s.withSession(r))
 	}
 }
 
@@ -184,7 +215,7 @@ func (s *Server) authorised(r *http.Request) bool {
 // memberView is one seated player as the lobby draws them.
 type memberView struct {
 	// Seat is "player", "observer" or "admin" (D38).
-	Seat string `json:"seat,omitempty"`
+	Seat      string `json:"seat,omitempty"`
 	PlayerID  string `json:"player_id"`
 	Nick      string `json:"nick"`
 	MMR       int    `json:"mmr"`
@@ -203,9 +234,9 @@ type roomView struct {
 	Seats    int          `json:"seats"`
 	Free     int          `json:"free_slots"`
 	// Watchers is how many observer seats are taken, of ipam.ObserverSlots.
-	Watchers int `json:"watchers"`
-	AvgMMR   int          `json:"avg_mmr"`
-	Joinable bool         `json:"joinable"`
+	Watchers int  `json:"watchers"`
+	AvgMMR   int  `json:"avg_mmr"`
+	Joinable bool `json:"joinable"`
 	// Players is the bare ID list the first CLI was written against.
 	Players []string `json:"players"`
 }
@@ -348,6 +379,8 @@ func (s *Server) createRoom(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
+	// The session decides who this is; the body only suggests it.
+	body.PlayerID = s.actor(r, body.PlayerID)
 	if body.PlayerID == "" {
 		writeErr(w, http.StatusBadRequest, "player_id is required")
 		return
@@ -381,6 +414,8 @@ func (s *Server) joinRoom(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
+	// The session decides who this is; the body only suggests it.
+	body.PlayerID = s.actor(r, body.PlayerID)
 	if body.PlayerID == "" {
 		writeErr(w, http.StatusBadRequest, "player_id is required")
 		return
@@ -418,6 +453,8 @@ func (s *Server) connectRoom(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
+	// The session decides who this is; the body only suggests it.
+	body.PlayerID = s.actor(r, body.PlayerID)
 	if body.PlayerID == "" {
 		writeErr(w, http.StatusBadRequest, "player_id is required")
 		return
@@ -442,6 +479,8 @@ func (s *Server) leaveRoom(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
+	// The session decides who this is; the body only suggests it.
+	body.PlayerID = s.actor(r, body.PlayerID)
 	id := r.PathValue("id")
 	if err := s.rooms.Leave(id, body.PlayerID, s.now()); err != nil {
 		writeErr(w, statusFor(err), err.Error())
@@ -463,6 +502,8 @@ func (s *Server) kickPlayer(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
+	// The session decides who this is; the body only suggests it.
+	body.PlayerID = s.actor(r, body.PlayerID)
 	id := r.PathValue("id")
 	if err := s.rooms.Kick(id, body.PlayerID, body.TargetID, s.now()); err != nil {
 		writeErr(w, statusFor(err), err.Error())
@@ -482,6 +523,8 @@ func (s *Server) setStatus(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
+	// The session decides who this is; the body only suggests it.
+	body.PlayerID = s.actor(r, body.PlayerID)
 	st := room.Status(body.Status)
 	switch st {
 	case room.StatusOpen, room.StatusLocked, room.StatusOpenToNew, room.StatusClosed:

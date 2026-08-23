@@ -1,8 +1,9 @@
 package room
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
-	"fmt"
 	"net/netip"
 	"sync"
 	"time"
@@ -47,7 +48,11 @@ type Store struct {
 	mu      sync.Mutex
 	rooms   map[string]*Room
 	indexes map[int]string // room index -> room ID
-	nextID  int
+
+	// onKick, if set, is called after a successful kick so the event can be
+	// written down. It runs while the store's lock is held, so it must be
+	// quick and must not call back into the store.
+	onKick func(KickEvent)
 }
 
 func NewStore() *Store {
@@ -55,6 +60,26 @@ func NewStore() *Store {
 		rooms:   make(map[string]*Room),
 		indexes: make(map[int]string),
 	}
+}
+
+// KickEvent is one kick, as something that happened rather than as a live
+// block. See D52: the block lives with the room, in memory; the event is what
+// moderation needs months later.
+type KickEvent struct {
+	RoomID     string
+	ActorID    string
+	TargetID   string
+	KickNumber int // which kick this was from this room
+	BlockedFor time.Duration
+	At         time.Time
+}
+
+// OnKick installs a recorder. Nil disables recording, which is what a
+// coordinator running without a database does.
+func (s *Store) OnKick(fn func(KickEvent)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onKick = fn
 }
 
 // Create opens a new room with hostID in slot 0.
@@ -66,8 +91,13 @@ func (s *Store) Create(hostID, name string, now time.Time) (*Room, Membership, e
 	if !ok {
 		return nil, Membership{}, ErrNoRoomIndexes
 	}
-	s.nextID++
-	id := fmt.Sprintf("r%d-%d", now.Unix()%100000, s.nextID)
+	// Random, and never reused. The first version counted up from a
+	// timestamp, which meant that after a restart a fresh room could take an
+	// ID a previous room had used - so anything keyed by room ID, from a
+	// chat log to a kick record to a tournament result, could attach itself
+	// to the wrong room. Sixteen random bytes cost nothing and close that
+	// off permanently.
+	id := newRoomID()
 
 	r := NewRoom(id, index, hostID, now)
 	r.Name = name
@@ -188,7 +218,21 @@ func (s *Store) Kick(roomID, actorID, targetID string, now time.Time) error {
 	if !ok {
 		return ErrNotFound
 	}
-	return r.Kick(actorID, targetID, now)
+	if err := r.Kick(actorID, targetID, now); err != nil {
+		return err
+	}
+	if s.onKick != nil {
+		n := r.KickCount[targetID]
+		s.onKick(KickEvent{
+			RoomID:     roomID,
+			ActorID:    actorID,
+			TargetID:   targetID,
+			KickNumber: n,
+			BlockedFor: KickBlockFor(n),
+			At:         now,
+		})
+	}
+	return nil
 }
 
 // SetStatus changes a room's admission state, host only.
@@ -311,4 +355,16 @@ func membershipFor(r *Room, slot int, isHost bool) (Membership, error) {
 		IsHost:    isHost,
 		Kind:      SeatPlayer,
 	}, nil
+}
+
+// newRoomID returns an identifier no room has held before.
+func newRoomID() string {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		// crypto/rand does not fail on any platform we run on; if it somehow
+		// did, a predictable room ID is not a security boundary here - the
+		// ticket is - so falling back is better than refusing to open a room.
+		return "r" + time.Now().UTC().Format("20060102150405.000000000")
+	}
+	return "r" + hex.EncodeToString(b)
 }

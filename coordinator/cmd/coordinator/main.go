@@ -1,8 +1,11 @@
 // Command coordinator is the control plane: it owns rooms, allocates virtual
 // addresses, and issues the tickets the relay checks.
 //
-// This is the stub described in the plan's self-review. Accounts, MMR,
-// friends, passwords and PostgreSQL persistence belong to sub-project 2.
+// Accounts, declared MMR and kick history live in a SQLite file (D51) named
+// by -db. Without that flag the coordinator runs exactly as it did during the
+// two-PC test phase: no accounts, no durable profiles, and a client's claimed
+// player_id taken at face value. That mode exists for the loadtest harness,
+// not for players.
 package main
 
 import (
@@ -17,10 +20,12 @@ import (
 	"syscall"
 	"time"
 
+	"lobbybaz/coordinator/internal/account"
 	"lobbybaz/coordinator/internal/api"
 	"lobbybaz/coordinator/internal/chat"
 	"lobbybaz/coordinator/internal/player"
 	"lobbybaz/coordinator/internal/room"
+	"lobbybaz/coordinator/internal/store"
 	"lobbybaz/coordinator/internal/ticket"
 )
 
@@ -32,6 +37,7 @@ func main() {
 	authFile := flag.String("auth-token-file", "", "file holding the shared bearer token for the player API (empty = open)")
 	distDir := flag.String("dist-dir", "", "directory holding the published installer and version.json (empty = serve no downloads)")
 	dlKeyFile := flag.String("download-key-file", "", "file holding the unguessable path segment the download is served under")
+	dbPath := flag.String("db", "", "SQLite file holding accounts and kick history (empty = run without accounts)")
 	debug := flag.Bool("debug", false, "verbose logging")
 	flag.Parse()
 
@@ -90,7 +96,32 @@ func main() {
 		os.Exit(1)
 	}
 
+	var accounts *account.Store
 	rooms := room.NewStore()
+	if *dbPath != "" {
+		db, err := store.Open(*dbPath)
+		if err != nil {
+			log.Error("cannot open the database", "file", *dbPath, "err", err)
+			os.Exit(1)
+		}
+		defer db.Close()
+		version, _ := store.Version(db)
+		accounts = account.New(db)
+
+		// Every kick is written down, so a moderator can see a pattern that
+		// outlives the room it happened in (D52). Recording never blocks the
+		// kick: a host removing a griefer must not fail because a disk did.
+		kicks := store.NewKicks(db)
+		rooms.OnKick(func(e room.KickEvent) {
+			if err := kicks.Record(e.RoomID, e.ActorID, e.TargetID, e.KickNumber, e.BlockedFor, e.At); err != nil {
+				log.Error("could not record a kick", "room", e.RoomID, "target", e.TargetID, "err", err)
+			}
+		})
+		log.Info("database ready", "file", *dbPath, "schema", version)
+	} else {
+		log.Warn("running without a database - no accounts, and a client's claimed player_id is taken at face value")
+	}
+
 	tickets := ticket.NewStore()
 	players := player.NewRegistry()
 	board := chat.NewBoard()
@@ -100,6 +131,7 @@ func main() {
 		Tickets:     tickets,
 		Players:     players,
 		Chat:        board,
+		Accounts:    accounts,
 		RelayAddr:   *relayAddr,
 		RelayPub:    pub,
 		Logger:      log,

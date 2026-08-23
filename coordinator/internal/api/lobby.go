@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"lobbybaz/coordinator/internal/account"
 	"lobbybaz/coordinator/internal/chat"
 	"lobbybaz/coordinator/internal/player"
 	"lobbybaz/coordinator/internal/room"
@@ -88,6 +89,8 @@ func (s *Server) sync(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
+	// The session decides who this is; the body only suggests it.
+	body.PlayerID = s.actor(r, body.PlayerID)
 	if body.PlayerID == "" {
 		writeErr(w, http.StatusBadRequest, "player_id is required")
 		return
@@ -154,18 +157,44 @@ func (s *Server) updateMe(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
+	// The session decides who this is; the body only suggests it.
+	body.PlayerID = s.actor(r, body.PlayerID)
 	if body.PlayerID == "" {
 		writeErr(w, http.StatusBadRequest, "player_id is required")
 		return
 	}
+	// With accounts enabled the database is where a profile lives and the
+	// registry is only the live view of it. Writing to the registry alone
+	// would mean a player's declared MMR - a number they may only change once
+	// a week - quietly resets every time the coordinator restarts, and the
+	// once-a-week rule would be enforced against nothing.
 	if body.Nick != "" {
+		if s.accountsOn() {
+			if _, err := s.accounts.SetDisplayName(body.PlayerID, body.Nick, s.now()); err != nil {
+				writeErr(w, authStatus(err), err.Error())
+				return
+			}
+		}
 		if _, err := s.players.Seen(body.PlayerID, body.Nick, s.now()); err != nil {
 			writeErr(w, http.StatusBadRequest, err.Error())
 			return
 		}
 	}
 	if body.MMR != nil {
-		if _, err := s.players.SetMMR(body.PlayerID, *body.MMR, s.now()); err != nil {
+		if s.accountsOn() {
+			if _, err := s.accounts.SetMMR(body.PlayerID, *body.MMR, s.now()); err != nil {
+				code := http.StatusBadRequest
+				if errors.Is(err, account.ErrMMRTooSoon) {
+					code = http.StatusConflict
+				}
+				writeErr(w, code, err.Error())
+				return
+			}
+			// The registry mirrors what the database now says. It keeps its
+			// own once-a-week clock, which has already been satisfied above,
+			// so a refused mirror write is not an error the player caused.
+			_, _ = s.players.SetMMR(body.PlayerID, *body.MMR, s.now())
+		} else if _, err := s.players.SetMMR(body.PlayerID, *body.MMR, s.now()); err != nil {
 			code := http.StatusBadRequest
 			if errors.Is(err, player.ErrMMRTooSoon) {
 				code = http.StatusConflict
@@ -194,6 +223,8 @@ func (s *Server) postChat(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
+	// The session decides who this is; the body only suggests it.
+	body.PlayerID = s.actor(r, body.PlayerID)
 	if body.PlayerID == "" {
 		writeErr(w, http.StatusBadRequest, "player_id is required")
 		return
@@ -233,6 +264,8 @@ func (s *Server) spectateRoom(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
+	// The session decides who this is; the body only suggests it.
+	body.PlayerID = s.actor(r, body.PlayerID)
 	if body.PlayerID == "" {
 		writeErr(w, http.StatusBadRequest, "player_id is required")
 		return

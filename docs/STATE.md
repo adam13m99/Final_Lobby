@@ -156,14 +156,31 @@ there; this is the summary.
 | T1 rename to LobbyBaz (D46) | **done** — `77d8a0d` |
 | T2 rooms move to a /27, 18 seats (D38) | **done** |
 | T3 room lifecycle: 1-minute host grace (D40) | **done** |
-| T4 kick escalation 1/3/5/7 min (D39) | **rules done**; persistence lands with T5 |
-| T5 accounts (D37) | not started |
+| T4 kick escalation 1/3/5/7 min (D39) | **done** — as events, not live blocks (D52) |
+| T5 accounts (D37) | **done** — server and client library; **not switched on yet, see below** |
 | T6 room privacy (D41) | not started |
 | T7 friends (D41) | not started |
 | T8 roles and moderation (D43, D47) | not started |
 | T9 interface built for translation (D44) | not started |
 | T10 the new lobby (D42) | not started |
 | T11 desktop application (D45) | not started |
+
+**Accounts exist but are not switched on.** The coordinator takes a `-db`
+file; with one it has usernames, Argon2id passwords, sessions, durable MMR and
+terms acceptance, and the session — not the request body — decides who a
+request is from (D53). Without one it behaves exactly as it did during the
+two-PC test. **The server is still running without `-db`,** because no shipped
+client has a sign-in screen yet; turning it on before T10 would lock both test
+PCs out of their own lobby. Flipping it is one flag in
+`coordinator.service`, and it is T10's job.
+
+**A kick is now two things.** The block that bars a kicked player for one,
+three, five minutes lives in memory with the room, and ends when the room
+does. Every kick is also written to `kick_events` — who, by whom, from where,
+how long — which is the part still true when a moderator looks a month later
+(D52). Room IDs became random and non-reusable in the same change; the old
+ones repeated after a restart, and anything keyed by one could have attached
+itself to the wrong room.
 
 **"Spectator" is now two things.** An observer is an ordinary player choosing
 to watch; an admin is staff. They have separate seat counts, separate address

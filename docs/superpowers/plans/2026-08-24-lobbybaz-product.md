@@ -96,16 +96,31 @@ end up with two services fighting over one virtual adapter.
 - [ ] Count is per player per room and survives a coordinator restart
 - [x] Tests: escalation sequence *(restart-survival test lands with T5, which brings the database)*
 
-## T5 — Accounts *(D37)*
+## T5 — Accounts *(D37)* — **done 2026-08-24**
 
-- [ ] Username and password, Argon2id
-- [ ] `contact_methods` table from the first migration, empty — the seam for
+- [x] Username and password, Argon2id — `coordinator/internal/account/password.go`,
+      parameters encoded into every hash so the cost can be raised later
+      without invalidating anybody's password
+- [x] `contact_methods` table from the first migration, empty — the seam for
       email and SMS, so neither is a schema change later
-- [ ] Recovery exists only where a verified contact method exists; signup says
-      so plainly
-- [ ] Sessions: device-bound rotating tokens
-- [ ] Terms acceptance recorded with version and timestamp
-- [ ] Tests: signup, login, wrong password, session rotation, no-recovery path
+- [x] Recovery exists only where a verified contact method exists; signup says
+      so plainly (`can_recover_password` in every auth reply)
+- [x] Sessions: device-bound rotating tokens — only the SHA-256 hash is
+      stored, expiry slides on use, a password change ends every device
+- [x] Terms acceptance recorded with version and timestamp; an account cannot
+      come into existence without it
+- [x] Tests: signup, login, wrong password, session rotation, no-recovery path
+- [x] **Beyond the checklist:** the session is now what decides who a request
+      is from (D53). It closes a hole that predated accounts — anybody could
+      act as anybody by typing their ID.
+- [x] The kick escalation T4 deferred: stored as events, not as live blocks,
+      and room IDs made non-reusable so nothing can key into the wrong room
+      (D52)
+
+**Not done, deliberately:** the coordinator on the server still runs *without*
+`-db`, because no shipped client can sign in yet. Turning accounts on before
+T10 lands the sign-in screen would lock the owner's two test PCs out of their
+own lobby. The switch is one flag; flip it in T10.
 
 ## T6 — Room privacy *(D41)*
 
