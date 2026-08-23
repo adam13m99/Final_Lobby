@@ -130,6 +130,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /v1/rooms/{id}/kick", s.limited(s.limitManage, s.kickPlayer))
 	mux.HandleFunc("POST /v1/rooms/{id}/status", s.limited(s.limitManage, s.setStatus))
 	mux.HandleFunc("POST /v1/rooms/{id}/spectate", s.limited(s.limitJoin, s.spectateRoom))
+	mux.HandleFunc("POST /v1/rooms/{id}/connect", s.limited(s.limitRead, s.connectRoom))
 	mux.HandleFunc("POST /v1/lease/renew", s.limited(s.limitRead, s.renewLease))
 
 	// One call per poll. The client asks for everything it draws at once:
@@ -380,6 +381,39 @@ func (s *Server) joinRoom(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, info)
 }
 
+// connectRoom hands a seated player a fresh ticket.
+//
+// Tickets live ten minutes and are minted at join. A room of people
+// arranging a match stays open much longer than that, so by the time anyone
+// pressed Connect their ticket was usually dead - the relay refused the
+// handshake and the app could only report that the tunnel had not come up.
+// Rejoining did not help, because Join refuses a player already seated.
+// Connect now asks for a new ticket every time, which costs one request and
+// removes the whole class of failure.
+func (s *Server) connectRoom(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		PlayerID string `json:"player_id"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	if body.PlayerID == "" {
+		writeErr(w, http.StatusBadRequest, "player_id is required")
+		return
+	}
+	m, err := s.rooms.Membership(r.PathValue("id"), body.PlayerID)
+	if err != nil {
+		writeErr(w, statusFor(err), err.Error())
+		return
+	}
+	info, err := s.issue(m, body.PlayerID)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "could not issue ticket")
+		return
+	}
+	writeJSON(w, http.StatusOK, info)
+}
+
 func (s *Server) leaveRoom(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		PlayerID string `json:"player_id"`
@@ -487,7 +521,8 @@ func (s *Server) validateTicket(w http.ResponseWriter, r *http.Request) {
 
 func statusFor(err error) int {
 	switch {
-	case errors.Is(err, room.ErrNotFound):
+	case errors.Is(err, room.ErrNotFound),
+		errors.Is(err, room.ErrNotMember):
 		return http.StatusNotFound
 	case errors.Is(err, room.ErrNotHost):
 		return http.StatusForbidden

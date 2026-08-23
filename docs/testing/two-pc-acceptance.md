@@ -164,6 +164,18 @@ two people at once.
 `Start-Service FinalLobbyNet`. If there is no such service, run the
 installer again from the link.
 
+**Connect fails, and the app says the tunnel did not come up.** This was
+the expiring-ticket bug (D36), fixed in build `2026.08.23-1739`. If it
+happens on a build at or after that one, it is something new — say so, and
+get the relay's own view before guessing:
+
+```bash
+journalctl -u relay -n 5 --no-pager
+```
+
+`handshake_rejected` climbing as you press Connect means the relay is
+refusing the ticket rather than the packets going missing.
+
 **Connect fails.** From `C:\Program Files\Final Lobby` run
 `.\lobbycli.exe probe`. It tests the relay alone with everything else out of
 the way. If the probe succeeds but Connect does not, the fault is the

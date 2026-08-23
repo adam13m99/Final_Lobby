@@ -76,7 +76,7 @@ Plan: `docs/superpowers/plans/2026-08-18-network-core.md`
 | 13 | Fail-closed lease watchdog | **done** | |
 | 14 | Dota 2 launch with argument allowlist | **done** | |
 | 15 | Load test harness | **done** | |
-| 16 | Physical two-PC acceptance test | **ready to run** — downloadable installer, lobby UI and self-checking diagnostics all prepared; needs two machines | |
+| 16 | Physical two-PC acceptance test | **in progress** — first session 2026-08-23 found and fixed the expiring-ticket bug (D36); no Dota match run yet | |
 
 ## Completed outside the plan
 
@@ -88,6 +88,23 @@ Plan: `docs/superpowers/plans/2026-08-18-network-core.md`
 | Design spec | `d727a18` |
 | Implementation plan | `06e6a18` |
 | Git sync through server tunnel (GitHub is DPI-blocked locally) | `dd28c05` |
+
+## First two-PC session, 2026-08-23
+
+Both machines installed from the link and reached the lobby. One created a
+room, the other joined, and neither could connect: **the ticket a player
+receives on joining expires after ten minutes, and nothing renewed it until
+after the tunnel was already up.** Any pair of people who spend more than ten
+minutes arranging a match hit it every time. See D36.
+
+Fixed by minting the ticket at Connect instead of at join
+(`POST /v1/rooms/{id}/connect`), deployed and published as `2026.08.23-1739`.
+Verified by connecting successfully with a deliberately invalid stored
+ticket, which failed reliably before the change.
+
+Still to run, and needing a person at each machine: the real Dota 2 match,
+bandwidth measurement, the abandoned-slot question, kick timing, network-drop
+recovery, and chat across two screens.
 
 ## Open questions
 

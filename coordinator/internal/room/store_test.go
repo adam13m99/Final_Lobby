@@ -115,3 +115,58 @@ func TestClosedRoomIndexIsReused(t *testing.T) {
 			second.Subnet, first.Subnet)
 	}
 }
+
+// A player sitting in a room must be able to ask for their addressing again
+// without leaving. The ticket minted at join dies after ten minutes, so
+// before this existed the only way to connect to a room you had been waiting
+// in was to leave it and join again.
+func TestMembershipForSeatedPlayer(t *testing.T) {
+	s := room.NewStore()
+	_, host, err := s.Create("h1", "A", t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined, err := s.Join(host.RoomID, "p2", t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Much later - well past any ticket lifetime - the same seat is returned.
+	again, err := s.Membership(host.RoomID, "p2")
+	if err != nil {
+		t.Fatalf("a seated player was refused their own membership: %v", err)
+	}
+	if again.VirtualIP != joined.VirtualIP || again.Slot != joined.Slot {
+		t.Fatalf("membership changed: got slot %d %s, want slot %d %s",
+			again.Slot, again.VirtualIP, joined.Slot, joined.VirtualIP)
+	}
+	if again.IsHost {
+		t.Fatal("a joining player was reported as the host")
+	}
+
+	h, err := s.Membership(host.RoomID, "h1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !h.IsHost {
+		t.Fatal("the host was not reported as the host")
+	}
+}
+
+func TestMembershipRefusesOutsiders(t *testing.T) {
+	s := room.NewStore()
+	_, host, _ := s.Create("h1", "A", t0)
+
+	if _, err := s.Membership(host.RoomID, "stranger"); !errors.Is(err, room.ErrNotMember) {
+		t.Fatalf("a stranger was given room addressing: %v", err)
+	}
+	if _, err := s.Membership("r-nope", "h1"); !errors.Is(err, room.ErrNotFound) {
+		t.Fatalf("got %v, want ErrNotFound", err)
+	}
+
+	// A player who left must not keep their address.
+	_ = s.Leave(host.RoomID, "h1", t0)
+	if _, err := s.Membership(host.RoomID, "h1"); !errors.Is(err, room.ErrNotMember) {
+		t.Fatalf("a departed player kept their membership: %v", err)
+	}
+}

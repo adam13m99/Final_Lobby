@@ -117,8 +117,10 @@ func friendly(code int, msg string) string {
 		return "only the host can do that"
 	case strings.Contains(msg, "no free spectator seat"):
 		return "all the spectator seats in that room are taken"
+	case strings.Contains(msg, "no such room"):
+		return "that room has closed"
 	case strings.Contains(msg, "not in that room"):
-		return "you have to be in a room to talk in it"
+		return "you are no longer in that room; join it again"
 	}
 	return msg
 }
@@ -134,6 +136,17 @@ func (c *Client) JoinRoom(roomID, playerID, nick string) (*ConnectInfo, error) {
 	var info ConnectInfo
 	err := c.do("POST", "/v1/rooms/"+roomID+"/join",
 		map[string]string{"player_id": playerID, "nick": nick}, &info)
+	return &info, err
+}
+
+// Refresh mints a new ticket for a player already seated in a room.
+//
+// Connect calls this every time rather than reusing what join returned: a
+// ticket expires in ten minutes and rooms sit open for far longer.
+func (c *Client) Refresh(roomID, playerID string) (*ConnectInfo, error) {
+	var info ConnectInfo
+	err := c.do("POST", "/v1/rooms/"+roomID+"/connect",
+		map[string]string{"player_id": playerID}, &info)
 	return &info, err
 }
 

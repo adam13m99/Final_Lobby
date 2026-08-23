@@ -460,6 +460,19 @@ func (s *server) connect(w http.ResponseWriter, r *http.Request) {
 		fail(w, "Join a room first.")
 		return
 	}
+
+	// Always take a fresh ticket. The one stored at join expires after ten
+	// minutes, and a room waiting for players is open for much longer than
+	// that, so reusing it meant Connect simply stopped working after a while
+	// with nothing on screen to explain why.
+	info, err := s.api().Refresh(cfg.RoomID, cfg.PlayerID)
+	if err != nil {
+		fail(w, err.Error())
+		return
+	}
+	s.storeRoom(info)
+	cfg = s.snapshot()
+
 	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
 	defer cancel()
 

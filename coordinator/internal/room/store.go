@@ -13,6 +13,7 @@ import (
 var (
 	ErrNoRoomIndexes = errors.New("room: no free room index")
 	ErrNotFound      = errors.New("room: no such room")
+	ErrNotMember     = errors.New("room: not in that room")
 )
 
 // Membership is what a player needs in order to connect.
@@ -94,6 +95,33 @@ func (s *Store) Join(roomID, playerID string, now time.Time) (Membership, error)
 	slot, err := r.Join(playerID, now)
 	if err != nil {
 		return Membership{}, err
+	}
+	return membershipFor(r, slot, playerID == r.HostID)
+}
+
+// Membership returns what an already-seated player needs in order to
+// connect, without changing the room.
+//
+// It exists because a ticket is minted when a player joins and dies ten
+// minutes later, while a room full of people arranging a match sits open for
+// far longer. Without this the ticket a player is holding by the time they
+// press Connect is long expired, the relay refuses the handshake, and Join
+// will not issue another because they are already in the room - so the only
+// escape was to leave and rejoin. Connect asks for a fresh ticket instead.
+func (s *Store) Membership(roomID, playerID string) (Membership, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	r, ok := s.rooms[roomID]
+	if !ok {
+		return Membership{}, ErrNotFound
+	}
+	slot, spectator, seated := r.SlotOf(playerID)
+	if !seated {
+		return Membership{}, ErrNotMember
+	}
+	if spectator {
+		return spectatorMembershipFor(r, slot)
 	}
 	return membershipFor(r, slot, playerID == r.HostID)
 }

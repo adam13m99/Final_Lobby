@@ -249,6 +249,18 @@ func cmdConnect() error {
 		return err
 	}
 
+	// A ticket lasts ten minutes from the moment it is issued, so the one
+	// saved at join is usually dead by the time anyone connects. Take a new
+	// one first.
+	info, err := lobby.New(cfg.Coordinator, cfg.AuthToken).Refresh(cfg.RoomID, cfg.PlayerID)
+	if err != nil {
+		return err
+	}
+	storeRoom(cfg, info)
+	if err := cfg.Save(); err != nil {
+		return err
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 

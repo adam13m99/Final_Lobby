@@ -493,3 +493,46 @@ are different sockets and coexist without either side knowing. The download
 went onto 7001 rather than taking a new port precisely to keep that count at
 two. `scripts/publish.sh` checks nginx, CoreDNS and the relay are still
 running after every publish and prints the result, rather than assuming it.
+
+## D36 — A ticket is minted when you press Connect, not when you join
+
+Found 2026-08-23, during the first two-PC session, and it had already cost
+the owner an evening.
+
+One PC created a room, the other joined, and the two people then did what
+two people always do: talked to each other about what to try next. Some
+minutes later both pressed **Connect** and neither could reach the host. The
+app said only that the tunnel had not come up within fifteen seconds.
+
+The cause was a lifetime mismatch nobody had noticed because every test until
+then had been done by one person in a hurry:
+
+- A ticket is valid for **10 minutes** (`ticket.Lifetime`).
+- It was issued when a player **joined** the room.
+- The watchdog that renews it only starts running **after** the tunnel is up.
+- So a player waiting in a room held a ticket that quietly died, and Connect
+  could never succeed again.
+- `Join` refuses a player who is already seated, so the only escape was to
+  leave the room and rejoin it — which nobody would guess.
+
+A room full of people arranging a match sits open far longer than ten
+minutes. The old arrangement therefore failed for **exactly the case the
+product exists to serve**, and worked only in the artificial case of joining
+and connecting within the same minute.
+
+The fix is that `POST /v1/rooms/{id}/connect` returns fresh connect info to
+any player already seated, and both the app and the CLI call it every time
+Connect is pressed. It costs one extra request per connect and removes the
+whole class of failure.
+
+Deliberately **not** done: lengthening the ticket lifetime. Ten minutes is
+short on purpose — it bounds how long a kicked player could keep playing if
+every other check failed (see the ticket package comment). Making tickets
+last longer would trade a real security property for a bug that is better
+fixed at its cause.
+
+**Still open, and worth fixing before real players:** a relay that refuses a
+handshake stays silent, so the client can only report a timeout. "The tunnel
+did not come up" was true and useless — it named a symptom three layers away
+from the cause. The relay should say no, and the app should repeat what it
+said.
