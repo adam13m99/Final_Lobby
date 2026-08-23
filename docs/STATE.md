@@ -159,16 +159,18 @@ out of scope (D42).
    (`netservice/internal/adapter/bin/wintun.dll`, v0.14.1, Authenticode
    signature verified as WireGuard LLC). Confirm redistribution terms before
    shipping a public installer.
-4. **Is Tournaments a real feature or a placeholder?** D42 puts it in the
-   toolbar; spec section 12 lists it as explicitly not being built. A menu
-   entry is cheap and a tournament system is not. Owner.
-5. **Who are the admins?** D43 gives the role real powers. It needs a named
-   person before any of it means anything. Owner.
-6. **Uplink port speed.** Open since 2026-08-18. The last unknown in the
-   capacity plan, and every server cost figure rests on it. MobinHost.
-7. **When to buy the dedicated server.** No port conflict with the other
-   business on the box, but one uplink and one IP address are shared, so
-   filtering aimed at either side hits both. Owner.
-8. A refused handshake is silent, so the client can only report a timeout.
+4. **Uplink port speed.** Open since 2026-08-18. The last unknown in the
+   capacity plan, and every server cost figure rests on it. **Waiting on
+   MobinHost** — the Persian letter to send them is
+   `docs/mobinhost-port-speed-letter.md`.
+5. A refused handshake is silent, so the client can only report a timeout.
    That is what turned the D36 ticket bug into an hour of investigation.
    Engineering; needs a protocol change.
+6. **What a tournament actually is** — brackets, scheduling, prizes,
+   registration, who runs one. D48 settles that it is a real feature; its
+   shape is undecided and needs its own brainstorm. Not before the account
+   system, the room work and the new lobby.
+
+**Answered 2026-08-24:** who the admins are (D47 — a role the head admin
+grants), whether Tournaments is real (D48 — yes), and when the dedicated
+server is bought (D49 — when the product is ready to deploy).

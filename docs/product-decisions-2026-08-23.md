@@ -7,10 +7,14 @@
 `docs/decisions.md`, which is the durable record; this file is kept as the
 original questions and the owner's own words.
 
-**Still unanswered:** 3.4 who the admins are - 5.3 uplink port speed from
-MobinHost - 5.6 when to buy the dedicated server. Plus one raised by the
-answers themselves: whether Tournaments (3.6) is a real feature or a
-placeholder, given the spec lists it as out of scope.
+**Fully answered.** The four follow-ups were settled on 2026-08-24 and are
+recorded as D47 (admin is a role the head admin grants), D48 (Tournaments is
+a real feature, so spec section 12 is now out of date) and D49 (the dedicated
+server is bought when the product is ready to deploy).
+
+The only item still outstanding is the uplink port speed, which is waiting on
+MobinHost rather than on anyone here. The letter to send them is
+`docs/mobinhost-port-speed-letter.md`.
 
 ---
 

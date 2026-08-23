@@ -749,3 +749,76 @@ old directory, the way it already handles the earlier per-user layout.
 
 Best done in one deliberate pass, and soon, while the number of places the old
 name appears is still small.
+
+## D47 — Admin is a role the head admin grants, not a flag on an account
+
+**Owner decision, 2026-08-24.** The owner is the head admin. Admins are people
+they appoint, and the appointment can be withdrawn.
+
+That is a sentence with real consequences for the schema, and getting it wrong
+is the kind of thing that is painful to unpick later:
+
+- **Roles are granted, so they are records, not booleans.** A grant has who
+  gave it, to whom, and when — and a withdrawal has the same. Without that
+  history, "who made this person an admin?" has no answer, which is exactly the
+  question asked after something goes wrong.
+- **There is exactly one head admin, and it is not an ordinary admin.** Only
+  the head admin appoints and removes. An admin cannot appoint another admin,
+  or the role spreads and cannot be pulled back.
+- **Every admin action is attributed.** A ban, a mute, a label, a closed room,
+  a changed host, an edited banner — each records which admin did it. Powers
+  like D43's without an audit trail are how a moderation team loses the trust
+  of its players, and there is no way to reconstruct the trail after the fact.
+
+The head admin is bootstrapped at deployment rather than through the app: an
+account promoted directly in the database, once. A self-service path to the
+most privileged role in the system is a door with no purpose.
+
+## D48 — Tournaments is a real feature, and the spec is now wrong about it
+
+**Owner decision, 2026-08-24.** The Tournaments entry in the left toolbar
+(D42) is a real feature, not a placeholder.
+
+**Section 12 of the design spec lists tournaments under "explicitly not
+doing".** That line is now out of date and the spec should say so rather than
+contradict the product.
+
+No design work is being done on it yet, and none should be until the account
+system, the room work and the new lobby are in. Recording it now does two
+things: it stops the toolbar entry shipping as a dead link nobody planned, and
+it means the room and account models get built by somebody who knows that
+scheduled multi-room competition is coming. Those two facts change how a room
+is modelled — a tournament match is a room that somebody else created, at a
+time nobody in it chose — and that is much cheaper to allow for than to
+retrofit.
+
+What a tournament actually *is* here — brackets, scheduling, prizes,
+registration, who runs it — is undecided and needs its own brainstorm.
+
+## D49 — The dedicated server is bought when the product is ready to deploy
+
+**Owner decision, 2026-08-24.** Not before.
+
+This matches the spec, which has always said a dedicated box before public
+launch, and it is the right economic call: paying for a second server through
+months of development buys nothing, because development load is negligible and
+the current box is measurably idle.
+
+What it means in practice is that **the move is part of launch, not a
+precursor to it.** The risks of sharing — one uplink, one IP address, so
+filtering aimed at either side hits both — are acceptable while the only users
+are us, and unacceptable the moment real players arrive. So the migration has
+to be rehearsed rather than improvised on the day:
+
+- Every server-side piece is already a systemd unit deployed by script, and
+  `scripts/deploy.sh` takes a host. Nothing is configured by hand, which is
+  what makes this a rehearsal rather than a rebuild.
+- The one piece of state that cannot be regenerated is `/etc/finallobby/relay.key`.
+  Clients carry the matching public key, so it moves with the platform or every
+  installed copy stops working.
+- The relay's address is stamped into client binaries at build time, so the new
+  server's address must be published to installed copies *before* the old one
+  goes away. The self-update path already carries this; the ordering is what
+  matters and it is easy to get backwards.
+
+Recorded now so that none of the above is discovered on the day.

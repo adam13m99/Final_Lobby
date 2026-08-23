@@ -463,9 +463,17 @@ installs.
 
 ## 12. Explicitly not doing
 
-Voice chat, tournaments, guilds, mobile, multi-game at launch, anti-cheat
+Voice chat, ~~tournaments~~, guilds, mobile, multi-game at launch, anti-cheat
 drivers, game binary modification, custom Dota server binaries, public internet
 matchmaking, permanent room networks, cross-room visibility.
+
+> **Superseded 2026-08-24 — tournaments.** The owner has since decided
+> tournaments are a real feature (D48), with an entry in the lobby toolbar
+> (D42). Nothing is being designed yet and none should be until accounts, the
+> room work and the new lobby are in — but the room and account models are
+> being built knowing that scheduled multi-room competition is coming, because
+> that is far cheaper to allow for than to retrofit. The rest of this list
+> stands.
 
 There is no Dota 2 dedicated server in this design. The host's PC is the game
 server, as it was in GameRanger and in DotaIranConnect. This was confirmed by
