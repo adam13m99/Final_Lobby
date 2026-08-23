@@ -50,11 +50,18 @@ the predecessor platform. Reasons are in `docs/decisions.md`.
 
 - **GitHub is DPI-blocked from this PC.** TCP connects, then stalls. Use
   `./scripts/git-sync.sh push|pull`, which tunnels through the server.
-- **Server `87.107.110.199` runs a live, unrelated SNI proxy business**
-  (CoreDNS on 53, nginx on TCP 443) with real users. Development and testing
-  only. Do not disturb it. A dedicated server is bought before launch.
+- **Server `87.107.110.199` runs a live, unrelated business** — the
+  `nati-filter` control plane: WireGuard on UDP 51821, nginx SNI routing on
+  TCP 443 fed from inside that tunnel, CoreDNS, PostgreSQL, and a reverse
+  tunnel to Paris. Real users. Development and testing only; do not disturb
+  it. **We hold UDP 443 and TCP 7001, and nothing else.** A dedicated server
+  is bought before launch. Survey before assuming: it changes.
 - **Physical test capacity is two PCs**, one host one client. Anything larger
   is simulated via `loadtest/`.
+- **To put a build on a test PC, run `./scripts/publish.sh`.** It stamps the
+  server details into the binaries, uploads one installer, and prints a
+  link. Installed copies pick up later builds themselves. Never go back to
+  copying a folder.
 
 ## Product rules (owner decisions — ask, never assume)
 

@@ -401,3 +401,95 @@ silent for 90 seconds - six missed keepalives, since clients send one every
 15. A quiet player who is watching rather than moving still sends keepalives,
 and a test covers exactly that case so the timeout can never be tightened
 into disconnecting real players.
+
+## D31 — Identity stays a name with no password, for the test only
+
+**Decided by the product owner, 2026-08-23.**
+
+A player is a chosen name plus an ID generated at install. There is no
+password and no account.
+
+The consequence is understood and accepted: **a kicked player who reinstalls
+comes back as somebody new**, so the five-minute block, room ownership and
+declared MMR all rest on nothing an attacker has to respect. For two people
+testing on two machines that costs nothing. For real players it is a hole,
+and it must be closed before they arrive.
+
+Recorded here so that nobody later reads the kick-block tests as evidence
+that kicking works against someone who does not want to be kicked.
+
+## D32 — The app is downloaded from a link, not copied on a stick
+
+The first test build shipped a folder containing three executables, two
+PowerShell scripts and a `setup.txt` holding the API token in plaintext. It
+had to be carried to the second machine, right-clicked, and then a server
+address and access code typed into a setup screen. Every fix repeated all of
+it on both machines.
+
+Now there is one link, one file, one permission prompt and a name to choose.
+The server address, access code, relay address and relay key are stamped into
+the binary at link time, so there is nothing to mistype and no token sitting
+in a text file on two PCs.
+
+**The download is served by the coordinator on TCP 7001**, which we already
+own and which is already open. A separate web server would need a new
+listening port and a new firewall rule; a vhost on the box's nginx would mean
+editing a configuration that an unrelated live business depends on. Neither
+is worth it to serve one file.
+
+A browser cannot send a bearer token, so the download cannot sit behind the
+API's authentication. The unguessable path segment is the secret instead.
+That is weak, deliberately: the worst case is a stranger downloading a test
+build of a lobby for a game they cannot reach. It goes away with real
+accounts.
+
+## D33 — The app updates itself, and "different" is what triggers it
+
+Without self-update, every fix during a test session costs a reinstall on
+every machine being tested, which in practice means the session stops while
+somebody walks to the other PC.
+
+The app compares its own build stamp against the published manifest and
+downloads anything **different** — not anything newer. Version strings here
+are build stamps, not an ordered series of releases, and if a bad build goes
+out mid-session then replacing it has to reach the test machines exactly as
+readily as a fix does.
+
+The downloaded file is checked against the manifest hash before anything will
+execute it, and a failed check leaves nothing behind on disk.
+
+Installing an update asks for Windows permission once. That is a deliberate
+limit on the no-UAC promise, which covers **playing** — connecting, joining,
+launching Dota — and not replacing the program's own files. Every Windows
+application behaves this way and pretending otherwise would mean giving a
+user-writable directory to something the system account executes.
+
+## D34 — The machine runs the acceptance checks, not a person
+
+The first acceptance document was fourteen numbered cases asking someone to
+read values off a screen and write them down, on two machines, and then read
+them aloud to whoever was fixing things.
+
+The app now has a Diagnostics button that checks the server, the service,
+Dota, the tunnel and the other player, and posts the results to the
+coordinator. Both machines' runs can be read from one place.
+
+What is deliberately **not** automated is whether a real Dota 2 match ran.
+No check can answer that, and a green tick claiming otherwise would be worse
+than no tick at all. That stays a human observation, and it is the gate.
+
+## D35 — Nothing we add goes near the other business on this box
+
+Re-confirmed 2026-08-23, after the owner rebuilt the `nati-filter` control
+plane on the same server.
+
+That stack now holds WireGuard on UDP 51821, a Python control plane on
+127.0.0.1:8080, PostgreSQL on 127.0.0.1:5432, an nginx stream router on TCP
+443 fed from inside the WireGuard tunnel, and a reverse SSH tunnel to Paris.
+Public TCP 443 is no longer accepted from the internet at all.
+
+We hold **UDP 443** and **TCP 7001**, and nothing else. UDP 443 and TCP 443
+are different sockets and coexist without either side knowing. The download
+went onto 7001 rather than taking a new port precisely to keep that count at
+two. `scripts/publish.sh` checks nginx, CoreDNS and the relay are still
+running after every publish and prints the result, rather than assuming it.

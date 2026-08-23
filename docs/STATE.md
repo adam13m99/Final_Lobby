@@ -5,14 +5,26 @@ this file is a convenience index, not an authority.
 
 ## Current phase
 
-Sub-project 1: network core. **Installable prototype ready.** Relay and
-coordinator are deployed and running; the Windows service, desktop app and
-installer all work on the development PC. Dota 2 launches and its listen
-server comes up. What remains is Task 16 itself - the real two-PC match -
-which needs a second machine and a person at each.
+Sub-project 1: network core. **The app is downloadable and installs
+itself.** Relay and coordinator are deployed; the Windows service, desktop
+app and installer all work on the development PC; Dota 2 launches and its
+listen server comes up. What remains is Task 16 itself - the real two-PC
+match - which needs a second machine and a person at each.
 
-Hand the second PC `dist/FinalLobby-test/` from `./scripts/bundle.sh` and
-follow `docs/testing/two-pc-acceptance.md`.
+**To test on a second PC:** run `./scripts/publish.sh`. It builds, stamps
+the server details into the binaries, uploads, and prints a link. Open that
+link on each PC, run the file, allow one prompt, pick a name. Then follow
+`docs/testing/two-pc-acceptance.md`.
+
+Publishing again during a session is how fixes reach both machines: an
+installed copy notices on its next launch and offers the new build.
+
+Diagnostics are run by the app, not by hand, and uploaded. Read both
+machines' results from here with:
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" http://87.107.110.199:7001/v1/diag
+```
 
 ## Blockers
 
@@ -25,6 +37,23 @@ follow `docs/testing/two-pc-acceptance.md`.
 | Data plane not using batched syscalls | One `sendto`/`recvfrom` per packet caps the relay near 30k pps, which covers the 500-player target with headroom but not much beyond it. `recvmmsg`/`sendmmsg` batching is the standard fix. Deferred: not needed at the current target. | deferred |
 | Race detector unavailable locally | `go test -race` needs cgo and there is no C compiler on the dev PC. Run it on the Linux server, which has one. Not yet scripted. | open |
 | ~~Relay not deployable~~ | Resolved 2026-08-18. `scripts/deploy.sh` builds, uploads and restarts it under systemd. Live on UDP 443 at 87.107.110.199, verified reachable from the dev PC at 4-8 ms. | resolved |
+
+## Test client (plan: `docs/superpowers/plans/2026-08-23-test-client.md`)
+
+Built 2026-08-23 after the owner rejected the copy-a-folder test method.
+
+| # | Task | Status |
+|---|---|---|
+| 1 | Download endpoint on the coordinator | **done** |
+| 2 | Server details stamped into the binary at build time | **done** |
+| 3 | One-file self-elevating installer | **done** |
+| 4 | Self-update | **done** — verified over three consecutive builds |
+| 5 | Players and self-declared MMR | **done** |
+| 6 | Lobby chat and room chat | **done** |
+| 7 | Room membership with names and MMR | **done** |
+| 8 | Admin spectator seat | **done** |
+| 9 | Lobby and Room screens, switchable | **done** |
+| 10 | Diagnostics that report themselves to the server | **done** |
 
 ## Task ledger
 
@@ -47,7 +76,7 @@ Plan: `docs/superpowers/plans/2026-08-18-network-core.md`
 | 13 | Fail-closed lease watchdog | **done** | |
 | 14 | Dota 2 launch with argument allowlist | **done** | |
 | 15 | Load test harness | **done** | |
-| 16 | Physical two-PC acceptance test | **ready to run** — GUI app, installer and checklist all prepared; needs two machines | |
+| 16 | Physical two-PC acceptance test | **ready to run** — downloadable installer, lobby UI and self-checking diagnostics all prepared; needs two machines | |
 
 ## Completed outside the plan
 

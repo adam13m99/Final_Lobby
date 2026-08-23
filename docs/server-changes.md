@@ -146,6 +146,49 @@ box are the two systemd services.
 
 ---
 
+## 7. A directory for the published installer
+
+Added 2026-08-23.
+
+```
+/var/lib/finallobby/dist/          755 root:root
+    FinalLobby-Setup.exe           644  the installer players download
+    version.json                   644  what build is current, and its hash
+/etc/finallobby/download.key       640 root:finallobby
+```
+
+`download.key` is the unguessable path segment the download is served under.
+A browser cannot send a bearer token, so this is what stands in front of the
+file. It is generated once by `scripts/publish.sh` and kept.
+
+The coordinator only reads these; `scripts/publish.sh` writes them over SSH.
+The systemd unit gained `-dist-dir` and `-download-key-file`, and
+`ReadOnlyPaths=/var/lib/finallobby` so the service cannot write there even if
+it wanted to.
+
+**No new listening port and no new firewall rule.** The download is served by
+the coordinator on TCP 7001, which was already open.
+
+## Note: what the other project now runs on this box
+
+Surveyed 2026-08-23, read-only, to be sure we do not overlap.
+
+| What | Where | Ours? |
+|---|---|---|
+| nginx stream SNI router | TCP 443, and 127.0.0.1:9443 | no |
+| WireGuard (`wg1`) | UDP 51821 | no |
+| CoreDNS | 53, and 127.0.0.1:5353, 9153 | no |
+| PostgreSQL | 127.0.0.1:5432 | no |
+| `nati-cp-api` control plane | 127.0.0.1:8080 | no |
+| `nati-cp-tunnel` reverse SSH to Paris | outbound | no |
+| **relay** | **UDP 443** | **yes** |
+| **coordinator** | **TCP 7001** | **yes** |
+
+Public TCP 443 is no longer accepted from the internet: `ufw` allows only
+22/tcp, 443/udp and 7001/tcp, and that traffic now arrives over WireGuard
+instead. Our relay on **UDP** 443 and their nginx on **TCP** 443 are
+different sockets and do not interact.
+
 ## Complete removal
 
 To take Final Lobby off this machine entirely:
@@ -154,7 +197,7 @@ To take Final Lobby off this machine entirely:
 systemctl disable --now relay.service coordinator.service
 rm -f /etc/systemd/system/relay.service /etc/systemd/system/coordinator.service
 systemctl daemon-reload
-rm -rf /opt/finallobby /etc/finallobby
+rm -rf /opt/finallobby /etc/finallobby /var/lib/finallobby
 rm -f /etc/sysctl.d/99-finallobby.conf
 ufw delete allow 443/udp
 ufw delete allow 7001/tcp
