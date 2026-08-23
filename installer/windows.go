@@ -82,7 +82,11 @@ func stopExisting(dir string) {
 		say("Removing the previous version")
 		_ = exec.Command(svcExe, "uninstall").Run()
 	} else if serviceExists() {
-		// Its binary is gone; unregister the service directly.
+		// Its binary is somewhere else, or gone: unregister it directly.
+		// This is the path an upgrade from the first test build takes, and
+		// it used to happen in silence, which made a working install look
+		// like it had skipped a step.
+		say("Removing the previous version")
 		_ = exec.Command("sc.exe", "stop", serviceName).Run()
 		_ = exec.Command("sc.exe", "delete", serviceName).Run()
 	}

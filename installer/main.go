@@ -38,14 +38,9 @@ var payload embed.FS
 // logged in.
 const appName = "Final Lobby"
 
-var components = []struct {
-	file    string
-	service bool
-}{
-	{"netservice.exe", true},
-	{"lobbyapp.exe", false},
-	{"lobbycli.exe", false},
-}
+// components are the executables carried inside this installer, written out
+// in this order.
+var components = []string{"netservice.exe", "lobbyapp.exe", "lobbycli.exe"}
 
 func main() {
 	silent := hasFlag("/silent") || hasFlag("-silent")
@@ -99,12 +94,13 @@ func install(silent bool) error {
 	// binary already deleted - is exactly the state a second attempt runs
 	// into, so each half is handled on its own.
 	stopExisting(dir)
+	removeLegacyInstall()
 
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("could not create %s: %w", dir, err)
 	}
-	for _, c := range components {
-		if err := writeComponent(dir, c.file); err != nil {
+	for _, name := range components {
+		if err := writeComponent(dir, name); err != nil {
 			return err
 		}
 	}
@@ -176,9 +172,51 @@ func writeComponent(dir, name string) error {
 	return nil
 }
 
+// removeLegacyInstall clears out the per-user folder the first test build
+// installed into. Leaving it behind means two copies of the app on disk and
+// a desktop shortcut that may point at the older one.
+func removeLegacyInstall() {
+	// Guard on the environment variable, not on the joined path. With
+	// LOCALAPPDATA unset, filepath.Join returns the bare relative name
+	// "FinalLobby" and this would delete whatever happens to be sitting in
+	// the working directory.
+	base := os.Getenv("LOCALAPPDATA")
+	if base == "" || !filepath.IsAbs(base) {
+		return
+	}
+	old := filepath.Join(base, "FinalLobby")
+	if _, err := os.Stat(old); err != nil {
+		return
+	}
+	// Never delete the folder we are running from. An earlier version of the
+	// updater downloaded this installer into exactly this directory, so the
+	// removal below was asking Windows to delete a running executable - it
+	// failed, silently, and left the folder half-emptied.
+	if exe, err := os.Executable(); err == nil {
+		if within(old, filepath.Dir(exe)) {
+			return
+		}
+	}
+	if err := os.RemoveAll(old); err == nil {
+		say("Removed the older per-user copy")
+	}
+}
+
+// within reports whether path is dir or sits inside it.
+func within(dir, path string) bool {
+	a, err1 := filepath.Abs(dir)
+	b, err2 := filepath.Abs(path)
+	if err1 != nil || err2 != nil {
+		return false
+	}
+	rel, err := filepath.Rel(a, b)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
 func removeAll() error {
 	dir := installDir()
 	stopExisting(dir)
+	removeLegacyInstall()
 	unregisterUninstall()
 	if p, err := desktopShortcutPath(); err == nil {
 		_ = os.Remove(p)

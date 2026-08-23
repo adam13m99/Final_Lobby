@@ -93,6 +93,7 @@ func (s *server) checkForUpdate() {
 	if manifestURL == "" {
 		return
 	}
+	clearOldUpdate()
 	m, differs, err := selfupdate.Check(manifestURL, build.Version, 10*time.Second)
 	if err != nil {
 		// A player whose connection is down still gets the app they have.
@@ -108,11 +109,7 @@ func (s *server) checkForUpdate() {
 	s.update = &pendingUpdate{Version: m.Version}
 	s.mu.Unlock()
 
-	dir, err := os.UserCacheDir()
-	if err != nil {
-		dir = os.TempDir()
-	}
-	dir = filepath.Join(dir, "FinalLobby")
+	dir := updateDir()
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		s.updateFailed(m.Version, err)
 		return
@@ -128,6 +125,24 @@ func (s *server) checkForUpdate() {
 	s.update = &pendingUpdate{Version: m.Version, Ready: true, Path: path}
 	s.mu.Unlock()
 	fmt.Printf("Update %s is ready to install.\n", m.Version)
+}
+
+// updateDir is where a downloaded installer waits to be run.
+//
+// Deliberately not %LOCALAPPDATA%\FinalLobby, which is where the first test
+// build installed itself: the new installer removes that folder, and putting
+// the installer inside the folder it is about to delete meant it was trying
+// to delete itself while running. It failed silently and left the folder
+// behind, which is how the collision was noticed at all.
+func updateDir() string {
+	return filepath.Join(os.TempDir(), "FinalLobby-update")
+}
+
+// clearOldUpdate deletes an installer left over from a previous update. It
+// runs before the update check, when nothing can still be executing from
+// there, and saves carrying a spare copy of the whole app on disk forever.
+func clearOldUpdate() {
+	_ = os.RemoveAll(updateDir())
 }
 
 func (s *server) updateFailed(version string, err error) {
