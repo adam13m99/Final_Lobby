@@ -470,3 +470,43 @@ input::placeholder { color: #5a6377; }
   font: inherit; font-size: .86rem; color: var(--text);
   white-space: pre-wrap; overflow-wrap: break-word;
 }
+
+/* ------------------------------------------------------------ moderation */
+/* Long lists of rows that are read rather than clicked through: sanctions,
+   audit entries, rooms, announcements. They share one shape so a moderator
+   reading four panels is reading one layout four times. */
+
+.record { border-block-start: 1px solid var(--line); padding: 1rem 1.2rem; }
+.record h4 {
+  margin: 1.2rem 0 .5rem; font-size: .78rem; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--dim);
+}
+
+.loglist { display: flex; flex-direction: column; }
+.logrow {
+  display: flex; align-items: center; gap: .6rem;
+  padding: .5rem 1.2rem; border-block-start: 1px solid var(--line);
+  font-size: .86rem;
+}
+.logrow:first-child { border-block-start: 0; }
+.grow { flex: 1; min-width: 0; overflow-wrap: break-word; }
+
+.labelrow { display: flex; flex-wrap: wrap; gap: .4rem; margin-block-end: .6rem; }
+.labeltag {
+  display: inline-flex; align-items: center; gap: .35rem;
+  padding: .18rem .5rem; border-radius: 999px;
+  background: var(--panel3); border: 1px solid var(--line);
+  font-size: .78rem;
+}
+
+.sanctionform, .bannerform {
+  display: flex; flex-wrap: wrap; gap: .6rem; align-items: center;
+}
+.bannerform { flex-direction: column; align-items: stretch; padding: 0 1.2rem 1rem; }
+.sanctionform #mod-reason { flex: 1; min-width: 14rem; }
+.sanctionform #mod-minutes { width: 6rem; }
+.bannerform textarea {
+  resize: vertical; font: inherit; font-size: .88rem;
+  background: #12141b; color: var(--text);
+  border: 1px solid var(--line); padding: .5rem .6rem;
+}

@@ -158,6 +158,7 @@ function render() {
     renderChat("roomlog", s.room_chat || []);
   }
   renderDiag();
+  renderMod(s);
 }
 
 function pill(id, ok, text) {
@@ -698,6 +699,257 @@ function renderDiag() {
   }
 }
 
+// ------------------------------------------------------------ moderation
+
+// What T8 built, with a door on it (D43, D47).
+//
+// Nothing here is a permission check. Every call goes to the coordinator,
+// which refuses anybody whose session holds no role; this only decides what
+// is worth drawing. Hiding the toolbar entry from a player is a courtesy, and
+// treating it as a defence would be a mistake.
+//
+// Everything a moderator writes down travels with the action. The audit log
+// is read months later by somebody who was not there, and "banned" with no
+// reason beside it is a row that cannot be reviewed, appealed, or defended.
+
+let modRecord = null;
+let modLabels = [];
+// Who is on screen, remembered so an action can redraw the record it just
+// changed. The username field is not it: a moderator types a name, acts, then
+// edits the field to look somebody else up, and the redraw would follow the
+// half-typed name instead of the person they just banned.
+let lastLookedUp = "";
+
+function renderMod(s) {
+  const role = s.role || "";
+  $("modtab").classList.toggle("hidden", !role);
+  if (!role) {
+    if (screen === "mod") show("lobby");
+    return;
+  }
+  $("mod-role").textContent = t(role === "head_admin" ? "mod.role.head" : "mod.role.admin");
+  $("mod-staffpanel").classList.toggle("hidden", role !== "head_admin");
+
+  renderModRooms(s.rooms || []);
+  renderModBanners(s.banners || []);
+  renderStaff(s.staff || []);
+}
+
+// renderModRooms lists every room with the two things staff can do to one:
+// end it, or hand it to somebody else already in it.
+function renderModRooms(rooms) {
+  const box = $("mod-rooms");
+  box.textContent = "";
+  if (!rooms.length) {
+    box.appendChild(el("p", "muted pad", t("mod.rooms.none")));
+    return;
+  }
+  for (const r of rooms) {
+    const row = el("div", "logrow");
+    row.appendChild(el("span", "grow", t("mod.room.line", {
+      room: r.name,
+      host: r.host_nick || t("status.dash"),
+      n: r.members ? r.members.length : 0,
+    })));
+
+    const pick = el("select", "small");
+    pick.appendChild(el("option", "", t("mod.host.pick")));
+    for (const m of r.members || []) {
+      if (m.is_host) continue;
+      const o = el("option", "", m.nick);
+      o.value = m.player_id;
+      pick.appendChild(o);
+    }
+    row.appendChild(pick);
+
+    const hand = el("button", "tiny", t("mod.host.give"));
+    hand.onclick = () => {
+      if (!pick.value) { banner(t("mod.host.nobody")); return; }
+      const why = window.prompt(t("mod.reason.ask"));
+      if (!why) return;
+      act(() => api("/api/admin/rooms/host",
+        { room_id: r.id, new_host_id: pick.value, reason: why }));
+    };
+    row.appendChild(hand);
+
+    const close = el("button", "tiny danger", t("mod.room.close"));
+    close.onclick = () => {
+      const why = window.prompt(t("mod.reason.ask"));
+      if (!why) return;
+      act(() => api("/api/admin/rooms/close", { room_id: r.id, reason: why }));
+    };
+    row.appendChild(close);
+    box.appendChild(row);
+  }
+}
+
+// renderModBanners lists the announcement strip as it stands, so an editor
+// can see what everybody else is seeing before adding to it.
+function renderModBanners(ads) {
+  const box = $("mod-bannerlist");
+  box.textContent = "";
+  if (!ads.length) {
+    box.appendChild(el("p", "muted pad", t("mod.banners.none")));
+    return;
+  }
+  for (const a of ads) {
+    const row = el("div", "logrow");
+    row.appendChild(el("span", "grow", a.title || a.body));
+    row.appendChild(el("span", "muted small", t(a.active ? "mod.banner.on" : "mod.banner.off")));
+    const del = el("button", "tiny danger", t("mod.banner.remove"));
+    del.onclick = () => act(() => api("/api/admin/banners/remove", { id: a.id }));
+    row.appendChild(del);
+    box.appendChild(row);
+  }
+}
+
+// renderStaff is drawn for the head admin alone (D47).
+function renderStaff(staff) {
+  const box = $("mod-staff");
+  box.textContent = "";
+  for (const m of staff) {
+    const row = el("div", "logrow");
+    row.appendChild(el("span", "grow", m.display_name));
+    row.appendChild(el("span", "muted small",
+      t(m.role === "head_admin" ? "mod.role.head" : "mod.role.admin")));
+    if (m.role !== "head_admin") {
+      const drop = el("button", "tiny danger", t("mod.staff.revoke"));
+      drop.onclick = () => act(() =>
+        api("/api/admin/staff", { target_id: m.account_id, grant: false }));
+      row.appendChild(drop);
+    }
+    box.appendChild(row);
+  }
+}
+
+async function lookUp(username) {
+  if (!username) return;
+  lastLookedUp = username;
+  try {
+    modRecord = await api("/api/admin/player?username=" + encodeURIComponent(username));
+    if (!modLabels.length) {
+      const got = await api("/api/admin/labels");
+      modLabels = got.labels || [];
+    }
+    banner("");
+  } catch (e) {
+    modRecord = null;
+    banner(e.message);
+  }
+  renderRecord();
+}
+
+// renderRecord draws one person's whole moderation history in one place:
+// what they are barred from now, what marks they carry, every sanction they
+// have had, and everything staff have done to them.
+function renderRecord() {
+  const box = $("mod-record");
+  box.classList.toggle("hidden", !modRecord);
+  if (!modRecord) return;
+  const r = modRecord;
+
+  $("mod-who").textContent = r.display_name || r.player_id;
+  $("mod-restriction").textContent = restrictionLine(r.restriction, r.kicks_this_week);
+
+  const labels = $("mod-labels");
+  labels.textContent = "";
+  if (!(r.labels || []).length) {
+    labels.appendChild(el("span", "muted small", t("mod.labels.none")));
+  }
+  for (const name of r.labels || []) {
+    const tag = el("span", "labeltag", name);
+    const off = el("button", "tiny", t("mod.label.remove"));
+    off.onclick = () => act(async () => {
+      await api("/api/admin/label", { target_id: r.player_id, label: name, remove: true });
+      await lookUp(lastLookedUp);
+    });
+    tag.appendChild(off);
+    labels.appendChild(tag);
+  }
+
+  const pick = $("mod-label");
+  pick.textContent = "";
+  for (const name of modLabels) {
+    const o = el("option", "", name);
+    o.value = name;
+    pick.appendChild(o);
+  }
+
+  drawSanctions(r);
+  drawActions(r.actions || []);
+}
+
+// restrictionLine is the first thing a moderator needs: what is this person
+// barred from right now, and how often have they been kicked lately.
+function restrictionLine(rest, kicks) {
+  const parts = [];
+  if (rest && rest.banned) parts.push(t("mod.restricted.banned"));
+  if (rest && rest.muted) parts.push(t("mod.restricted.muted"));
+  if (rest && rest.timeout) parts.push(t("mod.restricted.timeout"));
+  const what = parts.length ? parts.join(", ") : t("mod.restricted.none");
+  return t("mod.restricted.line", { what: what, n: kicks || 0 });
+}
+
+function drawSanctions(r) {
+  const box = $("mod-sanctions");
+  box.textContent = "";
+  const list = r.sanctions || [];
+  if (!list.length) {
+    box.appendChild(el("p", "muted pad", t("mod.history.none")));
+    return;
+  }
+  for (const sn of list) {
+    const row = el("div", "logrow");
+    row.appendChild(el("span", "grow", t("mod.history.line", {
+      kind: t("mod.sanction." + sn.kind),
+      reason: sn.reason,
+      when: when(sn.at),
+    })));
+    if (lifted(sn)) {
+      row.appendChild(el("span", "muted small", t("mod.history.lifted")));
+    } else {
+      const lift = el("button", "tiny", t("mod.lift"));
+      lift.onclick = () => act(async () => {
+        await api("/api/admin/sanction/lift", { sanction_id: sn.id, target_id: r.player_id });
+        await lookUp(lastLookedUp);
+      });
+      row.appendChild(lift);
+    }
+    box.appendChild(row);
+  }
+}
+
+// lifted reads Go's zero time, which arrives as the year 1, rather than as an
+// absent field. Treating that as a real date would show every open sanction
+// as already ended.
+function lifted(sn) {
+  return !!sn.lifted_at && !sn.lifted_at.startsWith("0001-01-01");
+}
+
+function drawActions(actions) {
+  const box = $("mod-actions");
+  box.textContent = "";
+  if (!actions.length) {
+    box.appendChild(el("p", "muted pad", t("mod.actions.none")));
+    return;
+  }
+  for (const a of actions) {
+    const row = el("div", "logrow");
+    row.appendChild(el("span", "grow", t("mod.actions.line", {
+      action: a.action,
+      detail: a.detail || "",
+      when: when(a.at),
+    })));
+    box.appendChild(row);
+  }
+}
+
+function when(stamp) {
+  if (!stamp) return "";
+  const d = new Date(stamp);
+  return isNaN(d.getTime()) ? "" : d.toLocaleString();
+}
+
 // --------------------------------------------------------------- screens
 
 function show(name) {
@@ -719,6 +971,59 @@ document.querySelectorAll(".chattab").forEach((tab) => {
 });
 
 $("chatcollapse").onclick = () => $("chatpanel").classList.toggle("collapsed");
+
+// Moderation. Each form sends what the coordinator requires and nothing it
+// does not: a reason with every action, and a duration the moderator chose
+// rather than one an empty field produced.
+$("modfind").onsubmit = (e) => {
+  e.preventDefault();
+  lookUp($("mod-username").value.trim());
+};
+
+$("modlabelform").onsubmit = (e) => {
+  e.preventDefault();
+  if (!modRecord || !$("mod-label").value) return;
+  act(async () => {
+    await api("/api/admin/label",
+      { target_id: modRecord.player_id, label: $("mod-label").value });
+    await lookUp(lastLookedUp);
+  });
+};
+
+$("modsanctionform").onsubmit = (e) => {
+  e.preventDefault();
+  if (!modRecord) return;
+  const reason = $("mod-reason").value.trim();
+  if (!reason) { banner(t("mod.reason.required")); return; }
+  act(async () => {
+    await api("/api/admin/sanction", {
+      target_id: modRecord.player_id,
+      kind: $("mod-kind").value,
+      reason: reason,
+      minutes: Number($("mod-minutes").value) || 0,
+    });
+    $("mod-reason").value = "";
+    await lookUp(lastLookedUp);
+  });
+};
+
+$("modbannerform").onsubmit = (e) => {
+  e.preventDefault();
+  const title = $("ban-title").value.trim();
+  const body = $("ban-body").value.trim();
+  if (!title && !body) { banner(t("mod.banner.empty")); return; }
+  act(async () => {
+    await api("/api/admin/banners", {
+      title: title,
+      body: body,
+      link_url: $("ban-link").value.trim(),
+      active: $("ban-active").checked,
+    });
+    $("ban-title").value = "";
+    $("ban-body").value = "";
+    $("ban-link").value = "";
+  });
+};
 
 // Search and filter run against the list already on screen, so they are
 // instant rather than waiting for the next two-second poll.

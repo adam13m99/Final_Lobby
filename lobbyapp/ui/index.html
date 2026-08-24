@@ -92,6 +92,12 @@
   <button class="nav" data-screen="checks">
     <span class="ico" aria-hidden="true">✚</span><span data-t="nav.checks"></span>
   </button>
+  <!-- Staff only, and hidden rather than disabled: an entry a player can see
+       but never use is a question they will ask instead of playing. The
+       coordinator refuses every call behind it regardless (D47). -->
+  <button class="nav hidden" data-screen="mod" id="modtab">
+    <span class="ico" aria-hidden="true">⚖</span><span data-t="nav.mod"></span>
+  </button>
 
   <div class="nav-gap"></div>
 
@@ -247,6 +253,99 @@
       <p class="muted pad" data-t="checks.none"></p>
     </div>
     <p class="muted small pad" id="diagwhen"></p>
+  </div>
+</section>
+
+<!-- ------------------------------------------------------- MODERATION -->
+<!-- What T8 built, with a door on it (D43, D47). Every panel here asks the
+     coordinator, which refuses anybody without a role; this screen only
+     decides what is worth drawing. -->
+<section id="screen-mod" class="screen hidden">
+  <div class="panel wide">
+    <div class="panel-head">
+      <div>
+        <h2 data-t="mod.title"></h2>
+        <p class="muted small" data-t="mod.blurb"></p>
+      </div>
+      <span class="badge" id="mod-role"></span>
+    </div>
+
+    <form class="inline pad" id="modfind">
+      <input id="mod-username" maxlength="32" data-t-placeholder="mod.find.placeholder" autocomplete="off">
+      <button class="primary" type="submit" data-t="mod.find"></button>
+    </form>
+
+    <div id="mod-record" class="record hidden">
+      <div class="panel-head plain">
+        <div>
+          <h3 id="mod-who"></h3>
+          <p class="muted small" id="mod-restriction"></p>
+        </div>
+      </div>
+
+      <div class="labelrow" id="mod-labels"></div>
+      <form class="inline" id="modlabelform">
+        <select id="mod-label"></select>
+        <button type="submit" data-t="mod.label.add"></button>
+      </form>
+
+      <h4 data-t="mod.sanction.title"></h4>
+      <form class="sanctionform" id="modsanctionform">
+        <label class="field inline-field">
+          <span data-t="mod.sanction.kind"></span>
+          <select id="mod-kind">
+            <option value="mute" data-t="mod.sanction.mute"></option>
+            <option value="timeout" data-t="mod.sanction.timeout"></option>
+            <option value="ban" data-t="mod.sanction.ban"></option>
+          </select>
+        </label>
+        <label class="field inline-field">
+          <span data-t="mod.sanction.minutes"></span>
+          <input id="mod-minutes" type="number" min="0" max="525600" value="60">
+        </label>
+        <input id="mod-reason" maxlength="200" data-t-placeholder="mod.reason.placeholder" autocomplete="off">
+        <button class="danger" type="submit" data-t="mod.sanction.apply"></button>
+      </form>
+      <p class="muted small" data-t="mod.sanction.forever"></p>
+
+      <h4 data-t="mod.history"></h4>
+      <div id="mod-sanctions" class="loglist"></div>
+
+      <h4 data-t="mod.actions"></h4>
+      <div id="mod-actions" class="loglist"></div>
+    </div>
+  </div>
+
+  <div class="panel wide">
+    <div class="panel-head plain"><h3 data-t="mod.rooms"></h3></div>
+    <p class="muted small pad" data-t="mod.rooms.blurb"></p>
+    <div id="mod-rooms" class="loglist"></div>
+  </div>
+
+  <div class="panel wide">
+    <div class="panel-head plain"><h3 data-t="mod.banners"></h3></div>
+    <p class="muted small pad" data-t="mod.banners.blurb"></p>
+    <form class="bannerform" id="modbannerform">
+      <input id="ban-title" maxlength="80" data-t-placeholder="mod.banner.title" autocomplete="off">
+      <textarea id="ban-body" maxlength="400" rows="2" data-t-placeholder="mod.banner.body"></textarea>
+      <input id="ban-link" maxlength="300" data-t-placeholder="mod.banner.link" autocomplete="off">
+      <div class="inline">
+        <label class="checkrow">
+          <input id="ban-active" type="checkbox" checked>
+          <span data-t="mod.banner.active"></span>
+        </label>
+        <button class="primary" type="submit" data-t="mod.banner.save"></button>
+      </div>
+    </form>
+    <div id="mod-bannerlist" class="loglist"></div>
+  </div>
+
+  <!-- Head admin only: an admin who could appoint another admin would mean
+       the role spreads and cannot be pulled back (D47). -->
+  <div class="panel wide hidden" id="mod-staffpanel">
+    <div class="panel-head plain"><h3 data-t="mod.staff"></h3></div>
+    <p class="muted small pad" data-t="mod.staff.blurb"></p>
+    <div id="mod-staff" class="loglist"></div>
   </div>
 </section>
 

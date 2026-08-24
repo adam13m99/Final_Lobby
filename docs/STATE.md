@@ -31,7 +31,7 @@ curl -s -H "Authorization: Bearer $TOKEN" http://87.107.110.199:7001/v1/diag
 | Command | What it proves | Cost |
 |---|---|---|
 | `bash scripts/check.sh` | every module builds, vets, passes its own tests; the front-end JS and string files parse; no secret is tracked; the Rust shell compiles | seconds |
-| `bash scripts/smoke.sh` | a real coordinator with accounts switched on and a real app, walked through browsing without an account, reading the terms, signing up, hosting a room, signing out and back in, and a wrong password being refused — then the page itself, rendered in headless Chrome | ~40s |
+| `bash scripts/smoke.sh` | a real coordinator with accounts switched on and **two** real apps: browsing without an account, the terms, signing up, hosting a room, signing out and back in, a wrong password refused, the friend graph and a private message between the two, then a head admin appointed across a restart who sanctions, lifts, labels, closes and announces — and the page rendered in headless Chrome as both a player and a moderator | ~60s |
 
 **The interface is rendered, not just parsed.** The last section of
 `smoke.sh` drives headless Chrome in a throwaway profile at the running app
@@ -180,7 +180,7 @@ there; this is the summary.
 | T1 rename to LobbyBaz (D46) | **done** — `77d8a0d` |
 | T2 rooms move to a /27, 18 seats (D38) | **done** |
 | T3 room lifecycle: 1-minute host grace (D40) | **done** |
-| T4 kick escalation 1/3/5/7 min (D39) | **done** — as events, not live blocks (D52) |
+| T4 kick escalation 1/3/5/7 min (D39) | **done** — live block in memory, durable record in `kick_events` (D52) |
 | T5 accounts (D37) | **done** — server and client library; **not switched on yet, see below** |
 | T6 room privacy (D41) | **done** — all four doors, plus an MMR floor |
 | T7 friends (D41) | **done** — graph, blocks, private chat, invites, presence |
@@ -190,6 +190,21 @@ there; this is the summary.
 | T11 desktop application (D45) | **done** — shell builds and runs; bundle not yet installed anywhere |
 | T12 tournaments (D48) | **done as specified** — an honest placeholder, not the feature |
 | T13 terms of use | **done** — served, readable, versioned; **text needs the owner's sign-off** |
+| T14 moderation panel | **done** — T8's tools, reachable from the product at last |
+
+**Moderators can moderate from the app now.** T8 built roles, sanctions,
+labels, banners and an audit log, and until today the only way to use any of
+it was a hand-written request from a developer's PC. The Moderation entry
+appears in the toolbar for staff and for nobody else: look a player up by
+name, see what they are barred from and every sanction and staff action
+against them, mute/timeout/ban with a reason and a duration, lift one, label
+them, close a room or hand it to somebody else in it, post announcements, and
+— for the head admin alone — appoint and remove admins. Hiding the entry is a
+courtesy; the coordinator refuses every call behind it without a role.
+
+**A head admin is appointed once, at deployment**: `-head-admin <account id>`
+on the coordinator (D47). Until somebody holds that role nobody can appoint
+moderators, and the coordinator says so in its startup log.
 
 **There are terms now, and they need reading.** The sign-up screen asks people
 to accept terms of use, so there is something to accept: `docs/terms-en.md`,

@@ -26,8 +26,10 @@ say()  { printf '%s\n' "$*"; }
 WORK=$(mktemp -d)
 COORD_PID=""
 APP_PID=""
+APP_B_PID=""
 
 cleanup() {
+  [ -n "$APP_B_PID" ] && kill "$APP_B_PID" 2>/dev/null
   [ -n "$APP_PID" ]   && kill "$APP_PID"   2>/dev/null
   [ -n "$COORD_PID" ] && kill "$COORD_PID" 2>/dev/null
   sleep 1
@@ -220,32 +222,215 @@ if [ -z "$CHROME" ]; then
   say "  WARN  skipping - no Chrome or Edge found to render with"
 else
   PROFILE=$(cygpath -w "$WORK" 2>/dev/null || echo "$WORK")
-  "$CHROME" --headless --disable-gpu --no-first-run --no-default-browser-check     --user-data-dir="$PROFILE\chrome" --virtual-time-budget=8000     --enable-logging=stderr --v=0 --dump-dom "$APP_URL"     > "$WORK/dom.html" 2> "$WORK/chrome.err"
+fi
 
-  DOM=$(cat "$WORK/dom.html" 2>/dev/null)
-  if [ "$(printf '%s' "$DOM" | wc -c)" -gt 4000 ]; then
-    ok "the page renders"
+# draw TAG URL WANTED - render one page and check it, or say why not.
+draw() {
+  if [ -z "$CHROME" ]; then return 0; fi
+  "$CHROME" --headless --disable-gpu --no-first-run --no-default-browser-check     --user-data-dir="$PROFILE\chrome" --virtual-time-budget=8000     --enable-logging=stderr --v=0 --dump-dom "$2"     > "$WORK/$1.html" 2> "$WORK/$1.err"
+
+  local dom
+  dom=$(cat "$WORK/$1.html" 2>/dev/null)
+  if [ "$(printf '%s' "$dom" | wc -c)" -gt 4000 ]; then
+    ok "$1: the page renders"
   else
-    bad "the page renders"
+    bad "$1: the page renders"
   fi
-  expect "and drew the room list from live state"  "Smoke Room"  "$DOM"
+  expect "$1: and drew live data" "$3" "$dom"
 
   # An element the interface left empty is a key nobody wrote a string for.
-  BLANK=$(printf '%s' "$DOM" | grep -c "data-t=\"[a-z0-9._]*\"></" || true)
-  if [ "$BLANK" -eq 0 ]; then
-    ok "every translated element has words in it"
+  local blank
+  blank=$(printf '%s' "$dom" | grep -c "data-t=\"[a-z0-9._]*\"></" || true)
+  if [ "$blank" -eq 0 ]; then
+    ok "$1: every translated element has words in it"
   else
-    bad "$BLANK translated elements are empty"
+    bad "$1: $blank translated elements are empty"
   fi
 
-  NOISE=$(grep ":CONSOLE:" "$WORK/chrome.err" 2>/dev/null)
-  if [ -z "$NOISE" ]; then
-    ok "the console said nothing"
+  local noise
+  noise=$(grep ":CONSOLE:" "$WORK/$1.err" 2>/dev/null)
+  if [ -z "$noise" ]; then
+    ok "$1: the console said nothing"
   else
-    bad "the console complained"
+    bad "$1: the console complained"
     printf '%s
-' "$NOISE" | sed "s/^/        /" | head -10
+' "$noise" | sed "s/^/        /" | head -10
   fi
+}
+
+draw player "$APP_URL" "Smoke Room"
+if [ -n "$CHROME" ]; then
+  # An ordinary player must not be offered the moderation tools. The
+  # coordinator refuses them anyway; showing an entry that always says no is
+  # a question somebody asks instead of playing.
+  PTAB=$(grep -o '<button[^>]*id="modtab"' "$WORK/player.html" 2>/dev/null | head -1)
+  case "$PTAB" in
+    *hidden*) ok "an ordinary player is not offered the moderation tools" ;;
+    *)        bad "an ordinary player is offered the moderation tools" ;;
+  esac
+fi
+
+say ""
+say "=== a second player, and the friend graph ==="
+# T7 built friends, blocks and private messages on the coordinator. Nothing
+# had ever exercised them from the app, which is where they are used.
+#
+# The second app gets its own APPDATA, because a session file is per
+# installation and two players sharing one would be one player.
+mkdir -p "$WORK/b"
+APPDATA="$(cygpath -w "$WORK/b" 2>/dev/null || echo "$WORK/b")" \
+  "$WORK/lobbyapp.exe" -no-browser -url-only -listen 127.0.0.1:0 > "$WORK/appb.log" 2>&1 &
+APP_B_PID=$!
+
+APP_B_URL=""
+for _ in $(seq 1 40); do
+  APP_B_URL=$(head -1 "$WORK/appb.log" 2>/dev/null)
+  case "$APP_B_URL" in http://*) break ;; esac
+  sleep 0.25
+done
+case "$APP_B_URL" in
+  http://*) ok "the second app started" ;;
+  *)        bad "the second app started"; say "$(cat "$WORK/appb.log")" ;;
+esac
+APP_B=${APP_B_URL%%/?t=*}
+TOK_B=${APP_B_URL##*t=}
+
+callb() {
+  if [ $# -ge 3 ]; then
+    curl -sS -X "$1" -H "X-Lobby-Token: $TOK_B" -H 'Content-Type: application/json' \
+      -d "$3" "$APP_B$2" 2>&1
+  else
+    curl -sS -X "$1" -H "X-Lobby-Token: $TOK_B" "$APP_B$2" 2>&1
+  fi
+}
+
+B_SIGNUP=$(callb POST /api/auth/signup \
+  "{\"username\":\"smokefriend\",\"display_name\":\"Smoke Friend\",\"password\":\"a different long one\",\"terms_version\":\"$VER\"}")
+expect "the second player signs up"          '"ok":true'      "$B_SIGNUP"
+
+B_STATE=$(callb GET "/api/state")
+B_ID=$(printf '%s' "$B_STATE" | python -c "import sys,json;print(json.load(sys.stdin)['player_id'])")
+
+FOUND=$(callb GET "/api/players/find?username=smoketester")
+expect "one player can find the other by name" "$PID"         "$FOUND"
+
+REQ=$(callb POST /api/friends "{\"action\":\"request\",\"target_id\":\"$PID\"}")
+expect "a friend request is sent"            '"ok":true'      "$REQ"
+
+ACC=$(call POST /api/friends "{\"action\":\"accept\",\"target_id\":\"$B_ID\"}")
+expect "and accepted"                        '"ok":true'      "$ACC"
+
+FRIENDS=$(call GET "/api/state")
+expect "the friend appears in the rail"      'Smoke Friend'   "$FRIENDS"
+
+DM=$(call POST /api/friends/messages "{\"target_id\":\"$B_ID\",\"send\":\"hello from the smoke test\"}")
+expect "a private message is accepted"       'hello from the smoke test' "$DM"
+
+DM_B=$(callb POST /api/friends/messages "{\"target_id\":\"$PID\"}")
+expect "and arrives at the other end"        'hello from the smoke test' "$DM_B"
+
+say ""
+say "=== moderation ==="
+# T8's roles, sanctions, labels, banners and audit log had the same shape of
+# gap accounts had: built on the coordinator, reachable from nothing that
+# ships. This is the first thing that walks them from the app.
+#
+# The head admin is named on the command line at deployment (D47), so the
+# coordinator is restarted to appoint one - which also tests that a session
+# survives a restart, because the app is expected to still be signed in
+# afterwards. The app is restarted with it, because a role is cached for two
+# minutes on purpose and nobody is appointed twice in one sitting.
+kill "$APP_PID" 2>/dev/null; APP_PID=""
+kill "$COORD_PID" 2>/dev/null; COORD_PID=""
+sleep 1
+
+"$WORK/coordinator.exe" \
+  -listen "127.0.0.1:$PORT" \
+  -db "$WORK/smoke.db" \
+  -relay-pub "$WORK/relay.pub" \
+  -terms-file docs/terms-en.md \
+  -head-admin "$PID" \
+  -tick 1s >> "$WORK/coordinator.log" 2>&1 &
+COORD_PID=$!
+for _ in $(seq 1 40); do
+  curl -fsS "$COORD/healthz" >/dev/null 2>&1 && break
+  sleep 0.25
+done
+
+APPDATA="$(cygpath -w "$WORK" 2>/dev/null || echo "$WORK")" \
+  "$WORK/lobbyapp.exe" -no-browser -url-only -listen 127.0.0.1:0 > "$WORK/app2.log" 2>&1 &
+APP_PID=$!
+APP_URL=""
+for _ in $(seq 1 40); do
+  APP_URL=$(head -1 "$WORK/app2.log" 2>/dev/null)
+  case "$APP_URL" in http://*) break ;; esac
+  sleep 0.25
+done
+APP=${APP_URL%%/?t=*}
+TOK=${APP_URL##*t=}
+
+STATE=$(call GET "/api/state")
+expect "the session survived both restarts"  '"signed_in":true' "$STATE"
+expect "and the account is now head admin"   '"role":"head_admin"' "$STATE"
+
+REC=$(call GET "/api/admin/player?username=smokefriend")
+expect "staff can read a player's record"    'Smoke Friend'   "$REC"
+
+BAN=$(call POST /api/admin/sanction \
+  "{\"target_id\":\"$B_ID\",\"kind\":\"mute\",\"reason\":\"smoke test\",\"minutes\":15}")
+expect "a sanction is applied"               '"kind":"mute"'  "$BAN"
+
+NOREASON=$(call POST /api/admin/sanction \
+  "{\"target_id\":\"$B_ID\",\"kind\":\"mute\",\"reason\":\"\",\"minutes\":15}")
+refuse "an unexplained one is refused"       '"kind"'         "$NOREASON"
+
+REC=$(call GET "/api/admin/player?username=smokefriend")
+expect "the record shows it"                 'smoke test'     "$REC"
+expect "and says what they are barred from"  '"muted":true'   "$REC"
+
+SID=$(printf '%s' "$REC" | python -c "import sys,json;print(json.load(sys.stdin)['sanctions'][0]['id'])")
+LIFT=$(call POST /api/admin/sanction/lift "{\"sanction_id\":\"$SID\",\"target_id\":\"$B_ID\"}")
+expect "it can be lifted"                    '"ok":true'      "$LIFT"
+
+REC=$(call GET "/api/admin/player?username=smokefriend")
+refuse "and the mute is gone"                '"muted":true'   "$REC"
+expect "while the record of it remains"      'smoke test'     "$REC"
+
+LOG=$(call GET "/api/admin/log?subject=$B_ID")
+# A sanction is logged under its own kind - "mute", not "sanction" - so the
+# log reads as what happened rather than as a category.
+expect "the audit log recorded the mute"     '"action":"mute"' "$LOG"
+expect "and recorded the lift"               '"action":"lift"' "$LOG"
+
+AD=$(call POST /api/admin/banners \
+  '{"title":"Smoke announcement","body":"posted by the smoke test","active":true}')
+expect "an announcement can be posted"       'Smoke announcement' "$AD"
+
+# Read from the coordinator rather than from the second app: the strip is
+# cached for five minutes there on purpose, and an announcement that appeared
+# instantly would mean that cache was not working.
+ADS=$(curl -fsS "$COORD/v1/banners" 2>&1)
+expect "and everybody can read it"           'Smoke announcement' "$ADS"
+
+NOTSTAFF=$(callb GET "/api/admin/player?username=smoketester")
+refuse "a player without a role cannot"      'Smoke Tester'   "$NOTSTAFF"
+
+say ""
+say "=== what a moderator sees ==="
+# The same page again, now signed in as the head admin. The moderation entry
+# is drawn from the role the state reply carries, so this is the only check
+# that the whole chain - staff list, role, hidden toolbar entry, panel -
+# agrees with itself.
+draw moderator "$APP_URL" "Smoke Friend"
+if [ -n "$CHROME" ]; then
+  MODDOM=$(cat "$WORK/moderator.html" 2>/dev/null)
+  MODTAB=$(printf '%s' "$MODDOM" | grep -o '<button[^>]*id="modtab"' | head -1)
+  case "$MODTAB" in
+    "")        bad "the moderation entry is missing entirely" ;;
+    *hidden*)  bad "the moderation entry is still hidden from a head admin" ;;
+    *)         ok "the moderation entry is in the toolbar" ;;
+  esac
+  expect "and the staff panel is drawn"  "Head admin"  "$MODDOM"
 fi
 
 say ""

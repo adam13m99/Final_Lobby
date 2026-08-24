@@ -57,6 +57,9 @@ type server struct {
 	bannersCache cached[[]lobby.Banner]
 	infoCache    cached[*serverCan]
 	termsCache   cached[*lobby.TermsOfUse]
+	// Who holds a role. Slow, because being appointed a moderator is not a
+	// thing that happens between two polls; see admin.go.
+	staffCache cached[[]lobby.StaffMember]
 }
 
 type pendingUpdate struct {
@@ -84,6 +87,7 @@ func newServer(token string) *server {
 	srv.bannersCache.every = bannersEvery
 	srv.infoCache.every = infoEvery
 	srv.termsCache.every = infoEvery
+	srv.staffCache.every = staffEvery
 	return srv
 }
 
@@ -117,6 +121,21 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /api/auth/signin", s.guard(s.signIn))
 	mux.HandleFunc("POST /api/auth/signout", s.guard(s.signOut))
 	mux.HandleFunc("GET /api/terms", s.guard(s.terms))
+
+	// Moderation (admin.go). Offered to everybody and refused by the
+	// coordinator to everybody without a role - the interface hides them as a
+	// courtesy, not as a defence. See admin.go.
+	mux.HandleFunc("GET /api/admin/player", s.guard(s.lookUp))
+	mux.HandleFunc("GET /api/admin/labels", s.guard(s.labelSet))
+	mux.HandleFunc("GET /api/admin/log", s.guard(s.auditLog))
+	mux.HandleFunc("POST /api/admin/sanction", s.guard(s.sanction))
+	mux.HandleFunc("POST /api/admin/sanction/lift", s.guard(s.liftSanction))
+	mux.HandleFunc("POST /api/admin/label", s.guard(s.label))
+	mux.HandleFunc("POST /api/admin/rooms/close", s.guard(s.closeRoom))
+	mux.HandleFunc("POST /api/admin/rooms/host", s.guard(s.changeHost))
+	mux.HandleFunc("POST /api/admin/banners", s.guard(s.saveBanner))
+	mux.HandleFunc("POST /api/admin/banners/remove", s.guard(s.removeBanner))
+	mux.HandleFunc("POST /api/admin/staff", s.guard(s.setRole))
 
 	return mux
 }
@@ -227,6 +246,7 @@ func (s *server) state(w http.ResponseWriter, r *http.Request) {
 	if cfg.PlayerID != "" && cfg.Coordinator != "" {
 		s.pull(cfg, out)
 		s.social(out)
+		s.role(out)
 	}
 
 	s.mu.Lock()

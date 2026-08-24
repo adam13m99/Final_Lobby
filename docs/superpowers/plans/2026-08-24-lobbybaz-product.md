@@ -90,11 +90,19 @@ end up with two services fighting over one virtual adapter.
 - [x] A finished match no longer closes or locks the room
 - [x] Tests: match ends and the room survives with everyone still seated
 
-## T4 — Kick escalation *(D39)* — **rules done, persistence pending**
+## T4 — Kick escalation *(D39)* — **done** *(the persistence box was answered by D52, not built)*
 
 - [x] Block is 1, 3, 5, 7… minutes — first offence 1, then +2 each time
-- [ ] Count is per player per room and survives a coordinator restart
-- [x] Tests: escalation sequence *(restart-survival test lands with T5, which brings the database)*
+- [x] Count is per player per room — **and deliberately does not survive a
+      coordinator restart.** This box asked for the opposite; D52 examined it
+      and reversed it. A block belongs to a room, a restart ends every room,
+      so a persisted block would key into a room that no longer exists and bar
+      nobody — or, back when room IDs were reused, key into a *different* room
+      and bar an innocent person from one they had never entered. What is
+      durable is the `kick_events` record, which is what a moderator reads
+      months later (T8). Room IDs became sixteen random hex characters in the
+      same change and are never reused.
+- [x] Tests: escalation sequence
 
 ## T5 — Accounts *(D37)* — **done 2026-08-24**
 
@@ -386,6 +394,37 @@ checkbox, and the account record stores an `accept_terms_version` against it.
 
 Changing the text means bumping `TermsVersion`, which is what makes existing
 acceptances stale. Deploying it means passing `-terms-file` to the coordinator.
+
+## T14 — The moderation panel *(unplanned, 2026-08-25)*
+
+T8 built roles, sanctions, labels, banners and an audit log on the
+coordinator. Nothing that ships could reach any of it: the only way to ban
+somebody was a hand-written request from a developer's machine. That is the
+same shape of gap accounts had before T11 — a whole subsystem with no door —
+and it fails the same way. A moderator who cannot moderate from the product
+moderates from a chat window instead, and nothing they do there is written
+down.
+
+- `lobbyapp/admin.go` — the app's half. Player lookup by username (staff are
+  told "smurf_1234 is ruining games", never an account id), sanction, lift,
+  label, close a room, hand a room to somebody else in it, post and delete
+  announcements, appoint and remove admins, read the audit log.
+- **The app knows whether to draw the tools by reading the staff list**, which
+  any signed-in account may read, and matching its own id against it. The
+  coordinator has no "what am I" endpoint for roles and does not need one:
+  hiding the entry is a courtesy to people who are not staff, never a defence
+  against them. Every call behind it is refused server-side without a role.
+- **A reason travels with every action**, refused client-side as well as
+  server-side. The audit log is read months later by somebody who was not
+  there, and "banned" with nothing beside it cannot be reviewed or appealed.
+- Zero minutes means a sanction that does not expire. The form makes that a
+  choice rather than what an empty field happens to produce.
+- The staff panel is drawn for the head admin alone (D47).
+
+Covered end to end by `scripts/smoke.sh`, which appoints a head admin,
+sanctions somebody, lifts it, checks both actions reached the audit log,
+posts an announcement, and renders the page as both an ordinary player and a
+moderator to confirm the entry is hidden from one and offered to the other.
 
 ---
 
