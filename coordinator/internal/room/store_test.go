@@ -2,6 +2,7 @@ package room_test
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -169,4 +170,96 @@ func TestMembershipRefusesOutsiders(t *testing.T) {
 	if _, err := s.Membership(host.RoomID, "h1"); !errors.Is(err, room.ErrNotMember) {
 		t.Fatalf("a departed player kept their membership: %v", err)
 	}
+}
+
+// --- the lobby's latency column and the host's description (D42) --------
+
+func TestOnlyTheHostsOwnLatencyReachesTheColumn(t *testing.T) {
+	s := room.NewStore()
+	now := time.Now()
+
+	_, host, err := s.Create("host", "a room", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Join(host.RoomID, room.Anyone("guest"), now); err != nil {
+		t.Fatal(err)
+	}
+
+	// The column is labelled as the host's. A guest on a terrible connection
+	// must not be able to write their own number into it - everyone reading
+	// the lobby would blame the host for it, and the room would look worse
+	// than it plays.
+	s.ReportHostLatency(host.RoomID, "guest", 400, now)
+	if got := roomOf(t, s, host.RoomID).HostRelayMillis; got != 0 {
+		t.Errorf("a guest wrote %d into the host's latency column", got)
+	}
+
+	s.ReportHostLatency(host.RoomID, "host", 38, now)
+	if got := roomOf(t, s, host.RoomID).HostRelayMillis; got != 38 {
+		t.Errorf("the host's own reading came out as %d, want 38", got)
+	}
+}
+
+// Zero means "not measured yet", and the interface has to be able to tell
+// that apart from an excellent connection. Storing it would make every
+// unmeasured room look like the best room in the lobby.
+func TestAnUnmeasuredLatencyIsNotStored(t *testing.T) {
+	s := room.NewStore()
+	now := time.Now()
+	_, host, err := s.Create("host", "a room", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.ReportHostLatency(host.RoomID, "host", 38, now)
+	s.ReportHostLatency(host.RoomID, "host", 0, now)
+	if got := roomOf(t, s, host.RoomID).HostRelayMillis; got != 38 {
+		t.Errorf("an unmeasured reading overwrote a real one: got %d, want 38", got)
+	}
+}
+
+func TestOnlyTheHostDescribesTheRoom(t *testing.T) {
+	s := room.NewStore()
+	now := time.Now()
+	_, host, err := s.Create("host", "a room", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Join(host.RoomID, room.Anyone("guest"), now); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetDescription(host.RoomID, "guest", "come to my room instead"); err == nil {
+		t.Error("a guest rewrote the host's description")
+	}
+	if err := s.SetDescription(host.RoomID, "host", "  need 2, we start at 9  "); err != nil {
+		t.Fatal(err)
+	}
+	if got := roomOf(t, s, host.RoomID).Description; got != "need 2, we start at 9" {
+		t.Errorf("description came out as %q", got)
+	}
+}
+
+// One host must not be able to push every other room off the screen.
+func TestADescriptionIsBounded(t *testing.T) {
+	s := room.NewStore()
+	now := time.Now()
+	_, host, err := s.Create("host", "a room", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetDescription(host.RoomID, "host", strings.Repeat("x", 500)); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(roomOf(t, s, host.RoomID).Description); got > room.MaxDescription {
+		t.Errorf("description kept %d characters, the limit is %d", got, room.MaxDescription)
+	}
+}
+
+func roomOf(t *testing.T, s *room.Store, id string) room.Room {
+	t.Helper()
+	r, err := s.Get(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
 }

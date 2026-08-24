@@ -214,6 +214,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /v1/rooms/{id}/kick", s.signedIn(s.limitManage, s.kickPlayer))
 	mux.HandleFunc("POST /v1/rooms/{id}/status", s.signedIn(s.limitManage, s.setStatus))
 	mux.HandleFunc("POST /v1/rooms/{id}/privacy", s.signedIn(s.limitManage, s.setPrivacy))
+	mux.HandleFunc("POST /v1/rooms/{id}/description", s.signedIn(s.limitManage, s.setDescription))
 	mux.HandleFunc("POST /v1/rooms/{id}/invite", s.signedIn(s.limitManage, s.invite))
 	mux.HandleFunc("POST /v1/rooms/{id}/spectate", s.signedIn(s.limitJoin, s.spectateRoom))
 	mux.HandleFunc("POST /v1/rooms/{id}/connect", s.signedIn(s.limitRead, s.connectRoom))
@@ -300,6 +301,14 @@ type roomView struct {
 	Privacy       string `json:"privacy"`
 	NeedsPassword bool   `json:"needs_password"`
 	MinMMR        int    `json:"min_mmr,omitempty"`
+	// Description is the host's own sentence about the room (D42).
+	Description string `json:"description,omitempty"`
+	// HostRelayMillis is the *host's* round trip to the relay, not the
+	// reader's. Anything displaying it must say so: a player who reads it as
+	// their own ping will blame the wrong thing when a game plays badly.
+	// Absent when the host has not reported one yet, which the interface must
+	// show as unknown rather than as zero.
+	HostRelayMillis int `json:"host_relay_ms,omitempty"`
 	// Players is the bare ID list the first CLI was written against.
 	Players []string `json:"players"`
 }
@@ -309,14 +318,16 @@ type roomView struct {
 // something anyone can choose a game from.
 func (s *Server) view(r room.Room) roomView {
 	v := roomView{
-		ID:            r.ID,
-		Name:          r.Name,
-		Status:        string(r.Status),
-		HostID:        r.HostID,
-		Privacy:       string(r.Privacy),
-		NeedsPassword: r.HasPassword(),
-		MinMMR:        r.MinMMR,
-		Members:       make([]memberView, 0, len(r.Slots)),
+		ID:              r.ID,
+		Name:            r.Name,
+		Description:     r.Description,
+		Status:          string(r.Status),
+		HostID:          r.HostID,
+		Privacy:         string(r.Privacy),
+		NeedsPassword:   r.HasPassword(),
+		MinMMR:          r.MinMMR,
+		HostRelayMillis: r.HostRelayMillis,
+		Members:         make([]memberView, 0, len(r.Slots)),
 	}
 	known := s.players.Lookup(r.Occupants())
 
@@ -441,6 +452,8 @@ func (s *Server) createRoom(w http.ResponseWriter, r *http.Request) {
 		PlayerID string `json:"player_id"`
 		Nick     string `json:"nick"`
 		Name     string `json:"name"`
+		// Description is the host's sentence about the room (D42).
+		Description string `json:"description"`
 		// The door, if the host wants one from the start (D41).
 		Privacy  string `json:"privacy"`
 		Password string `json:"password"`
@@ -473,6 +486,12 @@ func (s *Server) createRoom(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "could not issue ticket")
 		return
+	}
+	if body.Description != "" {
+		// A failure here is not worth undoing the room over: the host gets
+		// their room and can set the description again. Losing the room would
+		// be the larger surprise.
+		_ = s.rooms.SetDescription(m.RoomID, body.PlayerID, body.Description)
 	}
 	s.chat.System(m.RoomID, nick+" opened the room", s.now())
 	s.chat.System(chat.Lobby, nick+" opened \""+body.Name+"\"", s.now())

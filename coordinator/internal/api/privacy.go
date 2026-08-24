@@ -144,3 +144,34 @@ func (s *Server) invite(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
+
+// setDescription changes what the host says their room is for (D42).
+//
+// It lives beside the door handlers because it is the same kind of thing: the
+// host describing their room to people who are not in it. The store refuses
+// anybody who is not the host, so this does not check that itself.
+func (s *Server) setDescription(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		PlayerID    string `json:"player_id"`
+		Description string `json:"description"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	body.PlayerID = s.actor(r, body.PlayerID)
+	if body.PlayerID == "" {
+		writeErr(w, http.StatusBadRequest, "player_id is required")
+		return
+	}
+	roomID := r.PathValue("id")
+	if err := s.rooms.SetDescription(roomID, body.PlayerID, body.Description); err != nil {
+		writeErr(w, statusFor(err), err.Error())
+		return
+	}
+	rm, err := s.rooms.Get(roomID)
+	if err != nil {
+		writeErr(w, statusFor(err), err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, s.view(rm))
+}

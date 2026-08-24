@@ -22,9 +22,9 @@ import (
 	"time"
 
 	"lobbybaz/protocol/crypto"
+	"lobbybaz/protocol/wire"
 	"lobbybaz/relay/internal/route"
 	"lobbybaz/relay/internal/sendq"
-	"lobbybaz/protocol/wire"
 )
 
 // maxDatagram bounds a single read. Wintun MTU is 1300; this leaves ample
@@ -223,10 +223,45 @@ func (s *Server) handle(ctx context.Context, pkt []byte, from netip.AddrPort) {
 		if _, peer, ok := s.table.SenderFor(h.SessionID); ok {
 			peer.SetRemote(from)
 			peer.Touch(time.Now())
+			s.echoKeepalive(h, from)
 		}
 	case wire.TypeDisconnect:
 		s.dropSession(h.SessionID)
 	}
+}
+
+// echoKeepalive sends a keepalive straight back, carrying the same sequence
+// number it arrived with.
+//
+// This is how a host learns its own latency to the relay, which is the number
+// the lobby shows beside a room (D42). It cannot be measured any other way: a
+// player in the lobby has no path to the host of a room they have not joined,
+// and an empty room gives the host nobody to time a round trip against. The
+// relay is the one party both ends always talk to.
+//
+// The sequence number travels in the clear in every header already, so the
+// echo needs no new packet type and no payload - the client remembers when it
+// sent sequence N and subtracts.
+//
+// The reply is written here rather than pushed onto the peer's send queue.
+// That queue carries inner packets for the peer's writer to seal, and a
+// keepalive has nothing to seal; more importantly the rule this relay is built
+// on is that goroutines scale with players and never with packet rate, and a
+// fourteen-byte write from the reader adds neither. The reply is the same size
+// as the request, so it is not an amplifier.
+func (s *Server) echoKeepalive(h wire.Header, to netip.AddrPort) {
+	var hdr [wire.HeaderSize]byte
+	wire.EncodeHeader(hdr[:], wire.Header{
+		Version:   wire.ProtocolVersion,
+		Type:      wire.TypeKeepalive,
+		SessionID: h.SessionID,
+		Sequence:  h.Sequence,
+	})
+	// A keepalive is the most disposable packet there is. Losing one costs a
+	// latency sample, not a connection, so the error is deliberately dropped
+	// rather than logged: a peer behind a flaky NAT would otherwise fill the
+	// log with a line every fifteen seconds.
+	_, _ = s.conn.WriteToUDPAddrPort(hdr[:], to)
 }
 
 func (s *Server) handleHandshake(ctx context.Context, msg1 []byte, from netip.AddrPort) {

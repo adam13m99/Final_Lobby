@@ -162,8 +162,21 @@ there; this is the summary.
 | T7 friends (D41) | **done** — graph, blocks, private chat, invites, presence |
 | T8 roles and moderation (D43, D47) | **done** — roles, sanctions, labels, banners, audit log |
 | T9 interface built for translation (D44) | **done** — lookup, logical layout, and a test that enforces both |
-| T10 the new lobby (D42) | not started |
+| T10 the new lobby (D42) | in progress — the latency column is measured and served; the screen itself is next |
 | T11 desktop application (D45) | not started |
+
+**The lobby's latency column is real, and it is the host's (D54).** The relay
+now answers a keepalive with a keepalive carrying the same sequence number, so
+a host can time its own round trip to the relay; the number is smoothed,
+reported on each sync, kept by the coordinator only from the player who
+actually hosts that room, and served as `host_relay_ms`. Zero means not
+measured yet, never excellent. **The relay must be redeployed before any of
+this produces a number** — until then the column is empty, which is correct
+but is not the same as working. Rooms also gained a host-written
+`description`, the other D42 field the room list needed. The same change
+closed a gap in T7: the client library never actually sent `in_game`, so the
+friends rail's in-game light had a server that understood it and no client
+that said it.
 
 **The interface is built for translation, and a test keeps it that way.**
 Every string the player reads is a key in `lobbyapp/ui/strings/en.json`,

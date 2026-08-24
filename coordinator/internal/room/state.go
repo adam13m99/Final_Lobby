@@ -95,6 +95,27 @@ type Room struct {
 	HostID string
 	Status Status
 
+	// Description is the host's own sentence about the room - what they want
+	// to play, who they want, house rules. D42 puts it in the room list
+	// because a name alone does not tell anybody whether a room is for them.
+	Description string
+
+	// HostRelayMillis is the host's round trip to the relay, as their own
+	// machine measured it, and HostRelayAt is when they last said so.
+	//
+	// This is the lobby's latency column, and it is deliberately the host's
+	// number rather than the reader's: rooms are isolated from each other, so
+	// somebody browsing the lobby has no path to a host they have not joined
+	// and cannot measure anything. The host's distance from the relay is what
+	// determines how the game plays for everyone who joins them, which makes
+	// it the more useful number anyway (D42).
+	//
+	// It is self-reported, and that is acceptable: the only person a host
+	// could mislead with it is somebody deciding whether to join their room,
+	// and the lie is exposed by the first minute of play.
+	HostRelayMillis int
+	HostRelayAt     time.Time
+
 	// Privacy is the door on the room (D41); see privacy.go.
 	Privacy Privacy
 	// MinMMR is the floor a player must declare to be let in. Zero is no

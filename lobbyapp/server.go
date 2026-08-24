@@ -176,6 +176,7 @@ func (s *server) state(w http.ResponseWriter, r *http.Request) {
 		out["connected"] = resp.Connected
 		out["adapter"] = resp.AdapterName
 		out["dota_running"] = resp.DotaRunning
+		out["relay_ms"] = resp.RelayMillis
 		if resp.VirtualIP != "" {
 			out["virtual_ip"] = resp.VirtualIP
 		}
@@ -217,7 +218,15 @@ func (s *server) state(w http.ResponseWriter, r *http.Request) {
 }
 
 // pull performs the coordinator sync and folds the result into the reply.
+//
+// Two of the fields it sends come from this machine and from nowhere else:
+// whether Dota is running, and how far this PC is from the relay. The server
+// cannot observe either. It shows the first in the friends rail and, when this
+// player is hosting, the second beside their room (D42).
 func (s *server) pull(cfg *session.Config, out map[string]any) {
+	inGame, _ := out["dota_running"].(bool)
+	relayMS, _ := out["relay_ms"].(int)
+
 	s.mu.Lock()
 	req := lobby.SyncRequest{
 		PlayerID:    cfg.PlayerID,
@@ -225,6 +234,8 @@ func (s *server) pull(cfg *session.Config, out map[string]any) {
 		RoomID:      cfg.RoomID,
 		LobbyCursor: s.lobbyCursor,
 		RoomCursor:  s.roomCursor,
+		InGame:      inGame,
+		RelayMillis: relayMS,
 	}
 	// A different room means the chat we are holding belongs to somewhere
 	// else. Start it again rather than showing the last room's conversation.

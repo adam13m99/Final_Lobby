@@ -63,6 +63,12 @@ type Response struct {
 	// The app shows this in its diagnostics, so a missing game is named as
 	// the problem rather than surfacing later as a launch failure.
 	DotaFound bool `json:"dota_found,omitempty"`
+	// RelayMillis is this machine's smoothed round trip to the relay, or
+	// zero before the first keepalive has come back. The lobby shows the
+	// host's copy of this number beside their room (D42); it is the only
+	// latency measurable from a lobby, since a player browsing rooms has no
+	// path to a host they have not joined.
+	RelayMillis int `json:"relay_ms,omitempty"`
 
 	// Launch
 	DotaPath string   `json:"dota_path,omitempty"`

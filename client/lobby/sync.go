@@ -41,6 +41,18 @@ type SyncRequest struct {
 	RoomID      string `json:"room_id,omitempty"`
 	LobbyCursor uint64 `json:"lobby_cursor"`
 	RoomCursor  uint64 `json:"room_cursor"`
+
+	// InGame is whether Dota is actually running on this machine. The
+	// friends rail shows it, and it has to come from the machine because
+	// nothing the server can see distinguishes a locked room whose match has
+	// started from one whose host is still arranging teams.
+	InGame bool `json:"in_game,omitempty"`
+
+	// RelayMillis is this machine's round trip to the relay. The server
+	// keeps the host's copy against their room and shows it in the lobby
+	// (D42), labelled as the host's latency rather than the reader's,
+	// because that is what it is.
+	RelayMillis int `json:"relay_ms,omitempty"`
 }
 
 // SyncResponse is the whole screen.

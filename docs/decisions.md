@@ -943,3 +943,57 @@ The escalating sign-in limiter is the tightest of the four tiers: a guess
 every five seconds, five in hand, per address. Somebody who mistypes their
 password twice never notices it; somebody working a word list gets roughly
 seventeen thousand attempts a day, against an Argon2id hash costing 64 MiB.
+
+## D54 — The lobby's latency column is the host's, and the relay measures it by echoing
+
+D42 asked for a **ping** column on every room and flagged that it could not
+mean what it appears to mean. This is how it was resolved.
+
+**A player browsing the lobby cannot ping anything.** Rooms are isolated from
+each other and that isolation is enforced in three independent places, so
+there is no path from somebody in the lobby to the host of a room they have
+not joined. Any number presented as "your ping to this room" would be
+invented.
+
+**What is real, and more useful, is the host's own distance from the relay.**
+Every packet in a match passes through the relay, so the host's leg of that
+path is in the round trip of every other player in their room. A host on a bad
+connection makes a bad game for the nine people who join them, and that is
+exactly the thing worth knowing before choosing a room. It is shown labelled
+as the host's latency; a player who reads it as their own ping will blame the
+wrong thing when a game plays badly.
+
+**The relay did not measure anything, so it does now.** It replies to a
+keepalive with a keepalive, carrying back the same sequence number. The
+sequence field is in the clear in every header already, so this needs no new
+packet type and no payload. The client puts the moment of sending into that
+field and subtracts when it comes back, which means there is no table of
+outstanding probes to keep, expire or leak.
+
+Three things about that echo were deliberate:
+
+- **It is written from the reader, not pushed onto the peer's send queue.**
+  That queue carries inner packets for the peer's writer to seal, and a
+  keepalive has nothing to seal. The rule this relay is built on is that
+  goroutines scale with players and never with packet rate; a fourteen-byte
+  write adds neither.
+- **The reply is the same size as the request,** so it is not an amplifier.
+- **The reading is smoothed,** a quarter weight per sample, and samples outside
+  nought to five seconds are refused. One bad millisecond on a home Wi-Fi
+  must not make a column jump between 30 and 300, and a genuinely broken path
+  must not poison the average for minutes after it recovers.
+
+**The number is self-reported by the host's own machine,** and the coordinator
+keeps it only from the player who actually hosts that room. Self-reporting is
+acceptable here: the only person a host could mislead is somebody deciding
+whether to join their room, and the lie is exposed in the first minute of
+play.
+
+**Zero means not measured yet, not excellent.** Every layer preserves that
+distinction, because collapsing it would make every room nobody has measured
+look like the best room in the lobby.
+
+**Deployment note:** the echo is a relay change. Until the relay on the server
+is redeployed, hosts measure nothing and the column is empty everywhere — which
+is the correct thing for it to show, but it is not the same as the feature
+being broken.

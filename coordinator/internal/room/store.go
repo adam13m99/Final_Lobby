@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/netip"
+	"strings"
 	"sync"
 	"time"
 
@@ -435,4 +436,53 @@ func (s *Store) SetHost(roomID, newHostID string) ([]string, error) {
 		return nil, ErrNotFound
 	}
 	return r.SetHost(newHostID)
+}
+
+// MaxDescription bounds the host's sentence about their room. Long enough for
+// "need 2, no first-time Invokers, we start at 9" and short enough that one
+// room cannot push every other room off the screen.
+const MaxDescription = 120
+
+// SetDescription records what the host says their room is for (D42).
+//
+// It is the host's own words, shown to strangers, so it is rendered as text
+// and never as markup by anything that displays it - the same rule as the
+// announcement banners, for the same reason.
+func (s *Store) SetDescription(roomID, actorID, text string) error {
+	text = strings.TrimSpace(text)
+	if len(text) > MaxDescription {
+		text = strings.TrimSpace(text[:MaxDescription])
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r, ok := s.rooms[roomID]
+	if !ok {
+		return ErrNotFound
+	}
+	if actorID != r.HostID {
+		return ErrNotHost
+	}
+	r.Description = text
+	return nil
+}
+
+// ReportHostLatency records a host's measurement of their own distance from
+// the relay, for the lobby's latency column (D42).
+//
+// It is a no-op unless the reporting player actually hosts the room, so an
+// ordinary member's reading - which describes their connection, not the one
+// everybody else in the room will be routed through - can never end up in the
+// column labelled as the host's.
+func (s *Store) ReportHostLatency(roomID, playerID string, millis int, now time.Time) {
+	if millis <= 0 {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r, ok := s.rooms[roomID]
+	if !ok || r.HostID != playerID {
+		return
+	}
+	r.HostRelayMillis = millis
+	r.HostRelayAt = now
 }

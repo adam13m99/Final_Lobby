@@ -86,6 +86,7 @@ func (a *Agent) status() ipc.Response {
 		if ip := a.client.VirtualIP(); ip.IsValid() {
 			resp.VirtualIP = ip.String()
 		}
+		resp.RelayMillis = int(a.client.RTT().Milliseconds())
 	}
 	if a.teardown != "" {
 		resp.Err = a.teardown

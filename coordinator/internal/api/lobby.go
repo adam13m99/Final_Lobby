@@ -69,6 +69,11 @@ type syncRequest struct {
 	// on the server can see a match start, so this is the only honest
 	// source for a friend's "in game" light.
 	InGame bool `json:"in_game,omitempty"`
+
+	// RelayMillis is this client's round trip to the relay, which only its
+	// own machine can measure. It is kept only when the reporter hosts the
+	// room they are in; see room.Store.ReportHostLatency.
+	RelayMillis int `json:"relay_ms,omitempty"`
 }
 
 type syncResponse struct {
@@ -103,6 +108,9 @@ func (s *Server) sync(w http.ResponseWriter, r *http.Request) {
 	}
 	s.seen(body.PlayerID, body.Nick)
 	s.players.SetInGame(body.PlayerID, body.InGame, s.now())
+	if body.RoomID != "" {
+		s.rooms.ReportHostLatency(body.RoomID, body.PlayerID, body.RelayMillis, s.now())
+	}
 
 	out := syncResponse{
 		Online:     s.players.Online(OnlineWindow, s.now()),

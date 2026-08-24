@@ -341,3 +341,68 @@ func TestKeepaliveKeepsAPeerAlive(t *testing.T) {
 		t.Fatalf("Expired = %d, want 0", got)
 	}
 }
+
+// The lobby shows each room's host latency to the relay (D42), and the only
+// way a host can measure that is to time a round trip against the relay
+// itself. This is that round trip: the sequence number goes out on a
+// keepalive and has to come back on one.
+func TestKeepaliveComesBackSoAHostCanTimeIt(t *testing.T) {
+	pub, priv, err := crypto.GenerateStaticKeypair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	validate := func(ticket []byte) (server.TicketClaims, error) {
+		return server.TicketClaims{RoomID: "room-a",
+			VirtualIP: netip.MustParseAddr("10.87.0.2")}, nil
+	}
+	srv, err := server.New(server.Config{
+		Listen:         "127.0.0.1:0",
+		StaticPriv:     priv,
+		QueueDepth:     8,
+		ValidateTicket: validate,
+		IdleTimeout:    10 * time.Second,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { defer close(done); _ = srv.Serve(ctx) }()
+	t.Cleanup(func() { cancel(); <-done })
+
+	p := dialPeer(t, srv.LocalAddr(), pub, "room-a|10.87.0.2")
+
+	const probe = 4242
+	hdr := make([]byte, wire.HeaderSize)
+	wire.EncodeHeader(hdr, wire.Header{
+		Version:   wire.ProtocolVersion,
+		Type:      wire.TypeKeepalive,
+		SessionID: p.accept.SessionID,
+		Sequence:  probe,
+	})
+	if _, err := p.conn.Write(hdr); err != nil {
+		t.Fatal(err)
+	}
+
+	buf := make([]byte, 128)
+	_ = p.conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	n, err := p.conn.Read(buf)
+	if err != nil {
+		t.Fatalf("no keepalive came back, so a host cannot measure its latency: %v", err)
+	}
+	got, err := wire.DecodeHeader(buf[:n])
+	if err != nil {
+		t.Fatalf("the echo is not a valid packet: %v", err)
+	}
+	if got.Type != wire.TypeKeepalive {
+		t.Errorf("echo is type %d, want a keepalive", got.Type)
+	}
+	// The sequence is what pairs the reply with the moment it was sent. An
+	// echo that does not carry it back measures nothing.
+	if got.Sequence != probe {
+		t.Errorf("echo carries sequence %d, want %d", got.Sequence, probe)
+	}
+	if got.SessionID != p.accept.SessionID {
+		t.Errorf("echo carries session %d, want %d", got.SessionID, p.accept.SessionID)
+	}
+}

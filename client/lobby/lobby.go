@@ -48,6 +48,18 @@ type RoomView struct {
 	Joinable bool     `json:"joinable"`
 	Players  []string `json:"players"`
 
+	// Description is the host's own sentence about the room (D42). It is
+	// somebody's free text shown to strangers: render it as text, never as
+	// markup.
+	Description string `json:"description"`
+
+	// HostRelayMillis is the **host's** round trip to the relay, not this
+	// player's. Label it as the host's wherever it appears: a player who
+	// reads it as their own ping blames the wrong thing when a game plays
+	// badly. Zero means the host has not reported one yet, which is not the
+	// same as an excellent connection and must not be drawn as one.
+	HostRelayMillis int `json:"host_relay_ms"`
+
 	// The door (D41). Privacy is "public", "password", "friends" or
 	// "invite"; NeedsPassword is what the lobby draws a padlock from. The
 	// password itself never crosses this boundary in either direction except
@@ -408,4 +420,12 @@ func (c *Client) ChangePassword(current, next string) (*Account, error) {
 // AcceptTerms records agreement to a version of the terms.
 func (c *Client) AcceptTerms(version string) error {
 	return c.do("POST", "/v1/terms/accept", map[string]string{"version": version}, nil)
+}
+
+// Describe sets the host's sentence about their room (D42). Only the host may.
+func (c *Client) Describe(roomID, description string) (*RoomView, error) {
+	var rv RoomView
+	err := c.do("POST", "/v1/rooms/"+roomID+"/description",
+		map[string]any{"description": description}, &rv)
+	return &rv, err
 }

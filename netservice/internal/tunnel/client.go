@@ -113,6 +113,11 @@ type Client struct {
 	// blocked in adapter.Read every time the link blipped.
 	outbound  chan []byte
 	readerOne sync.Once
+
+	// started is the zero point for keepalive timing, and rtt is the smoothed
+	// round trip to the relay in nanoseconds. See timeKeepalive.
+	started time.Time
+	rtt     atomic.Int64
 }
 
 // New builds a Client. It does not touch the network.
@@ -130,6 +135,7 @@ func New(cfg Config) *Client {
 		cfg:      cfg,
 		log:      cfg.Logger,
 		outbound: make(chan []byte, 256),
+		started:  time.Now(),
 	}
 }
 
@@ -324,11 +330,16 @@ func (c *Client) pumpOutbound(ctx context.Context, udp *net.UDPConn, sess *crypt
 			}
 
 		case <-ticker.C:
+			// The sequence field carries the moment this keepalive left, as
+			// nanoseconds since the client started. The relay echoes it back
+			// untouched, so the reply times itself and there is no table of
+			// outstanding probes to keep, expire, or leak.
 			hdr := make([]byte, wire.HeaderSize)
 			wire.EncodeHeader(hdr, wire.Header{
 				Version:   wire.ProtocolVersion,
 				Type:      wire.TypeKeepalive,
 				SessionID: sessionID,
+				Sequence:  uint64(time.Since(c.started)),
 			})
 			if _, err := udp.Write(hdr); err != nil {
 				return err
@@ -352,7 +363,14 @@ func (c *Client) pumpInbound(ctx context.Context, udp *net.UDPConn, sess *crypto
 			return err
 		}
 		h, err := wire.DecodeHeader(buf[:n])
-		if err != nil || h.Type != wire.TypeData {
+		if err != nil {
+			continue
+		}
+		if h.Type == wire.TypeKeepalive {
+			c.timeKeepalive(h.Sequence)
+			continue
+		}
+		if h.Type != wire.TypeData {
 			continue
 		}
 		_, inner, err := sess.Open(buf[:n])
@@ -366,3 +384,39 @@ func (c *Client) pumpInbound(ctx context.Context, udp *net.UDPConn, sess *crypto
 		}
 	}
 }
+
+// timeKeepalive turns an echoed keepalive into a latency reading.
+//
+// This is the number the lobby shows beside a room: how far the host is from
+// the relay (D42). It is worth showing because it predicts how the game will
+// feel for everyone who joins that host, and it is the only latency anybody
+// can measure from the lobby - a player browsing rooms has no path to a host
+// they have not joined.
+//
+// The reading is smoothed. A single sample catches whatever the Wi-Fi was
+// doing in that millisecond, and a column that jumps between 30 and 300 tells
+// a player nothing. A quarter weight on each new sample settles within a
+// minute of keepalives and still moves when the path genuinely changes.
+func (c *Client) timeKeepalive(sentAt uint64) {
+	sample := time.Since(c.started) - time.Duration(sentAt)
+
+	// A sample outside these bounds is not a measurement. Negative means the
+	// echo carried a sequence we never sent - an old session's packet, or a
+	// forgery. Above five seconds the path is broken in a way no number
+	// describes, and letting it into the average would poison it for minutes.
+	if sample < 0 || sample > 5*time.Second {
+		return
+	}
+
+	previous := c.rtt.Load()
+	if previous == 0 {
+		c.rtt.Store(int64(sample))
+		return
+	}
+	c.rtt.Store((previous*3 + int64(sample)) / 4)
+}
+
+// RTT reports the smoothed round trip to the relay, or zero before the first
+// keepalive has come back. Zero means "not measured yet", which the interface
+// must show as an absence rather than as an excellent connection.
+func (c *Client) RTT() time.Duration { return time.Duration(c.rtt.Load()) }
