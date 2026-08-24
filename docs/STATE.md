@@ -31,7 +31,16 @@ curl -s -H "Authorization: Bearer $TOKEN" http://87.107.110.199:7001/v1/diag
 | Command | What it proves | Cost |
 |---|---|---|
 | `bash scripts/check.sh` | every module builds, vets, passes its own tests; the front-end JS and string files parse; no secret is tracked; the Rust shell compiles | seconds |
-| `bash scripts/smoke.sh` | a real coordinator with accounts switched on and a real app, walked through browsing without an account, reading the terms, signing up, hosting a room, signing out and back in, and a wrong password being refused | ~30s |
+| `bash scripts/smoke.sh` | a real coordinator with accounts switched on and a real app, walked through browsing without an account, reading the terms, signing up, hosting a room, signing out and back in, and a wrong password being refused — then the page itself, rendered in headless Chrome | ~40s |
+
+**The interface is rendered, not just parsed.** The last section of
+`smoke.sh` drives headless Chrome in a throwaway profile at the running app
+and asserts three things: the page drew, it drew the room that was hosted
+seconds earlier — which can only happen if it fetched live state and rendered
+it — and the console said nothing at all. That last one is the useful one: it
+catches uncaught exceptions and it catches i18n's "missing key" warning, which
+is the failure mode a translated interface actually has (D44). The developer's
+own browser is never touched.
 
 `check.sh` cannot see the seam that matters most. Accounts (T5) and the app's
 sign-in screen (T11) were written weeks apart, and every unit test in both
@@ -177,7 +186,7 @@ there; this is the summary.
 | T7 friends (D41) | **done** — graph, blocks, private chat, invites, presence |
 | T8 roles and moderation (D43, D47) | **done** — roles, sanctions, labels, banners, audit log |
 | T9 interface built for translation (D44) | **done** — lookup, logical layout, and a test that enforces both |
-| T10 the new lobby (D42) | **done** — not yet looked at in a browser |
+| T10 the new lobby (D42) | **done** — renders clean under `smoke.sh` |
 | T11 desktop application (D45) | **done** — shell builds and runs; bundle not yet installed anywhere |
 | T12 tournaments (D48) | **done as specified** — an honest placeholder, not the feature |
 | T13 terms of use | **done** — served, readable, versioned; **text needs the owner's sign-off** |

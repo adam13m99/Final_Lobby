@@ -196,6 +196,59 @@ WRONG=$(call POST /api/auth/signin '{"username":"smoketester","password":"not th
 refuse "a wrong password does not"                 '"ok":true'     "$WRONG"
 
 say ""
+say "=== what the page actually draws ==="
+# Everything above this point proves the HTTP layer. None of it opens the
+# page, and a single stray brace in app.js gives the player a blank window
+# with every check above still green.
+#
+# Chrome is driven headless, in a throwaway profile inside the temp
+# directory, so the developer's own browser and its sessions are untouched.
+# Two things are asserted, and the second is the interesting one:
+#
+#   - the interface drew, and drew live data - the room hosted a moment ago
+#     appears in the list, which can only happen if the page fetched state
+#     and rendered it;
+#   - the console said nothing at all. That catches uncaught exceptions, and
+#     it also catches i18n's "missing key" warning, which is the failure a
+#     translated interface actually has (D44).
+CHROME=""
+for c in "/c/Program Files/Google/Chrome/Application/chrome.exe"          "/c/Program Files (x86)/Google/Chrome/Application/chrome.exe"          "$LOCALAPPDATA/Google/Chrome/Application/chrome.exe"          "/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"; do
+  [ -x "$c" ] && { CHROME="$c"; break; }
+done
+
+if [ -z "$CHROME" ]; then
+  say "  WARN  skipping - no Chrome or Edge found to render with"
+else
+  PROFILE=$(cygpath -w "$WORK" 2>/dev/null || echo "$WORK")
+  "$CHROME" --headless --disable-gpu --no-first-run --no-default-browser-check     --user-data-dir="$PROFILE\chrome" --virtual-time-budget=8000     --enable-logging=stderr --v=0 --dump-dom "$APP_URL"     > "$WORK/dom.html" 2> "$WORK/chrome.err"
+
+  DOM=$(cat "$WORK/dom.html" 2>/dev/null)
+  if [ "$(printf '%s' "$DOM" | wc -c)" -gt 4000 ]; then
+    ok "the page renders"
+  else
+    bad "the page renders"
+  fi
+  expect "and drew the room list from live state"  "Smoke Room"  "$DOM"
+
+  # An element the interface left empty is a key nobody wrote a string for.
+  BLANK=$(printf '%s' "$DOM" | grep -c "data-t=\"[a-z0-9._]*\"></" || true)
+  if [ "$BLANK" -eq 0 ]; then
+    ok "every translated element has words in it"
+  else
+    bad "$BLANK translated elements are empty"
+  fi
+
+  NOISE=$(grep ":CONSOLE:" "$WORK/chrome.err" 2>/dev/null)
+  if [ -z "$NOISE" ]; then
+    ok "the console said nothing"
+  else
+    bad "the console complained"
+    printf '%s
+' "$NOISE" | sed "s/^/        /" | head -10
+  fi
+fi
+
+say ""
 if [ "$FAIL" -eq 0 ]; then
   say "RESULT: the path a new player walks works end to end"
 else
