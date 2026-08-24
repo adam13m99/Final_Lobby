@@ -1,5 +1,11 @@
 <!doctype html>
-<html lang="en">
+<!-- The lang and dir attributes here are the boot defaults only. i18n.js
+     overwrites both from the loaded language, which is what lets Persian flip
+     the whole layout without a second stylesheet (D44). Nothing below carries
+     user-facing text: every string is a data-t key resolved from
+     strings/<lang>.json, and lobbyapp/ui_test.go fails the build if anybody
+     types text into this file or uses a key that does not exist. -->
+<html lang="en" dir="ltr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -11,32 +17,32 @@
 <!-- First run. The only thing we ever ask for. -->
 <div id="namegate" class="gate hidden">
   <form class="gate-card" id="nameform">
-    <h1>LobbyBaz</h1>
-    <p class="muted">Pick the name other players will see.</p>
-    <input id="nameinput" maxlength="20" placeholder="Your name" autocomplete="off" required>
+    <h1 data-t="namegate.title"></h1>
+    <p class="muted" data-t="namegate.blurb"></p>
+    <input id="nameinput" maxlength="20" data-t-placeholder="namegate.name.placeholder" autocomplete="off" required>
     <label class="field">
-      <span>Your MMR <em>(optional, changeable once a week)</em></span>
-      <input id="mmrinput" type="number" min="0" max="15000" placeholder="e.g. 3200" autocomplete="off">
+      <span><span data-t="namegate.mmr"></span> <em data-t="namegate.mmr.note"></em></span>
+      <input id="mmrinput" type="number" min="0" max="15000" data-t-placeholder="namegate.mmr.placeholder" autocomplete="off">
     </label>
-    <button class="primary" type="submit">Start playing</button>
+    <button class="primary" type="submit" data-t="namegate.submit"></button>
     <p class="gate-err" id="nameerr"></p>
   </form>
 </div>
 
 <header id="top">
-  <div class="brand">FINAL&nbsp;LOBBY</div>
+  <div class="brand" data-t="app.name"></div>
 
   <nav class="tabs">
-    <button class="tab active" data-screen="lobby">Lobby</button>
-    <button class="tab" data-screen="room" id="roomtab" disabled>Room</button>
-    <button class="tab" data-screen="checks">Diagnostics</button>
+    <button class="tab active" data-screen="lobby" data-t="nav.lobby"></button>
+    <button class="tab" data-screen="room" id="roomtab" disabled data-t="nav.room"></button>
+    <button class="tab" data-screen="checks" data-t="nav.checks"></button>
   </nav>
 
   <div class="status">
-    <span class="pill" id="p-service">service</span>
-    <span class="pill" id="p-tunnel">tunnel</span>
-    <span class="pill quiet" id="p-online">&mdash;</span>
-    <button class="me" id="mebtn"><span id="menick">&mdash;</span><small id="memmr"></small></button>
+    <span class="pill" id="p-service"></span>
+    <span class="pill" id="p-tunnel"></span>
+    <span class="pill quiet" id="p-online"></span>
+    <button class="me" id="mebtn"><span id="menick"></span><small id="memmr"></small></button>
   </div>
 </header>
 
@@ -50,10 +56,10 @@
   <div class="col-main">
     <div class="panel">
       <div class="panel-head">
-        <h2>Rooms</h2>
+        <h2 data-t="lobby.rooms"></h2>
         <form id="createform" class="inline">
-          <input id="roomname" maxlength="40" placeholder="Name your room" autocomplete="off">
-          <button class="primary" type="submit">Create room</button>
+          <input id="roomname" maxlength="40" data-t-placeholder="lobby.roomname.placeholder" autocomplete="off">
+          <button class="primary" type="submit" data-t="lobby.create"></button>
         </form>
       </div>
       <div id="roomlist" class="roomlist"></div>
@@ -62,11 +68,11 @@
 
   <div class="col-side">
     <div class="panel chatpanel">
-      <div class="panel-head"><h2>Lobby chat</h2></div>
+      <div class="panel-head"><h2 data-t="lobby.chat"></h2></div>
       <div class="chatlog" id="lobbylog"></div>
       <form class="chatbox" id="lobbychatform">
-        <input id="lobbychatinput" maxlength="300" placeholder="Say something" autocomplete="off">
-        <button type="submit">Send</button>
+        <input id="lobbychatinput" maxlength="300" data-t-placeholder="chat.placeholder" autocomplete="off">
+        <button type="submit" data-t="chat.send"></button>
       </form>
     </div>
   </div>
@@ -78,7 +84,7 @@
     <div class="panel">
       <div class="panel-head">
         <div>
-          <h2 id="room-name">Room</h2>
+          <h2 id="room-name" data-t="room.title"></h2>
           <p class="muted small" id="room-sub"></p>
         </div>
         <span class="badge" id="room-status"></span>
@@ -87,7 +93,7 @@
       <div class="slots" id="slots"></div>
 
       <div class="specrow">
-        <h3>Spectators <em>reserved for admins</em></h3>
+        <h3><span data-t="room.spectators"></span> <em data-t="room.spectators.note"></em></h3>
         <div class="spectators" id="spectators"></div>
       </div>
     </div>
@@ -99,53 +105,53 @@
       <div class="netbanner" id="netbanner" hidden></div>
 
       <div class="actionrow">
-        <button class="primary big" id="btn-connect">Connect</button>
-        <button class="ghost" id="btn-disconnect">Disconnect</button>
+        <button class="primary big" id="btn-connect" data-t="room.connect"></button>
+        <button class="ghost" id="btn-disconnect" data-t="room.disconnect"></button>
         <span class="net" id="netinfo"></span>
       </div>
 
       <div class="actionrow">
         <label class="field inline-field">
-          <span>Game mode</span>
+          <span data-t="room.mode"></span>
           <select id="mode">
-            <option value="1">All Pick</option>
-            <option value="2">Captains Mode</option>
-            <option value="3">Random Draft</option>
-            <option value="4">Single Draft</option>
-            <option value="5">All Random</option>
-            <option value="22">Ranked All Pick</option>
+            <option value="1" data-t="room.mode.ap"></option>
+            <option value="2" data-t="room.mode.cm"></option>
+            <option value="3" data-t="room.mode.rd"></option>
+            <option value="4" data-t="room.mode.sd"></option>
+            <option value="5" data-t="room.mode.ar"></option>
+            <option value="22" data-t="room.mode.rap"></option>
           </select>
         </label>
         <label class="field inline-field">
-          <span>Team</span>
+          <span data-t="room.team"></span>
           <select id="team">
-            <option value="good">Radiant</option>
-            <option value="bad">Dire</option>
+            <option value="good" data-t="room.team.radiant"></option>
+            <option value="bad" data-t="room.team.dire"></option>
           </select>
         </label>
-        <button class="launch big" id="btn-play">Launch Dota 2</button>
+        <button class="launch big" id="btn-play" data-t="room.play"></button>
       </div>
 
       <div class="actionrow hostonly" id="hostcontrols">
-        <button id="btn-lock">Lock &mdash; match starting</button>
-        <button id="btn-reopen">Reopen for a replacement</button>
-        <button id="btn-open">Open to everyone</button>
+        <button id="btn-lock" data-t="room.lock"></button>
+        <button id="btn-reopen" data-t="room.reopen"></button>
+        <button id="btn-open" data-t="room.openall"></button>
       </div>
 
       <div class="actionrow">
-        <button class="danger ghost" id="btn-leave">Leave room</button>
-        <button class="ghost" id="btn-tolobby">Back to lobby</button>
+        <button class="danger ghost" id="btn-leave" data-t="room.leave"></button>
+        <button class="ghost" id="btn-tolobby" data-t="room.tolobby"></button>
       </div>
     </div>
   </div>
 
   <div class="col-side">
     <div class="panel chatpanel">
-      <div class="panel-head"><h2>Room chat</h2></div>
+      <div class="panel-head"><h2 data-t="room.chat"></h2></div>
       <div class="chatlog" id="roomlog"></div>
       <form class="chatbox" id="roomchatform">
-        <input id="roomchatinput" maxlength="300" placeholder="Say something" autocomplete="off">
-        <button type="submit">Send</button>
+        <input id="roomchatinput" maxlength="300" data-t-placeholder="chat.placeholder" autocomplete="off">
+        <button type="submit" data-t="chat.send"></button>
       </form>
     </div>
   </div>
@@ -156,13 +162,13 @@
   <div class="panel wide">
     <div class="panel-head">
       <div>
-        <h2>Diagnostics</h2>
-        <p class="muted small">Checks this machine and sends the results to the server.</p>
+        <h2 data-t="checks.title"></h2>
+        <p class="muted small" data-t="checks.blurb"></p>
       </div>
-      <button class="primary" id="btn-diag">Run checks</button>
+      <button class="primary" id="btn-diag" data-t="checks.run"></button>
     </div>
     <div id="diaglist" class="diaglist">
-      <p class="muted pad">Nothing run yet. For the most useful result, join a room and connect first, then run this on both PCs.</p>
+      <p class="muted pad" data-t="checks.none"></p>
     </div>
     <p class="muted small pad" id="diagwhen"></p>
   </div>
@@ -173,23 +179,24 @@
 <!-- Profile editor -->
 <div id="profilegate" class="gate hidden">
   <form class="gate-card" id="profileform">
-    <h1>Your profile</h1>
+    <h1 data-t="profile.title"></h1>
     <label class="field">
-      <span>Name</span>
+      <span data-t="profile.name"></span>
       <input id="p-nick" maxlength="20" autocomplete="off" required>
     </label>
     <label class="field">
-      <span>MMR <em id="mmrnote"></em></span>
+      <span><span data-t="profile.mmr"></span> <em id="mmrnote"></em></span>
       <input id="p-mmr" type="number" min="0" max="15000" autocomplete="off">
     </label>
     <div class="gate-actions">
-      <button class="primary" type="submit">Save</button>
-      <button type="button" class="ghost" id="p-cancel">Cancel</button>
+      <button class="primary" type="submit" data-t="profile.save"></button>
+      <button type="button" class="ghost" id="p-cancel" data-t="profile.cancel"></button>
     </div>
     <p class="gate-err" id="profileerr"></p>
   </form>
 </div>
 
+<script src="i18n.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

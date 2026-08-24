@@ -161,9 +161,22 @@ there; this is the summary.
 | T6 room privacy (D41) | **done** — all four doors, plus an MMR floor |
 | T7 friends (D41) | **done** — graph, blocks, private chat, invites, presence |
 | T8 roles and moderation (D43, D47) | **done** — roles, sanctions, labels, banners, audit log |
-| T9 interface built for translation (D44) | not started |
+| T9 interface built for translation (D44) | **done** — lookup, logical layout, and a test that enforces both |
 | T10 the new lobby (D42) | not started |
 | T11 desktop application (D45) | not started |
+
+**The interface is built for translation, and a test keeps it that way.**
+Every string the player reads is a key in `lobbyapp/ui/strings/en.json`,
+resolved by `lobbyapp/ui/i18n.js`: `data-t="some.key"` in markup, `t("some.key")`
+in the renderer. The layout uses logical properties, so setting `dir="rtl"`
+flips it with no second stylesheet. `lobbyapp/ui_test.go` fails the build on
+text typed into markup or into `app.js`, on a missing or unused key, on a
+language whose keys do not match English, on a placeholder lost in
+translation, on any hard-coded `left`/`right`, and on a strings file that did
+not make it into the embedded filesystem. Only English ships (D44) — adding
+Persian is a second JSON file and one line in `i18n.js`. Error text from the
+coordinator and the net service is still English wherever it appears: those
+sentences are written in Go and translating them is a separate job.
 
 **Moderation exists, and the head admin is set at deployment.** Pass
 `-head-admin <account-id>` to the coordinator once; there is exactly one, and

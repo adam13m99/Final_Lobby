@@ -190,7 +190,7 @@ main { padding: 1.1rem; }
 
 .actions { padding: 1.1rem; display: flex; flex-direction: column; gap: .8rem; }
 .actionrow { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
-.net { color: var(--muted); font-size: .82rem; margin-left: auto; font-variant-numeric: tabular-nums; }
+.net { color: var(--muted); font-size: .82rem; margin-inline-start: auto; font-variant-numeric: tabular-nums; }
 
 button, select, input {
   font: inherit; border-radius: .4rem;

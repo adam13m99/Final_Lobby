@@ -215,12 +215,45 @@ Notes for whoever picks this up:
   `moderation.KnownLabels` — which is why the set lives on the server and the
   client asks for it.
 
-## T9 — Interface built for translation *(D44)*
+## T9 — Interface built for translation *(D44)* — done
 
-- [ ] All user-facing text through a lookup, none typed into markup
-- [ ] Layout in logical properties so direction flips on its own
-- [ ] No hard-coded left/right anywhere
-- [ ] English is the only language shipped; Persian is a file and a switch
+- [x] All user-facing text through a lookup, none typed into markup
+- [x] Layout in logical properties so direction flips on its own
+- [x] No hard-coded left/right anywhere
+- [x] English is the only language shipped; Persian is a file and a switch
+
+**Notes for whoever picks this up.**
+
+The lookup is `lobbyapp/ui/i18n.js` and the catalogue is
+`lobbyapp/ui/strings/en.json`. In markup, `data-t="some.key"` fills an
+element's text and `data-t-placeholder` / `data-t-title` / `data-t-aria-label`
+fill those attributes; in the renderer, `t("some.key", {name: value})`.
+Nothing draws until the catalogue has loaded, so a screen never flashes its
+keys and corrects itself.
+
+**The rules are enforced, not merely written down.** `lobbyapp/ui_test.go`
+fails the build on text typed into the markup or into `app.js`, on a key that
+does not exist, on a catalogue entry nothing uses, on a language missing a key
+another language has, on a placeholder that did not survive translation, on
+any hard-coded `left`/`right`, and on a strings file that did not make it into
+the embedded filesystem. That last one matters: `go:embed` skips files quietly
+and the failure would otherwise appear only on an installed copy, as a blank
+window. Each guard was checked by breaking the thing it guards and watching it
+fail.
+
+Two limits worth knowing before T10:
+
+- **Server-side error text is not translated.** Messages from the coordinator
+  and the net service arrive already written in English and pass straight to
+  the banner. Translating them means translating them in Go, at their source.
+  It is a separate surface and a later decision, not an oversight.
+- **Block-axis physical properties are allowed on purpose** — `top`, `bottom`,
+  `border-bottom`, `margin-block`. Right-to-left flips the inline axis only;
+  banning the rest would be noise that teaches people to ignore the test.
+
+Adding Persian is now: copy `strings/en.json` to `strings/fa.json`, translate
+the values, and uncomment the `fa` line in `i18n.js`. Every test above starts
+guarding it the moment the file exists.
 
 ## T10 — The new lobby *(D42)*
 

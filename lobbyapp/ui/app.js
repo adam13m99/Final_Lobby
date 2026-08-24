@@ -4,6 +4,10 @@
 // posts actions. It holds no state of its own beyond which screen is showing
 // and what the player is halfway through typing, so a refresh never loses
 // anything and there is no second copy of the truth to drift.
+//
+// No user-facing text is written in this file. Every string is t("some.key"),
+// resolved from strings/<lang>.json by i18n.js, and lobbyapp/ui_test.go fails
+// the build if a key is missing or a quoted sentence appears here (D44).
 
 const TOKEN = new URLSearchParams(location.search).get("t") || "";
 const POLL_MS = 2000;
@@ -45,6 +49,13 @@ async function act(fn) {
   }
 }
 
+// banner shows a sentence across the top.
+//
+// Some of what lands here is an error message from the service or the
+// coordinator, which arrives already written in English and cannot go through
+// the lookup from here. Translating those means translating them at their
+// source, in Go; that is a separate surface and a later task. Everything this
+// file writes itself goes through t().
 function banner(msg) {
   const b = $("banner");
   b.textContent = msg;
@@ -62,22 +73,22 @@ function render() {
   const s = state;
 
   // Header pills.
-  pill("p-service", s.service, s.service ? "service running" : "service down");
+  pill("p-service", s.service, t(s.service ? "status.service.up" : "status.service.down"));
   const tun = s.connected ? "ok" : (s.tunnel === "connecting" ? "wait" : null);
-  pill("p-tunnel", tun, s.connected ? "tunnel connected"
-    : s.tunnel === "connecting" ? "connecting" : "tunnel off");
-  $("p-online").textContent = (s.online ?? 0) + " online";
+  pill("p-tunnel", tun, t(s.connected ? "status.tunnel.on"
+    : s.tunnel === "connecting" ? "status.tunnel.connecting" : "status.tunnel.off"));
+  $("p-online").textContent = t("status.online", { n: s.online ?? 0 });
 
-  $("menick").textContent = s.nick || "…";
-  $("memmr").textContent = s.mmr ? s.mmr + " MMR" : "no MMR set";
+  $("menick").textContent = s.nick || t("status.dash");
+  $("memmr").textContent = s.mmr ? t("status.mmr", { n: s.mmr }) : t("status.nomm");
 
   // First run asks for a name and nothing else.
   $("namegate").classList.toggle("hidden", !!s.named);
 
   // Problems worth interrupting for.
   banner(s.service_error || s.coordinator_error || s.tunnel_error ||
-    (s.room_gone ? "That room has closed." : "") ||
-    (s.removed ? "You are no longer in that room." : "") ||
+    (s.room_gone ? t("err.room_gone") : "") ||
+    (s.removed ? t("err.removed") : "") ||
     (s.build_warning || ""));
 
   renderUpdate(s.update);
@@ -106,16 +117,21 @@ function renderUpdate(u) {
   const el = $("update");
   if (!u) { el.classList.add("hidden"); return; }
   el.classList.remove("hidden");
+  el.textContent = "";
+  const line = document.createElement("span");
   if (u.error) {
-    el.innerHTML = `<span>An update (${esc(u.version)}) could not be downloaded: ${esc(u.error)}</span>`;
+    line.textContent = t("update.failed", { version: u.version, error: u.error });
+    el.appendChild(line);
   } else if (u.ready) {
-    el.innerHTML = `<span>Version ${esc(u.version)} is ready. Installing takes a few seconds and reopens the app.</span>`;
+    line.textContent = t("update.ready", { version: u.version });
+    el.appendChild(line);
     const b = document.createElement("button");
-    b.textContent = "Install now";
+    b.textContent = t("update.install");
     b.onclick = () => act(() => api("/api/update", {}));
     el.appendChild(b);
   } else {
-    el.innerHTML = `<span>Downloading version ${esc(u.version)}…</span>`;
+    line.textContent = t("update.downloading", { version: u.version });
+    el.appendChild(line);
   }
 }
 
@@ -123,12 +139,23 @@ function renderUpdate(u) {
 
 function renderRooms(rooms) {
   const box = $("roomlist");
+  box.innerHTML = "";
   if (!rooms.length) {
-    box.innerHTML = `<p class="muted pad">No rooms yet. Create one and the other player will see it.</p>`;
+    const p = document.createElement("p");
+    p.className = "muted pad";
+    p.textContent = t("lobby.empty");
+    box.appendChild(p);
     return;
   }
-  box.innerHTML = "";
   for (const r of rooms) box.appendChild(roomCard(r));
+}
+
+// roomMeta is the one line under a room's name: how full it is, whose PC is
+// hosting, and the average MMR when anybody has declared one.
+function roomMeta(r) {
+  return r.avg_mmr
+    ? t("room.meta.mmr", { seats: r.seats, host: r.host_nick, mmr: r.avg_mmr })
+    : t("room.meta", { seats: r.seats, host: r.host_nick });
 }
 
 function roomCard(r) {
@@ -147,10 +174,7 @@ function roomCard(r) {
         <strong>${esc(r.name)}</strong>
         ${statusBadge(r.status)}
       </div>
-      <div class="room-meta">
-        ${r.seats}/10 players &middot; host ${esc(r.host_nick)}${
-          r.avg_mmr ? " &middot; average " + r.avg_mmr + " MMR" : ""}
-      </div>
+      <div class="room-meta">${esc(roomMeta(r))}</div>
       <div class="room-players">${players}</div>
     </div>
     <div class="room-actions"></div>`;
@@ -160,25 +184,25 @@ function roomCard(r) {
 
   if (mine) {
     const open = document.createElement("button");
-    open.textContent = "Open";
+    open.textContent = t("room.open");
     open.className = "primary";
     open.onclick = () => show("room");
     actions.appendChild(open);
   } else {
     const join = document.createElement("button");
-    join.textContent = "Join";
+    join.textContent = t("room.join");
     join.className = "primary";
     join.disabled = !r.joinable || !!state.room_id;
-    join.title = state.room_id ? "Leave your current room first"
-      : r.joinable ? "" : "This room is not accepting players";
+    join.title = state.room_id ? t("room.join.busy")
+      : r.joinable ? "" : t("room.join.closed");
     join.onclick = () => act(() => api("/api/rooms/join", { room_id: r.id }));
     actions.appendChild(join);
 
     const spec = document.createElement("button");
-    spec.textContent = "Spectate";
+    spec.textContent = t("room.spectate");
     spec.className = "ghost";
     spec.disabled = !!state.room_id;
-    spec.title = "Admin seat, outside the ten playing slots";
+    spec.title = t("room.spectate.note");
     spec.onclick = () => act(() => api("/api/rooms/spectate", { room_id: r.id }));
     actions.appendChild(spec);
   }
@@ -192,23 +216,21 @@ function statusClass(status) {
 }
 
 function statusLabel(status) {
-  if (status === "locked_in_game") return "In game";
-  if (status === "open_to_new_players") return "Needs a player";
-  if (status === "closed") return "Closed";
-  return "Open";
+  if (status === "locked_in_game") return t("room.status.locked");
+  if (status === "open_to_new_players") return t("room.status.replacing");
+  if (status === "closed") return t("room.status.closed");
+  return t("room.status.open");
 }
 
 function statusBadge(status) {
-  return `<span class="${statusClass(status)}">${statusLabel(status)}</span>`;
+  return `<span class="${statusClass(status)}">${esc(statusLabel(status))}</span>`;
 }
 
 // ------------------------------------------------------------------ room
 
 function renderRoom(r) {
   $("room-name").textContent = r.name;
-  $("room-sub").textContent =
-    `${r.seats}/10 players · host ${r.host_nick}` +
-    (r.avg_mmr ? ` · average ${r.avg_mmr} MMR` : "");
+  $("room-sub").textContent = roomMeta(r);
   const badge = $("room-status");
   badge.className = statusClass(r.status);
   badge.textContent = statusLabel(r.status);
@@ -227,22 +249,27 @@ function renderRoom(r) {
 
   const specs = (r.members || []).filter((m) => m.spectator);
   const sbox = $("spectators");
-  sbox.innerHTML = specs.length ? "" :
-    `<p class="muted small">Nobody is spectating.</p>`;
+  sbox.innerHTML = "";
+  if (!specs.length) {
+    const p = document.createElement("p");
+    p.className = "muted small";
+    p.textContent = t("room.spectators.none");
+    sbox.appendChild(p);
+  }
   for (const m of specs) sbox.appendChild(slotCard(m.slot, m, false, true));
 
   // Network facts, shown plainly. During testing these are the numbers
   // somebody will be asked about.
   const bits = [];
-  if (state.virtual_ip) bits.push("you " + state.virtual_ip);
-  if (state.host_ip) bits.push("host " + state.host_ip);
+  if (state.virtual_ip) bits.push(t("net.you", { ip: state.virtual_ip }));
+  if (state.host_ip) bits.push(t("net.host", { ip: state.host_ip }));
   if (state.adapter) bits.push(state.adapter);
   $("netinfo").textContent = bits.join("  ·  ");
 
   $("btn-connect").disabled = !!state.connected;
   $("btn-disconnect").disabled = !state.connected;
   $("btn-play").disabled = !state.connected;
-  $("btn-play").title = state.connected ? "" : "Connect first";
+  $("btn-play").title = state.connected ? "" : t("room.play.note");
 
   drawNetBanner();
 }
@@ -256,30 +283,26 @@ function renderRoom(r) {
 // them minutes later as an error inside the game.
 function drawNetBanner() {
   const el = $("netbanner");
+  el.hidden = false;
   if (state.connected) {
-    el.hidden = false;
     el.className = "netbanner ok";
-    el.textContent = "You are on the room's network" +
-      (state.virtual_ip ? " as " + state.virtual_ip : "") + ".";
+    el.textContent = state.virtual_ip
+      ? t("net.on", { ip: state.virtual_ip })
+      : t("net.on.noip");
     return;
   }
   if (state.connect_error) {
-    el.hidden = false;
     el.className = "netbanner bad";
-    el.textContent = "Could not get onto the room's network: " +
-      state.connect_error + " Press Connect to try again.";
+    el.textContent = t("net.failed", { error: state.connect_error });
     return;
   }
   if (state.tunnel === "connecting") {
-    el.hidden = false;
     el.className = "netbanner wait";
-    el.textContent = "Getting you onto the room's network...";
+    el.textContent = t("net.connecting");
     return;
   }
-  el.hidden = false;
   el.className = "netbanner bad";
-  el.textContent = "You are not on the room's network yet, so nobody can " +
-    "reach you and you cannot reach the host. Press Connect.";
+  el.textContent = t("net.off");
 }
 
 function slotCard(index, member, canKick, spectator) {
@@ -292,18 +315,21 @@ function slotCard(index, member, canKick, spectator) {
   const body = el.querySelector(".slot-body");
 
   if (!member) {
-    body.innerHTML = `<div class="slot-name muted">Empty</div>`;
+    body.innerHTML = `<div class="slot-name muted">${esc(t("room.slot.empty"))}</div>`;
     return el;
   }
+
+  const name = mine ? t("room.slot.you", { name: member.nick }) : member.nick;
+  const mmr = member.mmr ? t("status.mmr", { n: member.mmr }) : t("status.nomm");
+  const sub = member.is_host ? t("room.slot.host", { sub: mmr }) : mmr;
   body.innerHTML = `
-    <div class="slot-name">${esc(member.nick)}${mine ? " (you)" : ""}</div>
-    <div class="slot-sub">${member.is_host ? "Host · " : ""}${
-      member.mmr ? member.mmr + " MMR" : "no MMR set"}</div>`;
+    <div class="slot-name">${esc(name)}</div>
+    <div class="slot-sub">${esc(sub)}</div>`;
 
   if (canKick && !member.is_host && !mine) {
     const b = document.createElement("button");
-    b.textContent = "Kick";
-    b.title = "Removes them and bars them from this room for 5 minutes";
+    b.textContent = t("room.kick");
+    b.title = t("room.kick.note");
     b.onclick = () => act(() => api("/api/rooms/kick", { target: member.player_id }));
     el.appendChild(b);
   }
@@ -334,7 +360,7 @@ function renderChat(id, msgs) {
 
 function renderDiag() {
   $("btn-diag").disabled = !!state.diag_running;
-  $("btn-diag").textContent = state.diag_running ? "Running…" : "Run checks";
+  $("btn-diag").textContent = t(state.diag_running ? "checks.running" : "checks.run");
 
   const checks = state.diagnostics;
   if (!checks) return;
@@ -347,13 +373,14 @@ function renderDiag() {
         <div class="name">${esc(c.name)}</div>
         ${c.detail ? `<div class="detail">${esc(c.detail)}</div>` : ""}
       </div>
-      ${c.ms ? `<div class="ms">${c.ms} ms</div>` : ""}
+      ${c.ms ? `<div class="ms">${esc(t("checks.ms", { n: c.ms }))}</div>` : ""}
     </div>`).join("");
 
   if (state.diag_at) {
     const when = new Date(state.diag_at);
-    $("diagwhen").textContent = "Last run " + when.toLocaleTimeString() +
-      ", and sent to the server.";
+    $("diagwhen").textContent = t("checks.when", {
+      time: when.toLocaleTimeString(I18n.lang),
+    });
   }
 }
 
@@ -363,13 +390,13 @@ function show(name) {
   screen = name;
   for (const el of document.querySelectorAll(".screen")) el.classList.add("hidden");
   $("screen-" + name).classList.remove("hidden");
-  for (const t of document.querySelectorAll(".tab")) {
-    t.classList.toggle("active", t.dataset.screen === name);
+  for (const tab of document.querySelectorAll(".tab")) {
+    tab.classList.toggle("active", tab.dataset.screen === name);
   }
 }
 
-document.querySelectorAll(".tab").forEach((t) => {
-  t.onclick = () => show(t.dataset.screen);
+document.querySelectorAll(".tab").forEach((tab) => {
+  tab.onclick = () => show(tab.dataset.screen);
 });
 
 // ---------------------------------------------------------------- events
@@ -393,8 +420,10 @@ $("mebtn").onclick = () => {
   $("p-nick").value = state.nick || "";
   $("p-mmr").value = state.mmr || "";
   $("mmrnote").textContent = state.mmr_locked_until
-    ? "changeable again " + new Date(state.mmr_locked_until).toLocaleDateString()
-    : "changeable once a week";
+    ? t("profile.mmr.locked", {
+        date: new Date(state.mmr_locked_until).toLocaleDateString(I18n.lang),
+      })
+    : t("profile.mmr.free");
   $("profileerr").textContent = "";
   $("profilegate").classList.remove("hidden");
 };
@@ -463,9 +492,15 @@ async function refresh() {
     state = await api("/api/state");
     render();
   } catch (e) {
-    banner("The app stopped responding: " + e.message);
+    banner(t("err.dead", { error: e.message }));
   }
 }
 
-refresh();
-setInterval(refresh, POLL_MS);
+// Nothing may draw before the strings are in: a screen that flashes its keys
+// and then corrects itself looks broken, and on a slow PC the flash lasts long
+// enough to be read.
+I18n.load("en").then(() => {
+  I18n.apply();
+  refresh();
+  setInterval(refresh, POLL_MS);
+});
