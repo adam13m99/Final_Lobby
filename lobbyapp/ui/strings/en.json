@@ -1,7 +1,6 @@
 {
   "_readme": "English source text. Keys are ordered by where they appear on screen. To add a language, copy this file to <code>.json, translate the values, leave the keys alone, and add the language to LANGUAGES in i18n.js. lobbyapp/ui_test.go fails the build if any language is missing a key the others have, so a half-finished translation cannot ship. Placeholders in braces are substituted at runtime and must survive translation unchanged; the words around them may be reordered freely.",
   "namegate.title": "LobbyBaz",
-  "namegate.blurb": "Pick the name other players will see.",
   "namegate.name.placeholder": "Your name",
   "namegate.mmr": "Your MMR",
   "namegate.mmr.note": "(optional, changeable once a week)",
@@ -153,5 +152,8 @@
   "tournaments.title": "Tournaments",
   "tournaments.soon": "Not built yet. The spec leaves tournaments out of the first release, and this entry is here so the toolbar does not move when they arrive.",
   "friends.inroomhidden": "In a room",
-  "chat.me": "You"
+  "chat.me": "You",
+  "namegate.why.join": "Pick the name the other players will see. They are about to play with you.",
+  "namegate.why.create": "Pick the name the other players will see before you open a room.",
+  "namegate.why.chat": "Pick a name before you say something — nobody can reply to a blank."
 }

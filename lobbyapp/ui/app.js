@@ -64,6 +64,20 @@ function banner(msg) {
   b.classList.toggle("hidden", !msg);
 }
 
+// needName stops an action that cannot be done anonymously and asks for a
+// name, saying which action prompted it. Returns true if it stopped.
+//
+// Browsing needs no name. Sitting in somebody's room, or talking in it, does:
+// the other nine people are entitled to know who they are playing with.
+function needName(why) {
+  if (state.named) return false;
+  $("namewhy").textContent = t(why);
+  $("nameerr").textContent = "";
+  $("namegate").classList.remove("hidden");
+  $("nameinput").focus();
+  return true;
+}
+
 function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -90,8 +104,10 @@ function render() {
 
   renderConnection(s);
 
-  // First run asks for a name and nothing else.
-  $("namegate").classList.toggle("hidden", !!s.named);
+  // The lobby is browsable before signing up (D45). Nothing is asked for
+  // until the player does something that needs a name, so somebody who just
+  // installed the app can see whether anyone is playing before deciding
+  // whether to bother. Asking first is how an install gets abandoned.
 
   banner(s.service_error || s.coordinator_error || s.tunnel_error ||
     (s.room_gone ? t("err.room_gone") : "") ||
@@ -302,7 +318,10 @@ function roomActions(r) {
   const spec = el("button", "ghost tiny", t("room.spectate"));
   spec.disabled = !!state.room_id;
   spec.title = t("room.spectate.note");
-  spec.onclick = () => act(() => api("/api/rooms/spectate", { room_id: r.id }));
+  spec.onclick = () => {
+    if (needName("namegate.why.join")) return;
+    act(() => api("/api/rooms/spectate", { room_id: r.id }));
+  };
   acts.appendChild(spec);
   return acts;
 }
@@ -310,6 +329,7 @@ function roomActions(r) {
 // joinRoom asks for the password only when the room actually has one, so an
 // open room is one click and a locked one is honest about why it is asking.
 function joinRoom(r) {
+  if (needName("namegate.why.join")) return;
   let password = "";
   if (r.needs_password) {
     password = window.prompt(t("lobby.door.ask")) || "";
@@ -689,6 +709,7 @@ $("nameform").onsubmit = async (e) => {
       mmr: mmr === "" ? null : Number(mmr),
     });
     $("nameerr").textContent = "";
+    $("namegate").classList.add("hidden");
     await refresh();
   } catch (err) {
     $("nameerr").textContent = err.message;
@@ -725,6 +746,7 @@ $("profileform").onsubmit = async (e) => {
 
 $("createform").onsubmit = (e) => {
   e.preventDefault();
+  if (needName("namegate.why.create")) return;
   const name = $("roomname").value;
   act(async () => {
     await api("/api/rooms/create", { name });
@@ -740,6 +762,7 @@ $("describeform").onsubmit = (e) => {
 
 $("chatform").onsubmit = (e) => {
   e.preventDefault();
+  if (needName("namegate.why.chat")) return;
   const text = $("chatinput").value.trim();
   if (!text) return;
   $("chatinput").value = "";

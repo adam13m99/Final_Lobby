@@ -37,6 +37,12 @@ var uiFiles embed.FS
 
 func main() {
 	noBrowser := flag.Bool("no-browser", false, "do not open a browser window")
+	// urlOnly prints the address on the first line and nothing before it, so
+	// the desktop shell can read it back rather than agreeing a port in
+	// advance and finding it taken (D45). The port is chosen by the operating
+	// system and the token is fresh each run, so there is nothing fixed for
+	// anything else on the machine to guess.
+	urlOnly := flag.Bool("url-only", false, "print the address on the first line, for the desktop shell")
 	addr := flag.String("listen", "127.0.0.1:0", "loopback address to serve on")
 	flag.Parse()
 
@@ -59,11 +65,16 @@ func main() {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	fmt.Printf("LobbyBaz %s is running.\n", build.Version)
-	fmt.Println()
-	fmt.Println("  ", url)
-	fmt.Println()
-	fmt.Println("Leave this window open while you play. Close it to quit.")
+	if *urlOnly {
+		fmt.Println(url)
+		_ = os.Stdout.Sync()
+	} else {
+		fmt.Printf("LobbyBaz %s is running.\n", build.Version)
+		fmt.Println()
+		fmt.Println("  ", url)
+		fmt.Println()
+		fmt.Println("Leave this window open while you play. Close it to quit.")
+	}
 
 	if !*noBrowser {
 		openBrowser(url)

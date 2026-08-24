@@ -56,3 +56,13 @@ tmp/
 
 # Test bundle - contains the API token
 /dist/
+
+# The desktop shell's build output, and the Go binary copied in beside it.
+# Both are produced by scripts/publish.sh from sources already tracked.
+desktop/target/
+desktop/binaries/
+desktop/gen/
+# ...but the shell's own splash page is source, not build output, and the
+# unanchored `dist/` rule above would otherwise swallow it.
+!desktop/dist/
+!desktop/dist/**
