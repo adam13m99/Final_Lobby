@@ -223,7 +223,15 @@ courtesy; the coordinator refuses every call behind it without a role.
 
 **A head admin is appointed once, at deployment**: `-head-admin <account id>`
 on the coordinator (D47). Until somebody holds that role nobody can appoint
-moderators, and the coordinator says so in its startup log.
+moderators, and the coordinator says so in its startup log. After that the
+head admin appoints admins from the app — from a player's record, where they
+have just read what that person has done, rather than from an abstract list.
+
+One thing to know: **a role is cached for two minutes on every client**, so
+somebody appointed while their window is open sees their tools within two
+minutes rather than at once. That is deliberate. The alternative is every
+signed-in client asking who the staff are every few seconds, which at 500
+players is a constant load for an answer that changes about once a month.
 
 **There are terms now, and they need reading.** The sign-up screen asks people
 to accept terms of use, so there is something to accept: `docs/terms-en.md`,

@@ -249,5 +249,7 @@
   "pass.done": "Password changed.",
   "terms.changed": "The terms of use have changed since you agreed to them.",
   "terms.read": "Read them",
-  "terms.accept": "Accept"
+  "terms.accept": "Accept",
+  "mod.staff.appoint": "Make this player an admin",
+  "mod.staff.appoint.note": "They can then sanction, label and close rooms. Only you can undo it."
 }

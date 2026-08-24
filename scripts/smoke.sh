@@ -489,6 +489,20 @@ expect "an announcement can be posted"       'Smoke announcement' "$AD"
 ADS=$(curl -fsS "$COORD/v1/banners" 2>&1)
 expect "and everybody can read it"           'Smoke announcement' "$ADS"
 
+APPOINT=$(call POST /api/admin/staff "{\"target_id\":\"$B_ID\",\"grant\":true}")
+expect "the head admin can appoint an admin"  '"ok":true'      "$APPOINT"
+
+# Read from the head admin's own state, not the new admin's: a role is
+# cached for two minutes on every client, so somebody appointed while their
+# window is open sees their tools within two minutes rather than instantly.
+# That is the right trade for a list every signed-in client would otherwise
+# refetch constantly, and it is worth knowing about.
+A_STATE=$(call GET "/api/state")
+expect "and the staff list says so"           '"role":"admin"' "$A_STATE"
+
+REVOKE=$(call POST /api/admin/staff "{\"target_id\":\"$B_ID\",\"grant\":false}")
+expect "and can take it back"                 '"ok":true'      "$REVOKE"
+
 NOTSTAFF=$(callb GET "/api/admin/player?username=smoketester")
 refuse "a player without a role cannot"      'Smoke Tester'   "$NOTSTAFF"
 

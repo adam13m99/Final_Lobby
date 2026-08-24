@@ -874,6 +874,9 @@ function renderRecord() {
   const r = modRecord;
 
   $("mod-who").textContent = r.display_name || r.player_id;
+  // Only the head admin may appoint, and nobody may appoint themselves.
+  $("mod-appointrow").classList.toggle("hidden",
+    state.role !== "head_admin" || r.player_id === state.player_id);
   $("mod-restriction").textContent = restrictionLine(r.restriction, r.kicks_this_week);
 
   const labels = $("mod-labels");
@@ -1003,6 +1006,11 @@ $("chatcollapse").onclick = () => $("chatpanel").classList.toggle("collapsed");
 $("modfind").onsubmit = (e) => {
   e.preventDefault();
   lookUp($("mod-username").value.trim());
+};
+
+$("mod-appoint").onclick = () => {
+  if (!modRecord) return;
+  act(() => api("/api/admin/staff", { target_id: modRecord.player_id, grant: true }));
 };
 
 $("modlabelform").onsubmit = (e) => {

@@ -317,6 +317,14 @@
         </div>
       </div>
 
+      <!-- Appointing an admin happens where you have just read somebody's
+           record, not from a separate list of people who are already staff.
+           Head admin only (D47); hidden for everybody else. -->
+      <div class="inline pad hidden" id="mod-appointrow">
+        <button class="tiny" id="mod-appoint" data-t="mod.staff.appoint"></button>
+        <span class="muted small" data-t="mod.staff.appoint.note"></span>
+      </div>
+
       <div class="labelrow" id="mod-labels"></div>
       <form class="inline" id="modlabelform">
         <select id="mod-label"></select>
