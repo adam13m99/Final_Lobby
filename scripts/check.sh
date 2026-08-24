@@ -62,6 +62,24 @@ else
 fi
 
 say ""
+say "=== desktop shell ==="
+# The Tauri window (D45, D55). It is checked rather than built: a full build
+# links a webview and takes minutes, and what breaks in practice is the Rust,
+# not the linker. Its toolchain is not required to work on this project - most
+# tasks never touch it - so its absence is a note, not a failure.
+if [ ! -d desktop ]; then
+  warn "no desktop shell yet - plan Task 11 has not landed"
+elif ! command -v cargo >/dev/null 2>&1; then
+  warn "skipping the desktop shell - cargo not installed"
+else
+  if (cd desktop && cargo check --quiet >/dev/null 2>&1); then
+    ok "check desktop"
+  else
+    bad "check desktop"
+  fi
+fi
+
+say ""
 say "=== working tree ==="
 if [ -n "$(git status --porcelain)" ]; then
   warn "uncommitted changes present:"

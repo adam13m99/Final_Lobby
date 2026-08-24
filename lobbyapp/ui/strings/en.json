@@ -155,5 +155,17 @@
   "chat.me": "You",
   "namegate.why.join": "Pick the name the other players will see. They are about to play with you.",
   "namegate.why.create": "Pick the name the other players will see before you open a room.",
-  "namegate.why.chat": "Pick a name before you say something — nobody can reply to a blank."
+  "namegate.why.chat": "Pick a name before you say something — nobody can reply to a blank.",
+  "auth.signin": "Sign in",
+  "auth.signup": "Create account",
+  "auth.signout": "Sign out",
+  "auth.username": "Username",
+  "auth.displayname": "Name other players see",
+  "auth.password": "Password",
+  "auth.norecovery": "There is no way to reset a forgotten password. Write it down somewhere you will still have it.",
+  "auth.terms": "I accept the terms.",
+  "auth.mustaccept": "You have to accept the terms to create an account.",
+  "profile.signedin": "Signed in as {username}",
+  "profile.local": "Not signed in — this name is stored on this PC only.",
+  "friends.signin": "Sign in to see your friends."
 }

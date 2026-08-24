@@ -18,17 +18,54 @@
 </head>
 <body>
 
-<!-- First run. The only thing we ever ask for. -->
+<!-- The gate. It only appears when the player does something that cannot be
+     done anonymously, and what it asks for depends on the server: a
+     coordinator with no database has no accounts, and there the app asks for
+     a name and nothing else, exactly as it did before (D37, D45). -->
 <div id="namegate" class="gate hidden">
   <form class="gate-card" id="nameform">
     <h1 data-t="namegate.title"></h1>
     <p class="muted" id="namewhy"></p>
-    <input id="nameinput" maxlength="20" data-t-placeholder="namegate.name.placeholder" autocomplete="off" required>
-    <label class="field">
-      <span><span data-t="namegate.mmr"></span> <em data-t="namegate.mmr.note"></em></span>
-      <input id="mmrinput" type="number" min="0" max="15000" data-t-placeholder="namegate.mmr.placeholder" autocomplete="off">
-    </label>
-    <button class="primary" type="submit" data-t="namegate.submit"></button>
+
+    <!-- Accounts off: a typed name, and that is all there is. -->
+    <div id="nickonly">
+      <input id="nameinput" maxlength="20" data-t-placeholder="namegate.name.placeholder" autocomplete="off">
+      <label class="field">
+        <span><span data-t="namegate.mmr"></span> <em data-t="namegate.mmr.note"></em></span>
+        <input id="mmrinput" type="number" min="0" max="15000" data-t-placeholder="namegate.mmr.placeholder" autocomplete="off">
+      </label>
+    </div>
+
+    <!-- Accounts on. -->
+    <div id="accountform" class="hidden">
+      <div class="modetabs">
+        <button type="button" class="chattab active" data-mode="signin" data-t="auth.signin"></button>
+        <button type="button" class="chattab" data-mode="signup" data-t="auth.signup"></button>
+      </div>
+      <label class="field">
+        <span data-t="auth.username"></span>
+        <input id="a-user" maxlength="24" autocomplete="username">
+      </label>
+      <label class="field signup-only">
+        <span data-t="auth.displayname"></span>
+        <input id="a-nick" maxlength="20" autocomplete="nickname">
+      </label>
+      <label class="field">
+        <span data-t="auth.password"></span>
+        <input id="a-pass" type="password" maxlength="72" autocomplete="current-password">
+      </label>
+      <label class="field signup-only">
+        <span><span data-t="namegate.mmr"></span> <em data-t="namegate.mmr.note"></em></span>
+        <input id="a-mmr" type="number" min="0" max="15000" data-t-placeholder="namegate.mmr.placeholder" autocomplete="off">
+      </label>
+      <p class="warn-note signup-only" data-t="auth.norecovery"></p>
+      <label class="checkrow signup-only">
+        <input id="a-terms" type="checkbox">
+        <span data-t="auth.terms"></span>
+      </label>
+    </div>
+
+    <button class="primary" type="submit" id="gatego"></button>
     <p class="gate-err" id="nameerr"></p>
   </form>
 </div>
@@ -258,6 +295,7 @@
 <div id="profilegate" class="gate hidden">
   <form class="gate-card" id="profileform">
     <h1 data-t="profile.title"></h1>
+    <p class="muted small" id="p-who"></p>
     <label class="field">
       <span data-t="profile.name"></span>
       <input id="p-nick" maxlength="20" autocomplete="off" required>
@@ -269,6 +307,7 @@
     <div class="gate-actions">
       <button class="primary" type="submit" data-t="profile.save"></button>
       <button type="button" class="ghost" id="p-cancel" data-t="profile.cancel"></button>
+      <button type="button" class="ghost danger hidden" id="p-signout" data-t="auth.signout"></button>
     </div>
     <p class="gate-err" id="profileerr"></p>
   </form>

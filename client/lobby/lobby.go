@@ -429,3 +429,24 @@ func (c *Client) Describe(roomID, description string) (*RoomView, error) {
 		map[string]any{"description": description}, &rv)
 	return &rv, err
 }
+
+// ServerInfo is what a coordinator can do, asked before anything is asked of
+// it. A client that knows there are no accounts can decline to offer a sign-in
+// screen, rather than offering one and showing the player an error for a thing
+// they never chose to do.
+type ServerInfo struct {
+	OK           bool   `json:"ok"`
+	Rooms        int    `json:"rooms"`
+	Accounts     bool   `json:"accounts"`
+	Friends      bool   `json:"friends"`
+	TermsVersion string `json:"terms_version"`
+}
+
+// Info asks what the server supports. It needs no session and no account.
+func (c *Client) Info() (*ServerInfo, error) {
+	var out ServerInfo
+	if err := c.do("GET", "/healthz", nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}

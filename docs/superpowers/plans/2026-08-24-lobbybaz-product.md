@@ -305,12 +305,51 @@ id, a class, or a data attribute the markup does not have.
 has looked at the rendered page. That needs `./scripts/publish.sh` and one of
 the two test PCs.
 
-## T11 — Desktop application *(D45)*
+## T11 — Desktop application *(D45)* — done
 
-- [ ] Tauri window replacing the browser page
-- [ ] Minimise to tray
-- [ ] Notify when a room fills or a host starts
-- [ ] Browse the lobby before signing up; account asked for at join
+- [x] Tauri window replacing the browser page
+- [x] Minimise to tray
+- [x] Notify when a room fills or a host starts
+- [x] Browse the lobby before signing up; account asked for at join
+
+**Notes for whoever picks this up.**
+
+`desktop/` is a Tauri shell and nothing more: it starts the Go binary with
+`-url-only`, reads the loopback address off its first line, and points a
+webview at it. Why it is a shell rather than a rewrite is D55 — briefly, the
+Go client is the only code here that has actually carried a Dota match, and
+what a browser page genuinely cannot do is exactly the small thing the shell
+adds.
+
+Build it with `./scripts/build-desktop.sh`. It is **not** wired into
+`publish.sh` yet, and that is deliberate: publish.sh is the owner's only
+distribution channel and the installer it makes is known to work. Swapping it
+for one nobody has installed on a real machine risks the thing that works to
+ship the thing that is not yet proven. Install the shell by hand on a test PC
+first.
+
+**Browse-before-signup needed a server change, not just a client one.** With
+accounts on, `POST /v1/sync` used to require a session, so a new install could
+not see the lobby at all. It is now open: without a session it answers with
+the room list, the lobby chat and the online count, and nothing that belongs
+to a person - no presence recorded, no room, no room chat. See `Server.browse`.
+
+**The gate has three shapes**, chosen from what the server says it can do at
+`GET /healthz`: a typed name (no accounts on this server), sign in, or create
+an account. The live coordinator still runs without `-db`, so today it is the
+first of those - and the app must keep working that way, which is why the
+capability is asked for rather than assumed.
+
+**The session is stored** in the session file and attached to every call, so
+nobody types a password twice a day. The password itself is never written
+down. Signing out ends the session on the server as well, because the case
+where signing out matters is a machine somebody has just walked away from.
+
+**What was verified:** sign-up, sign-in, room creation, description, sign-out
+and anonymous browsing all exercised end to end against a real coordinator
+with `-db`; the shell launches, spawns its sidecar without a console window,
+and the webview polls the local server. **What was not:** nobody has looked at
+the rendered window, and the NSIS bundle has never been built or installed.
 
 ## T12 — Tournaments *(D48)*
 

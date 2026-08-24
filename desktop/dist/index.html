@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<title>LobbyBaz</title>
+<style>
+  /* Shown for the second or so between the window opening and the local
+     server being ready. Deliberately wordless: this page is bundled inside
+     the Rust binary and cannot reach the string catalogue the real interface
+     uses (D44), so rather than hard-code a sentence in one language it says
+     nothing and simply looks like the app starting. */
+  html, body { height: 100%; margin: 0; background: #0f1116; }
+  body { display: grid; place-items: center; }
+  .mark {
+    font: 800 1.1rem/1 "Segoe UI", system-ui, sans-serif;
+    letter-spacing: .35em; color: #e04a2f;
+    animation: breathe 1.6s ease-in-out infinite;
+  }
+  @keyframes breathe { 0%,100% { opacity: .35 } 50% { opacity: 1 } }
+</style>
+</head>
+<body><div class="mark">LOBBYBAZ</div></body>
+</html>

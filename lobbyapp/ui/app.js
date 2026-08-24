@@ -20,6 +20,7 @@ let filter = "all";
 let query = "";
 let busy = false;
 let dmWith = null;
+let authMode = "signin";
 
 const $ = (id) => document.getElementById(id);
 
@@ -64,18 +65,43 @@ function banner(msg) {
   b.classList.toggle("hidden", !msg);
 }
 
-// needName stops an action that cannot be done anonymously and asks for a
-// name, saying which action prompted it. Returns true if it stopped.
+// needName stops an action that cannot be done anonymously and asks for
+// whatever this server requires, saying which action prompted it. Returns
+// true if it stopped.
 //
-// Browsing needs no name. Sitting in somebody's room, or talking in it, does:
+// Browsing needs nothing. Sitting in somebody's room, or talking in it, does:
 // the other nine people are entitled to know who they are playing with.
+//
+// What it asks for depends on the server. A coordinator with no database has
+// no accounts, and there a typed name is all there is and all that is asked
+// for - the app has to keep working against the server that is running today.
 function needName(why) {
-  if (state.named) return false;
+  if (state.accounts ? state.signed_in : state.named) return false;
+  gateMode(authMode);
   $("namewhy").textContent = t(why);
   $("nameerr").textContent = "";
   $("namegate").classList.remove("hidden");
-  $("nameinput").focus();
+  ($("accountform").classList.contains("hidden") ? $("nameinput") : $("a-user")).focus();
   return true;
+}
+
+// gateMode switches the gate between its three shapes: a name, signing in, or
+// creating an account.
+function gateMode(mode) {
+  authMode = mode;
+  const accounts = !!state.accounts;
+  $("nickonly").classList.toggle("hidden", accounts);
+  $("accountform").classList.toggle("hidden", !accounts);
+  for (const f of document.querySelectorAll(".signup-only")) {
+    f.classList.toggle("hidden", !accounts || mode !== "signup");
+  }
+  for (const tab of document.querySelectorAll(".modetabs .chattab")) {
+    tab.classList.toggle("active", tab.dataset.mode === mode);
+  }
+  $("a-pass").setAttribute("autocomplete",
+    mode === "signup" ? "new-password" : "current-password");
+  $("gatego").textContent = t(!accounts ? "namegate.submit"
+    : mode === "signup" ? "auth.signup" : "auth.signin");
 }
 
 function esc(s) {
@@ -473,8 +499,15 @@ function renderFriends(list, why) {
   box.textContent = "";
 
   if (!list) {
-    box.appendChild(el("p", "muted small friend-empty",
-      why ? t("friends.unavailable") : t("friends.loading")));
+    // Three different absences, and they mean different things to a player:
+    // this server has no friends list at all, you have not signed in yet, or
+    // it simply has not arrived. Saying "unavailable" for all three would
+    // send somebody looking for a fault that is not there.
+    let key = "friends.loading";
+    if (state.accounts && !state.signed_in) key = "friends.signin";
+    else if (state.accounts === false) key = "friends.unavailable";
+    else if (why) key = "friends.unavailable";
+    box.appendChild(el("p", "muted small friend-empty", t(key)));
     return;
   }
 
@@ -700,19 +733,46 @@ document.querySelectorAll(".chip").forEach((chip) => {
   };
 });
 
+document.querySelectorAll(".modetabs .chattab").forEach((tab) => {
+  tab.onclick = () => gateMode(tab.dataset.mode);
+});
+
 $("nameform").onsubmit = async (e) => {
   e.preventDefault();
-  const mmr = $("mmrinput").value;
+  const say = (m) => { $("nameerr").textContent = m; };
   try {
-    await api("/api/profile", {
-      nick: $("nameinput").value,
-      mmr: mmr === "" ? null : Number(mmr),
-    });
-    $("nameerr").textContent = "";
+    if (!state.accounts) {
+      const mmr = $("mmrinput").value;
+      await api("/api/profile", {
+        nick: $("nameinput").value,
+        mmr: mmr === "" ? null : Number(mmr),
+      });
+    } else if (authMode === "signup") {
+      // The terms are accepted as part of creating the account, because that
+      // is what the server records. There is no account that has not
+      // accepted them.
+      if (!$("a-terms").checked) { say(t("auth.mustaccept")); return; }
+      await api("/api/auth/signup", {
+        username: $("a-user").value,
+        display_name: $("a-nick").value || $("a-user").value,
+        password: $("a-pass").value,
+        terms_version: state.terms_version || "",
+      });
+      const mmr = $("a-mmr").value;
+      if (mmr !== "") await api("/api/profile", { mmr: Number(mmr) });
+    } else {
+      await api("/api/auth/signin", {
+        username: $("a-user").value,
+        password: $("a-pass").value,
+      });
+    }
+    // Never leave a typed password sitting in the document.
+    $("a-pass").value = "";
+    say("");
     $("namegate").classList.add("hidden");
     await refresh();
   } catch (err) {
-    $("nameerr").textContent = err.message;
+    say(err.message);
   }
 };
 
@@ -725,9 +785,20 @@ $("mebtn").onclick = () => {
       })
     : t("profile.mmr.free");
   $("profileerr").textContent = "";
+  // Signing out only exists where there is a session to end.
+  $("p-signout").classList.toggle("hidden", !state.signed_in);
+  $("p-who").textContent = state.username
+    ? t("profile.signedin", { username: state.username })
+    : t("profile.local");
   $("profilegate").classList.remove("hidden");
 };
 $("p-cancel").onclick = () => $("profilegate").classList.add("hidden");
+
+$("p-signout").onclick = () => act(async () => {
+  await api("/api/auth/signout", {});
+  $("profilegate").classList.add("hidden");
+  show("lobby");
+});
 
 $("profileform").onsubmit = async (e) => {
   e.preventDefault();

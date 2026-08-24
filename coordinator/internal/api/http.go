@@ -158,10 +158,18 @@ func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
+		// The client needs to know what this server can do before it asks
+		// for anything, so it can offer a sign-in screen on a server that
+		// has accounts and not offer one on a server that does not. Asking
+		// by attempting and reading a 503 works but shows the player an
+		// error for a thing they never chose to do.
 		writeJSON(w, http.StatusOK, map[string]any{
-			"ok":      true,
-			"rooms":   len(s.rooms.List()),
-			"tickets": s.tickets.Count(),
+			"ok":            true,
+			"rooms":         len(s.rooms.List()),
+			"tickets":       s.tickets.Count(),
+			"accounts":      s.accountsOn(),
+			"friends":       s.socialOn(),
+			"terms_version": TermsVersion,
 		})
 	})
 
@@ -224,7 +232,11 @@ func (s *Server) Routes() http.Handler {
 	// who it is, what rooms exist, who is in them, and both chat channels.
 	// Five separate polls would be five times the request rate for exactly
 	// the same screen.
-	mux.HandleFunc("POST /v1/sync", s.signedIn(s.limitRead, s.sync))
+	// Sync is deliberately not behind signedIn. Somebody who has just
+	// installed the app must be able to see the lobby before they are asked
+	// for anything (D45), and sync is what draws it. Without a session it
+	// answers with the browsable part and nothing else; see sync itself.
+	mux.HandleFunc("POST /v1/sync", s.limited(s.limitRead, s.sync))
 	mux.HandleFunc("POST /v1/me", s.signedIn(s.limitManage, s.updateMe))
 	mux.HandleFunc("POST /v1/chat", s.signedIn(s.limitChat, s.postChat))
 	mux.HandleFunc("POST /v1/diag", s.signedIn(s.limitManage, s.postDiag))

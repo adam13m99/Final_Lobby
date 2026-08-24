@@ -85,14 +85,22 @@ func (c *cached[T]) forget() {
 // reply. Neither is fatal: a missing one is reported as a reason, and the
 // lobby draws the rest of itself regardless.
 func (s *server) social(out map[string]any) {
-	friends, err := s.friendsCache.get(func() (*lobby.FriendList, error) {
-		return s.api().Friends()
-	})
-	if friends != nil {
-		out["friends"] = friends
-	}
-	if err != "" {
-		out["friends_error"] = err
+	// A friends list belongs to an account. On a server with accounts, asking
+	// for one before signing in produces a 401 every five seconds and tells
+	// the player nothing they did not already know; the interface says "sign
+	// in to see your friends" from what it already has.
+	accounts, _ := out["accounts"].(bool)
+	signedIn, _ := out["signed_in"].(bool)
+	if !accounts || signedIn {
+		friends, err := s.friendsCache.get(func() (*lobby.FriendList, error) {
+			return s.api().Friends()
+		})
+		if friends != nil {
+			out["friends"] = friends
+		}
+		if err != "" {
+			out["friends_error"] = err
+		}
 	}
 
 	banners, err := s.bannersCache.get(func() ([]lobby.Banner, error) {

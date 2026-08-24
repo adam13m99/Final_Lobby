@@ -439,3 +439,18 @@ input::placeholder { color: #5a6377; }
 .netbanner.ok   { color: var(--good); border-color: #27502f; background: #16281c; }
 .netbanner.bad  { color: var(--bad);  border-color: #4d241f; background: #2a1714; }
 .netbanner.wait { color: var(--warn); border-color: #4d3c17; background: #2a2313; }
+
+/* ------------------------------------------------------------ the gate */
+
+.modetabs { display: flex; gap: .2rem; margin-block-end: .3rem; }
+.checkrow { display: flex; align-items: center; gap: .5rem; font-size: .85rem; color: var(--muted); }
+.checkrow input { width: auto; }
+#nickonly, #accountform { display: flex; flex-direction: column; gap: .8rem; }
+#nickonly.hidden, #accountform.hidden { display: none; }
+
+/* Said before a password is chosen, not after it is forgotten. */
+.warn-note {
+  margin: 0; padding: .5rem .7rem; border-radius: .4rem;
+  background: #2a2313; color: #ecc96a; border: 1px solid #4d3c17;
+  font-size: .82rem;
+}

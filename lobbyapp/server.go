@@ -55,6 +55,7 @@ type server struct {
 	// than the lobby poll; see social.go.
 	friendsCache cached[*lobby.FriendList]
 	bannersCache cached[[]lobby.Banner]
+	infoCache    cached[*serverCan]
 }
 
 type pendingUpdate struct {
@@ -74,7 +75,14 @@ func newServer(token string) *server {
 	if cfg.Prepare() {
 		_ = cfg.Save()
 	}
-	return &server{token: token, cfg: cfg}
+	srv := &server{token: token, cfg: cfg}
+	// Each of these answers to its own clock; see social.go. Without an
+	// interval they would refetch on every poll, which is the thing they
+	// exist to stop.
+	srv.friendsCache.every = friendsEvery
+	srv.bannersCache.every = bannersEvery
+	srv.infoCache.every = infoEvery
+	return srv
 }
 
 func (s *server) routes() http.Handler {
@@ -103,6 +111,9 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /api/friends/invite", s.guard(s.inviteFriend))
 	mux.HandleFunc("POST /api/friends/invitations/seen", s.guard(s.invitationsSeen))
 	mux.HandleFunc("GET /api/players/find", s.guard(s.findPlayer))
+	mux.HandleFunc("POST /api/auth/signup", s.guard(s.signUp))
+	mux.HandleFunc("POST /api/auth/signin", s.guard(s.signIn))
+	mux.HandleFunc("POST /api/auth/signout", s.guard(s.signOut))
 
 	return mux
 }
@@ -144,7 +155,16 @@ func (s *server) update_(fn func(*session.Config)) error {
 
 func (s *server) api() *lobby.Client {
 	cfg := s.snapshot()
-	return lobby.New(cfg.Coordinator, cfg.AuthToken)
+	c := lobby.New(cfg.Coordinator, cfg.AuthToken)
+	// The session, when there is one, is what makes a request act as an
+	// account rather than as a bare player id (D53). Everything that is
+	// account-scoped - friends, private messages, moderation - depends on it
+	// being carried on every call, so it is attached here rather than at
+	// each call site.
+	if cfg.Session != "" {
+		c.UseSession(cfg.Session)
+	}
+	return c
 }
 
 // --- state --------------------------------------------------------------
@@ -196,6 +216,11 @@ func (s *server) state(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	out["username"] = cfg.Username
+	out["signed_in"] = cfg.Session != ""
+	if cfg.Coordinator != "" {
+		s.capabilities(out)
+	}
 	if cfg.PlayerID != "" && cfg.Coordinator != "" {
 		s.pull(cfg, out)
 		s.social(out)

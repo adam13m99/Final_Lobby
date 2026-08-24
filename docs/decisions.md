@@ -997,3 +997,53 @@ look like the best room in the lobby.
 is redeployed, hosts measure nothing and the column is empty everywhere — which
 is the correct thing for it to show, but it is not the same as the feature
 being broken.
+
+## D55 — The desktop app is a shell around the Go client, not a rewrite
+
+D45 asked for a real desktop application: a window rather than a browser tab,
+a tray icon, and notifications. Tauri was chosen there. What that decision did
+not settle is **how much of the product moves into it**, and the answer is:
+none of it.
+
+`desktop/` is a Tauri shell that starts the existing Go binary, asks it which
+loopback address and token it is serving on, and points a webview at it. The
+lobby, the tunnel, accounts, moderation and the launcher all stay exactly
+where they are.
+
+**Why not rewrite the client in Rust:**
+
+- The Go client is the only code here that has actually carried a Dota match
+  between two PCs. Rewriting it would set the one proven part of the system
+  back to zero, in exchange for nothing a player could see.
+- The same binary is what the Windows service talks to and what runs headless
+  for load testing. One implementation means one set of bugs.
+- What a browser page genuinely cannot do is precisely what the shell adds: a
+  window that is not a tab, a tray icon, and notifications that arrive while
+  the window is hidden. That is a small, well-bounded amount of code.
+
+**Three consequences worth knowing.**
+
+**The address is read back, not agreed in advance.** The Go binary is started
+with `-url-only`, prints its address on the first line, and the shell reads
+it. A fixed port would eventually collide with something else on a player's
+machine, and there would be no good way to recover. The port comes from the
+operating system and the token is fresh each run, so nothing else on the
+machine has a fixed thing to guess.
+
+**Notifications are raised in Rust, not in the page.** They exist for the case
+where the window is hidden in the tray — and a hidden window is not running
+the page. A player who is watching the lobby can see a room fill with their
+own eyes. Both notifications are edge-triggered against the previous poll:
+level-triggering would fire every five seconds for as long as the condition
+held, which is how a player learns to turn notifications off.
+
+**Closing the window hides it rather than quitting.** Quitting is in the tray
+menu. Somebody who closes the lobby while a friend is filling a room should
+still hear about it; that is the entire reason the tray is there. The Go
+process is killed when the shell genuinely exits, because a lobby server left
+running without a window is a held port and an unwatched tunnel.
+
+**The splash screen is deliberately wordless.** It is bundled inside the Rust
+binary and cannot reach the string catalogue the real interface uses (D44), so
+rather than hard-code one language's sentence where the lookup cannot see it,
+it shows the mark and nothing else.

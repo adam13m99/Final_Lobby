@@ -24,6 +24,16 @@ type Config struct {
 	Nick        string `json:"nick"`
 	MMR         int    `json:"mmr,omitempty"`
 
+	// Session is the coordinator session this installation is signed in
+	// with, when the server has accounts (D37, D53). It is what makes the
+	// friends list and everything else account-scoped work, and it survives
+	// a restart so nobody types a password twice a day.
+	//
+	// Username is kept beside it only so the sign-in screen can offer it
+	// back; the password is never stored, here or anywhere else.
+	Session  string `json:"session,omitempty"`
+	Username string `json:"username,omitempty"`
+
 	// Set by create/join, cleared by leave.
 	RoomID      string `json:"room_id,omitempty"`
 	VirtualIP   string `json:"virtual_ip,omitempty"`

@@ -102,7 +102,18 @@ func (s *Server) sync(w http.ResponseWriter, r *http.Request) {
 	}
 	// The session decides who this is; the body only suggests it.
 	body.PlayerID = s.actor(r, body.PlayerID)
+
+	// Nobody at all, on a server that has accounts: somebody browsing before
+	// they sign up (D45). They get the lobby and nothing personal - no
+	// presence recorded, no room, no private chat - because there is nobody
+	// to record it against. Asking them to sign in first is how an install
+	// gets abandoned by a person who cannot yet see whether anyone is
+	// playing.
 	if body.PlayerID == "" {
+		if s.accountsOn() {
+			s.browse(w)
+			return
+		}
 		writeErr(w, http.StatusBadRequest, "player_id is required")
 		return
 	}
@@ -397,4 +408,30 @@ func (s *Server) postDiag(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) listDiag(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"reports": s.diag.all()})
+}
+
+// browse is what an anonymous caller sees: the lobby, and nothing that
+// belongs to a person (D45).
+//
+// The room list is already public - GET /v1/rooms has always been open, so
+// that somebody can look before they commit - and the lobby chat is worth
+// showing for the same reason: an empty room list and a silent chat say
+// different things about whether a place is worth joining.
+//
+// What is deliberately absent: no presence is recorded, so browsers do not
+// inflate the online count; no room, because they are not in one; no room
+// chat, because that belongs to the people in it.
+func (s *Server) browse(w http.ResponseWriter) {
+	out := syncResponse{
+		Online:     s.players.Online(OnlineWindow, s.now()),
+		ServerTime: s.now(),
+	}
+	rooms := s.rooms.List()
+	out.Rooms = make([]roomView, 0, len(rooms))
+	for _, rm := range rooms {
+		out.Rooms = append(out.Rooms, s.view(rm))
+	}
+	out.LobbyChat = s.chat.Since(chat.Lobby, 0)
+	out.LobbyCursor = cursorAfter(0, out.LobbyChat)
+	writeJSON(w, http.StatusOK, out)
 }

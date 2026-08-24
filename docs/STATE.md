@@ -163,7 +163,29 @@ there; this is the summary.
 | T8 roles and moderation (D43, D47) | **done** — roles, sanctions, labels, banners, audit log |
 | T9 interface built for translation (D44) | **done** — lookup, logical layout, and a test that enforces both |
 | T10 the new lobby (D42) | **done** — not yet looked at in a browser |
-| T11 desktop application (D45) | not started |
+| T11 desktop application (D45) | **done** — shell builds and runs; bundle not yet installed anywhere |
+
+**There is a desktop window, and there is a sign-in (D45, D55).**
+`desktop/` is a Tauri shell that starts the Go binary, reads the loopback
+address off its first line and points a webview at it — a window rather than a
+browser tab, a tray icon, and notifications that arrive while the window is
+hidden. Everything the product does stays in the Go client; D55 says why.
+Build it with `./scripts/build-desktop.sh`. It is **not** wired into
+`publish.sh` on purpose: that installer is the only distribution channel and it
+works, and replacing it with one nobody has installed would risk the working
+thing for the unproven one.
+
+**Accounts are now reachable from the app**, which is what was missing. The
+gate has three shapes and picks one from `GET /healthz`: a typed name on a
+server without accounts, sign in, or create an account. The session is stored
+and attached to every call; the password never is. **The lobby is browsable
+before any of that** — `POST /v1/sync` no longer needs a session, and without
+one answers with the room list, the lobby chat and the online count and
+nothing belonging to a person.
+
+**The `-db` flip is now unblocked.** The app can sign in, so turning accounts
+on no longer locks the test PCs out. It is still the owner's call and still one
+flag in `coordinator.service`; what changed is that it is now safe to do.
 
 **The lobby is a place now (D42).** A permanent toolbar down one side —
 Lobby, Room, Tournaments, Diagnostics, and a connection light that is the
