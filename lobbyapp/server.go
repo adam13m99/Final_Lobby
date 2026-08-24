@@ -112,6 +112,8 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /api/diagnose", s.guard(s.diagnose))
 	mux.HandleFunc("POST /api/update", s.guard(s.applyUpdate))
 	mux.HandleFunc("POST /api/rooms/describe", s.guard(s.describeRoom))
+	mux.HandleFunc("POST /api/rooms/privacy", s.guard(s.setPrivacy))
+	mux.HandleFunc("POST /api/rooms/invite", s.guard(s.inviteToRoom))
 	mux.HandleFunc("POST /api/friends", s.guard(s.friendAction))
 	mux.HandleFunc("POST /api/friends/messages", s.guard(s.conversation))
 	mux.HandleFunc("POST /api/friends/invite", s.guard(s.inviteFriend))
@@ -422,21 +424,120 @@ func (s *server) postChat(w http.ResponseWriter, r *http.Request) {
 
 // --- rooms --------------------------------------------------------------
 
+// createRoom opens a room with its door already set (D41).
+//
+// The door travels with the creation rather than following a moment later.
+// Opening a room public and locking it a second afterwards is a second in
+// which anybody can walk in, and the person who wanted a private room is the
+// person least able to get the stranger back out.
 func (s *server) createRoom(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Name string `json:"name"`
+		Name     string `json:"name"`
+		Privacy  string `json:"privacy"`
+		Password string `json:"password"`
+		MinMMR   int    `json:"min_mmr"`
 	}
 	if !decode(w, r, &body) {
 		return
 	}
+	if !doorOK(w, body.Privacy, body.Password) {
+		return
+	}
 	cfg := s.snapshot()
-	info, err := s.api().CreateRoom(cfg.PlayerID, cfg.Nick, body.Name)
+	info, err := s.api().CreateRoomWith(cfg.PlayerID, cfg.Nick, body.Name, lobby.RoomOptions{
+		Privacy:  body.Privacy,
+		Password: body.Password,
+		MinMMR:   body.MinMMR,
+	})
 	if err != nil {
 		fail(w, err.Error())
 		return
 	}
 	s.storeRoom(info)
 	go s.autoConnect()
+	ok(w)
+}
+
+// doorOK checks the door makes sense before asking the coordinator.
+//
+// A password door with no password is the failure worth catching here: the
+// coordinator refuses it, but by then the host has watched a room fail to
+// open and been told something about a field they cannot see.
+func doorOK(w http.ResponseWriter, privacy, password string) bool {
+	switch privacy {
+	case "", "public", "friends", "invite":
+		return true
+	case "password":
+		if password == "" {
+			fail(w, "a password door needs a password")
+			return false
+		}
+		return true
+	}
+	fail(w, "unknown door "+privacy)
+	return false
+}
+
+// setPrivacy changes the door on a room that is already open. Host only,
+// enforced by the coordinator.
+func (s *server) setPrivacy(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Privacy  string `json:"privacy"`
+		Password string `json:"password"`
+		MinMMR   int    `json:"min_mmr"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	if !doorOK(w, body.Privacy, body.Password) {
+		return
+	}
+	cfg := s.snapshot()
+	if cfg.RoomID == "" {
+		fail(w, "you are not in a room")
+		return
+	}
+	got, err := s.api().SetPrivacy(cfg.RoomID, cfg.PlayerID, lobby.RoomOptions{
+		Privacy:  body.Privacy,
+		Password: body.Password,
+		MinMMR:   body.MinMMR,
+	})
+	if err != nil {
+		fail(w, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, got)
+}
+
+// inviteToRoom opens an invite-only room to one person, or withdraws that.
+//
+// This is not the same as inviting a friend (social.go). That one sends
+// somebody a notification asking them to come; this one lets them through the
+// door when they try. A host who wants both does both, and the interface
+// offers them together.
+func (s *server) inviteToRoom(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Target   string `json:"target_id"`
+		Withdraw bool   `json:"withdraw"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	cfg := s.snapshot()
+	if cfg.RoomID == "" {
+		fail(w, "you are not in a room")
+		return
+	}
+	var err error
+	if body.Withdraw {
+		err = s.api().Uninvite(cfg.RoomID, cfg.PlayerID, body.Target)
+	} else {
+		err = s.api().Invite(cfg.RoomID, cfg.PlayerID, body.Target)
+	}
+	if err != nil {
+		fail(w, err.Error())
+		return
+	}
 	ok(w)
 }
 

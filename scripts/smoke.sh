@@ -184,18 +184,11 @@ expect "a signed-in player can open a room"        '"ok":true'     "$ROOM"
 
 STATE=$(call GET "/api/state")
 expect "and is in it"                              '"is_host":true' "$STATE"
+ROOM_ID=$(printf '%s' "$STATE" | python -c "import sys,json;print(json.load(sys.stdin)['room_id'])")
 
 SYNC=$(curl -sS -X POST -H 'Content-Type: application/json' -d '{}' "$COORD/v1/sync" 2>&1)
 expect "the room is visible to a stranger"         'Smoke Room'    "$SYNC"
 
-SIGNOUT=$(call POST /api/auth/signout '{}')
-expect "signing out succeeds"                      '"ok":true'     "$SIGNOUT"
-
-SIGNIN=$(call POST /api/auth/signin '{"username":"smoketester","password":"correct horse battery"}')
-expect "signing back in succeeds"                  '"ok":true'     "$SIGNIN"
-
-WRONG=$(call POST /api/auth/signin '{"username":"smoketester","password":"not the password"}')
-refuse "a wrong password does not"                 '"ok":true'     "$WRONG"
 
 say ""
 say "=== what the page actually draws ==="
@@ -328,6 +321,60 @@ expect "a private message is accepted"       'hello from the smoke test' "$DM"
 
 DM_B=$(callb POST /api/friends/messages "{\"target_id\":\"$PID\"}")
 expect "and arrives at the other end"        'hello from the smoke test' "$DM_B"
+
+say ""
+say "=== the door on a room ==="
+# T6 built four doors and an MMR floor on the coordinator (D41). Until now no
+# host could choose one: the app created every room public and had no control
+# for changing it, so the padlock the lobby draws could never appear.
+DOOR=$(call POST /api/rooms/privacy '{"privacy":"password","password":"open sesame"}')
+expect "a host can put a password on their room"  '"needs_password":true' "$DOOR"
+
+NOPASS=$(callb POST /api/rooms/join "{\"room_id\":\"$ROOM_ID\"}")
+refuse "and a stranger without it is refused"     '"ok":true'    "$NOPASS"
+
+WITHPASS=$(callb POST /api/rooms/join "{\"room_id\":\"$ROOM_ID\",\"password\":\"open sesame\"}")
+expect "and one with it gets in"                  '"ok":true'    "$WITHPASS"
+
+LEFT=$(callb POST /api/rooms/leave '{}')
+expect "and can leave again"                      '"ok":true'    "$LEFT"
+
+EMPTY=$(call POST /api/rooms/privacy '{"privacy":"password","password":""}')
+refuse "a password door with no password is refused" '"needs_password"' "$EMPTY"
+
+FLOOR=$(call POST /api/rooms/privacy '{"privacy":"public","min_mmr":3000}')
+expect "a host can set an MMR floor"              '"min_mmr":3000' "$FLOOR"
+
+INVONLY=$(call POST /api/rooms/privacy '{"privacy":"invite"}')
+expect "a host can make a room invite-only"       '"privacy":"invite"' "$INVONLY"
+
+UNINVITED=$(callb POST /api/rooms/join "{\"room_id\":\"$ROOM_ID\"}")
+refuse "an uninvited player is refused"           '"ok":true'    "$UNINVITED"
+
+# One word, two things: tell them to come, and let them through the door.
+# Doing only the first is how somebody is invited and then refused (D41).
+INVITE=$(call POST /api/friends/invite "{\"target_id\":\"$B_ID\"}")
+expect "inviting a friend opens the door to them" '"ok":true'    "$INVITE"
+
+INVITED=$(callb POST /api/rooms/join "{\"room_id\":\"$ROOM_ID\"}")
+expect "and then they get in"                     '"ok":true'    "$INVITED"
+
+LEFT=$(callb POST /api/rooms/leave '{}')
+expect "and can leave again"                      '"ok":true'    "$LEFT"
+
+BACK=$(call POST /api/rooms/privacy '{"privacy":"public"}')
+expect "and open the door again"                  '"privacy":"public"' "$BACK"
+
+# Left until here because signing out forgets which room this installation
+# was in, and the door checks above need it to still know.
+SIGNOUT=$(call POST /api/auth/signout '{}')
+expect "signing out succeeds"                     '"ok":true'    "$SIGNOUT"
+
+SIGNIN=$(call POST /api/auth/signin '{"username":"smoketester","password":"correct horse battery"}')
+expect "signing back in succeeds"                 '"ok":true'    "$SIGNIN"
+
+WRONG=$(call POST /api/auth/signin '{"username":"smoketester","password":"not the password"}')
+refuse "a wrong password does not"                '"ok":true'    "$WRONG"
 
 say ""
 say "=== moderation ==="

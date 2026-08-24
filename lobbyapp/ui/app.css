@@ -510,3 +510,7 @@ input::placeholder { color: #5a6377; }
   background: #12141b; color: var(--text);
   border: 1px solid var(--line); padding: .5rem .6rem;
 }
+
+/* A number that is at most five digits should not take the width of a
+   sentence. Used by the MMR floor beside the door. */
+.narrow { width: 7rem; }

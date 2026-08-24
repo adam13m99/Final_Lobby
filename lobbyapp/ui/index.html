@@ -143,6 +143,17 @@
       <h2 data-t="lobby.rooms"></h2>
       <form id="createform" class="inline">
         <input id="roomname" maxlength="40" data-t-placeholder="lobby.roomname.placeholder" autocomplete="off">
+        <!-- The door is chosen before the room exists, not after (D41). A
+             room opened public and locked a second later is a second in
+             which anybody can walk in. -->
+        <select id="newdoor">
+          <option value="public" data-t="door.public"></option>
+          <option value="password" data-t="door.password"></option>
+          <option value="friends" data-t="door.friends"></option>
+          <option value="invite" data-t="door.invite"></option>
+        </select>
+        <input id="newpass" type="password" maxlength="40" class="hidden" data-t-placeholder="door.password.placeholder" autocomplete="off">
+        <input id="newmmr" type="number" min="0" max="15000" step="500" class="narrow" data-t-placeholder="door.mmr.placeholder">
         <button class="primary" type="submit" data-t="lobby.create"></button>
       </form>
     </div>
@@ -171,6 +182,21 @@
     <form class="describerow hostonly" id="describeform">
       <input id="describe" maxlength="120" data-t-placeholder="room.describe.placeholder" autocomplete="off">
       <button type="submit" data-t="room.describe.save"></button>
+    </form>
+
+    <!-- The door, changeable while the room is open. Host only; the
+         coordinator refuses it from anybody else. -->
+    <form class="describerow hostonly" id="doorform">
+      <select id="door">
+        <option value="public" data-t="door.public"></option>
+        <option value="password" data-t="door.password"></option>
+        <option value="friends" data-t="door.friends"></option>
+        <option value="invite" data-t="door.invite"></option>
+      </select>
+      <input id="doorpass" type="password" maxlength="40" class="hidden" data-t-placeholder="door.password.placeholder" autocomplete="off">
+      <input id="doormmr" type="number" min="0" max="15000" step="500" class="narrow" data-t-placeholder="door.mmr.placeholder">
+      <button type="submit" data-t="door.save"></button>
+      <span class="muted small" id="doornow"></span>
     </form>
 
     <div class="slots" id="slots"></div>

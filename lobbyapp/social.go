@@ -187,6 +187,19 @@ func (s *server) inviteFriend(w http.ResponseWriter, r *http.Request) {
 		fail(w, "you are not in a room")
 		return
 	}
+	// Two things are called an invitation and a host means both of them: tell
+	// this person to come, and let them through the door when they do. Doing
+	// only the first on an invite-only room produces the worst outcome
+	// available - somebody is asked to come and then refused at the door,
+	// with the host certain they invited them (D41).
+	//
+	// The door grant is attempted first and its failure ignored: the
+	// coordinator refuses it on rooms that have no invite list, which is not
+	// an error, and on rooms this player does not host, which the
+	// notification below will fail on anyway.
+	if cfg.IsHost {
+		_ = s.api().Invite(cfg.RoomID, cfg.PlayerID, body.Target)
+	}
 	if err := s.api().InviteFriend(body.Target, cfg.RoomID); err != nil {
 		fail(w, err.Error())
 		return

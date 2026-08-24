@@ -426,6 +426,32 @@ sanctions somebody, lifts it, checks both actions reached the audit log,
 posts an announcement, and renders the page as both an ordinary player and a
 moderator to confirm the entry is hidden from one and offered to the other.
 
+## T15 — The door, from the host's side *(unplanned, 2026-08-25)*
+
+T6 built four doors and an MMR floor on the coordinator (D41). The lobby drew
+padlocks for them and asked for a password when joining. No host could ever
+make such a room: the app created every room public and had no control for
+changing one. The same gap again, and the most visible of the three — a
+player asking for a private game had nowhere to make one.
+
+- `POST /api/rooms/create` now carries the door, so a private room is private
+  from the moment it exists. Opening it public and locking it a second later
+  is a second in which anybody can walk in.
+- `POST /api/rooms/privacy` changes the door on a room already open.
+- The create form and the room screen both carry a door select, a password box
+  that appears only for the door that uses one, and an MMR floor.
+- The password is never filled back in from the server, because the server
+  never sends it: an empty box means "leave it as it is".
+- **One word, two things.** Inviting a friend now also opens an invite-only
+  room's door to them. Doing only the notification produced the worst outcome
+  available: somebody asked to come and then refused at the door, with the
+  host certain they had invited them.
+
+`scripts/smoke.sh` covers all of it with two players: a password door refusing
+and then admitting, a password door with no password refused, an MMR floor,
+and an invite-only room refusing somebody and admitting them after an
+invitation.
+
 ---
 
 ## Open, and not blocking

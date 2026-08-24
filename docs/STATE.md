@@ -191,6 +191,15 @@ there; this is the summary.
 | T12 tournaments (D48) | **done as specified** — an honest placeholder, not the feature |
 | T13 terms of use | **done** — served, readable, versioned; **text needs the owner's sign-off** |
 | T14 moderation panel | **done** — T8's tools, reachable from the product at last |
+| T15 the door, host side | **done** — a host can finally make a private room |
+
+**A host can choose the door now.** T6 built public, password, friends-only
+and invite-only rooms plus an MMR floor, and no host could pick any of them:
+every room the app made was public. The create form and the room screen now
+both carry the door, the password box appears only for the door that uses one,
+and the floor is a number beside it. Inviting a friend to an invite-only room
+opens its door to them as well as telling them to come — doing only the second
+is how somebody gets invited and then refused.
 
 **Moderators can moderate from the app now.** T8 built roles, sanctions,
 labels, banners and an audit log, and until today the only way to use any of

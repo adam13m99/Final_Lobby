@@ -399,6 +399,8 @@ function renderRoom(r) {
   // Only fill the box when it is not being typed in, or every poll would
   // overwrite what the host is halfway through writing.
   if (document.activeElement !== $("describe")) $("describe").value = r.description || "";
+  $("doorform").classList.toggle("hidden", !iAmHost);
+  if (iAmHost) drawDoor(r);
 
   const seated = {};
   for (const m of r.members || []) if (!m.spectator) seated[m.slot] = m;
@@ -426,6 +428,23 @@ function renderRoom(r) {
   $("btn-play").title = state.connected ? "" : t("room.play.note");
 
   drawNetBanner();
+}
+
+// drawDoor fills the host's door controls from the room.
+//
+// The password is never filled in, because the coordinator never sends it
+// back and should not: what is on screen would then be a guess at a secret.
+// An empty box means "leave it as it is"; typing in one changes it.
+function drawDoor(r) {
+  const door = r.privacy || "public";
+  if (document.activeElement !== $("door")) $("door").value = door;
+  if (document.activeElement !== $("doormmr")) {
+    $("doormmr").value = r.min_mmr ? String(r.min_mmr) : "";
+  }
+  $("doorpass").classList.toggle("hidden", $("door").value !== "password");
+  $("doorpass").placeholder = r.needs_password
+    ? t("door.password.keep") : t("door.password.placeholder");
+  $("doornow").textContent = t("door.now", { door: t("door." + door) });
 }
 
 // drawNetBanner says, in words and where it cannot be missed, whether this
@@ -1124,11 +1143,36 @@ $("createform").onsubmit = (e) => {
   e.preventDefault();
   if (needName("namegate.why.create")) return;
   const name = $("roomname").value;
+  const door = $("newdoor").value;
+  const pass = $("newpass").value;
+  if (door === "password" && !pass) { banner(t("door.password.needed")); return; }
   act(async () => {
-    await api("/api/rooms/create", { name });
+    await api("/api/rooms/create", {
+      name: name,
+      privacy: door,
+      password: pass,
+      min_mmr: Number($("newmmr").value) || 0,
+    });
     $("roomname").value = "";
+    $("newpass").value = "";
     show("room");
   });
+};
+
+// A password box is only shown for the door that uses one. Showing it always
+// invites somebody to type a password into a room that will ignore it.
+$("newdoor").onchange = () =>
+  $("newpass").classList.toggle("hidden", $("newdoor").value !== "password");
+$("door").onchange = () =>
+  $("doorpass").classList.toggle("hidden", $("door").value !== "password");
+
+$("doorform").onsubmit = (e) => {
+  e.preventDefault();
+  act(() => api("/api/rooms/privacy", {
+    privacy: $("door").value,
+    password: $("doorpass").value,
+    min_mmr: Number($("doormmr").value) || 0,
+  }));
 };
 
 $("describeform").onsubmit = (e) => {
