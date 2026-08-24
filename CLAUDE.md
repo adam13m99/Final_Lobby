@@ -27,7 +27,13 @@ Before writing code, every session:
 1. Read `docs/STATE.md`.
 2. Run `bash scripts/check.sh`. **Trust its output over any summary**,
    including one describing this conversation. A summary is prose that can be
-   misread; the tests are ground truth.
+   misread; the tests are ground truth. It is unit level: it proves every
+   module builds, passes its own tests and parses. Run `bash scripts/smoke.sh`
+   as well after touching accounts, the coordinator API or the app's own HTTP
+   layer — it starts a real coordinator on a throwaway database and walks a
+   real app through browsing, reading the terms, signing up, hosting a room
+   and signing back in. Both bind loopback only and never touch the live
+   server.
 3. `git log --oneline -15` to see what actually landed.
 
 Finishing a task means: tests pass, `STATE.md` updated, one commit naming the

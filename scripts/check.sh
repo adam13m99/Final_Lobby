@@ -62,6 +62,26 @@ else
 fi
 
 say ""
+say "=== front end ==="
+# Go tests read the JS as text and cannot tell whether it parses. A single
+# stray brace in app.js gives the user a blank window, and every Go test still
+# passes. node only parses here; it is not a build dependency, so its absence
+# is a note rather than a failure.
+if ! command -v node >/dev/null 2>&1; then
+  warn "skipping the front end - node not installed"
+else
+  for f in lobbyapp/ui/*.js; do
+    [ -e "$f" ] || continue
+    if node --check "$f" >/dev/null 2>&1; then ok "parse $f"; else bad "parse $f"; fi
+  done
+  for f in lobbyapp/ui/strings/*.json; do
+    [ -e "$f" ] || continue
+    if node -e "JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'))" "$f" >/dev/null 2>&1
+    then ok "parse $f"; else bad "parse $f"; fi
+  done
+fi
+
+say ""
 say "=== desktop shell ==="
 # The Tauri window (D45, D55). It is checked rather than built: a full build
 # links a webview and takes minutes, and what breaks in practice is the Rust,
@@ -92,6 +112,8 @@ say "  HEAD: $(git log --oneline -1)"
 say ""
 if [ "$FAIL" -eq 0 ]; then
   say "RESULT: healthy"
+  say "        (unit level only. scripts/smoke.sh walks a real coordinator"
+  say "         and a real app through signing up and hosting a room.)"
 else
   say "RESULT: PROBLEMS FOUND - fix before continuing"
 fi

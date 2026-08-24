@@ -26,6 +26,21 @@ machines' results from here with:
 curl -s -H "Authorization: Bearer $TOKEN" http://87.107.110.199:7001/v1/diag
 ```
 
+## How to know it works
+
+| Command | What it proves | Cost |
+|---|---|---|
+| `bash scripts/check.sh` | every module builds, vets, passes its own tests; the front-end JS and string files parse; no secret is tracked; the Rust shell compiles | seconds |
+| `bash scripts/smoke.sh` | a real coordinator with accounts switched on and a real app, walked through browsing without an account, reading the terms, signing up, hosting a room, signing out and back in, and a wrong password being refused | ~30s |
+
+`check.sh` cannot see the seam that matters most. Accounts (T5) and the app's
+sign-in screen (T11) were written weeks apart, and every unit test in both
+passed the whole time they could not talk to each other. `smoke.sh` is the
+test that would have noticed. It builds the app with the coordinator's address
+linked in, redirects `APPDATA` so it cannot touch the developer's own session
+file, and deletes everything it made. **Neither ever contacts
+87.107.110.199.**
+
 ## Blockers
 
 | Blocker | Detail | Owner |
