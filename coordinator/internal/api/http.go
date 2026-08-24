@@ -39,6 +39,11 @@ type Server struct {
 	dl       *downloads
 	log      *slog.Logger
 
+	// terms_ holds the text served at GET /v1/terms. Named with a trailing
+	// underscore only because `terms` is the handler; see terms.go for why
+	// the text lives here rather than in the client.
+	terms_ *Terms
+
 	// relayAddr and relayPub are handed to clients so they know where to
 	// connect and which key to expect. Shipping the key here rather than
 	// baking it into the client means rotating it does not need a new build.
@@ -95,9 +100,15 @@ type Config struct {
 	DownloadKey string
 	RelayAddr   string
 	RelayPub    string
-	Logger      *slog.Logger
-	Now         func() time.Time
-	AuthToken   string
+
+	// TermsFile is the file holding the terms of use served at
+	// GET /v1/terms. Empty serves a placeholder that says the server is
+	// misconfigured, which is better than inventing an agreement and asking
+	// somebody to accept it.
+	TermsFile string
+	Logger    *slog.Logger
+	Now       func() time.Time
+	AuthToken string
 }
 
 func New(cfg Config) *Server {
@@ -128,6 +139,7 @@ func New(cfg Config) *Server {
 		log:       cfg.Logger,
 		relayAddr: cfg.RelayAddr,
 		relayPub:  cfg.RelayPub,
+		terms_:    NewTerms(cfg.TermsFile),
 		// Three tiers, because the risks differ. Creating or joining a room
 		// costs us an address allocation and a ticket, and is what a griefer
 		// would automate - keep it tight. Managing a room you already host
@@ -208,6 +220,8 @@ func (s *Server) Routes() http.Handler {
 	// The banner strip is open to everybody, including somebody who has not
 	// signed in: an announcement about signing up is precisely for them.
 	mux.HandleFunc("GET /v1/banners", s.limited(s.limitRead, s.banners))
+	// Read before there is an account to read it with.
+	mux.HandleFunc("GET /v1/terms", s.limited(s.limitRead, s.terms))
 
 	// Reading the room list needs no account. D45: somebody who has just
 	// installed the app should see what is going on before deciding whether

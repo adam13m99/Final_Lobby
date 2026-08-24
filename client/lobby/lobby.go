@@ -450,3 +450,21 @@ func (c *Client) Info() (*ServerInfo, error) {
 	}
 	return &out, nil
 }
+
+// TermsOfUse is the agreement a new account is asked to accept, and the
+// version it is. Both come from the server: the version somebody accepted is
+// recorded there, so the words and the version must not be able to disagree.
+type TermsOfUse struct {
+	Version string `json:"version"`
+	Text    string `json:"text"`
+}
+
+// Terms fetches them. No session and no account: they are read before there
+// is an account to read them with.
+func (c *Client) Terms() (*TermsOfUse, error) {
+	var out TermsOfUse
+	if err := c.do("GET", "/v1/terms", nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}

@@ -351,12 +351,41 @@ with `-db`; the shell launches, spawns its sidecar without a console window,
 and the webview polls the local server. **What was not:** nobody has looked at
 the rendered window, and the NSIS bundle has never been built or installed.
 
-## T12 — Tournaments *(D48)*
+## T12 — Tournaments *(D48)* — done, as specified
 
 Not designed yet, and deliberately not built here. The room and account models
 are built knowing that a tournament match is a room somebody else created at a
 time nobody in it chose. The toolbar entry ships pointing at an honest
 "coming soon" rather than a dead link.
+
+That is what shipped: `#screen-tournaments` in `lobbyapp/ui/index.html` says
+what it is for and that it is not built yet, and the toolbar entry beside
+Lobby, Room and Diagnostics will not move when the feature arrives. Closing
+this task is not a claim that tournaments exist; it is the claim that the
+placeholder the plan asked for is in place and honest. The feature itself
+needs its own brainstorm — open question 6 in `docs/STATE.md`.
+
+## T13 — The terms somebody is asked to accept *(unplanned, 2026-08-25)*
+
+T11's sign-up screen asks for a tick against "I accept the terms of use", and
+until now there were no terms anywhere: not on the server, not in the repo, not
+on screen. A checkbox against a document nobody can read is worse than no
+checkbox, and the account record stores an `accept_terms_version` against it.
+
+- `docs/terms-en.md` — the text, in plain language. **Engineering's draft, not
+  legal advice**; it opens saying so, and needs the owner's sign-off.
+- `coordinator/internal/api/terms.go` — `GET /v1/terms` serves
+  `{"version", "text"}`, reading the file once and caching it. The path comes
+  from `-terms-file`; **without that flag the server serves a placeholder
+  saying it is misconfigured** rather than inventing an agreement.
+- `client/lobby` — `Terms()`; `lobbyapp` — `GET /api/terms`, cached for two
+  minutes like the other read-only lookups.
+- The UI — a "Read the terms" link beside the checkbox opening a dialog that
+  renders the text into a `<pre>` as **textContent, never markup**, so the
+  words on screen cannot differ from the words on file.
+
+Changing the text means bumping `TermsVersion`, which is what makes existing
+acceptances stale. Deploying it means passing `-terms-file` to the coordinator.
 
 ---
 

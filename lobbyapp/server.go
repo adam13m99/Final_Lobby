@@ -56,6 +56,7 @@ type server struct {
 	friendsCache cached[*lobby.FriendList]
 	bannersCache cached[[]lobby.Banner]
 	infoCache    cached[*serverCan]
+	termsCache   cached[*lobby.TermsOfUse]
 }
 
 type pendingUpdate struct {
@@ -82,6 +83,7 @@ func newServer(token string) *server {
 	srv.friendsCache.every = friendsEvery
 	srv.bannersCache.every = bannersEvery
 	srv.infoCache.every = infoEvery
+	srv.termsCache.every = infoEvery
 	return srv
 }
 
@@ -114,6 +116,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /api/auth/signup", s.guard(s.signUp))
 	mux.HandleFunc("POST /api/auth/signin", s.guard(s.signIn))
 	mux.HandleFunc("POST /api/auth/signout", s.guard(s.signOut))
+	mux.HandleFunc("GET /api/terms", s.guard(s.terms))
 
 	return mux
 }

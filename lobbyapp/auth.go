@@ -19,6 +19,7 @@ import (
 	"os"
 	"time"
 
+	"lobbybaz/client/lobby"
 	"lobbybaz/client/session"
 )
 
@@ -144,4 +145,20 @@ func deviceName() string {
 		return host
 	}
 	return "this PC"
+}
+
+// terms serves the agreement to the sign-up screen.
+//
+// Proxied through the app rather than fetched by the page directly so the
+// page keeps talking to exactly one origin, and cached because it changes
+// when somebody deploys.
+func (s *server) terms(w http.ResponseWriter, r *http.Request) {
+	got, err := s.termsCache.get(func() (*lobby.TermsOfUse, error) {
+		return s.api().Terms()
+	})
+	if got == nil {
+		fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, got)
 }

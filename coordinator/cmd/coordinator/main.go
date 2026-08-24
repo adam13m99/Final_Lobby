@@ -40,6 +40,7 @@ func main() {
 	distDir := flag.String("dist-dir", "", "directory holding the published installer and version.json (empty = serve no downloads)")
 	dlKeyFile := flag.String("download-key-file", "", "file holding the unguessable path segment the download is served under")
 	headAdmin := flag.String("head-admin", "", "account id to make head admin (D47: done once, at deployment)")
+	termsFile := flag.String("terms-file", "", "file holding the terms of use served at /v1/terms (empty = a placeholder saying so)")
 	dbPath := flag.String("db", "", "SQLite file holding accounts and kick history (empty = run without accounts)")
 	debug := flag.Bool("debug", false, "verbose logging")
 	flag.Parse()
@@ -161,6 +162,7 @@ func main() {
 		Friends:     friendsOrNil(friends),
 		RelayAddr:   *relayAddr,
 		RelayPub:    pub,
+		TermsFile:   *termsFile,
 		Logger:      log,
 		AuthToken:   authToken,
 		DistDir:     *distDir,

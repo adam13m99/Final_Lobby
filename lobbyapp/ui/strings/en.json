@@ -167,5 +167,8 @@
   "auth.mustaccept": "You have to accept the terms to create an account.",
   "profile.signedin": "Signed in as {username}",
   "profile.local": "Not signed in — this name is stored on this PC only.",
-  "friends.signin": "Sign in to see your friends."
+  "friends.signin": "Sign in to see your friends.",
+  "auth.readterms": "Read the terms",
+  "auth.termstitle": "Terms of use",
+  "auth.termsloading": "Loading…"
 }

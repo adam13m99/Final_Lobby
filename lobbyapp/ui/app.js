@@ -866,6 +866,21 @@ $("findform").onsubmit = async (e) => {
   }
 };
 
+// The terms are shown as text, in a <pre>, exactly as the server sent them.
+// They are an agreement somebody is about to accept; rendering them as markup
+// would mean the words on screen could differ from the words on file.
+$("readterms").onclick = async () => {
+  $("termsgate").classList.remove("hidden");
+  $("termstext").textContent = t("auth.termsloading");
+  try {
+    const got = await api("/api/terms");
+    $("termstext").textContent = got.text || "";
+  } catch (err) {
+    $("termstext").textContent = err.message;
+  }
+};
+$("termsclose").onclick = () => $("termsgate").classList.add("hidden");
+
 $("dmclose").onclick = () => { dmWith = null; $("dmgate").classList.add("hidden"); };
 $("dmform").onsubmit = (e) => {
   e.preventDefault();

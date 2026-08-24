@@ -63,6 +63,7 @@
         <input id="a-terms" type="checkbox">
         <span data-t="auth.terms"></span>
       </label>
+      <button type="button" class="linkish signup-only" id="readterms" data-t="auth.readterms"></button>
     </div>
 
     <button class="primary" type="submit" id="gatego"></button>
@@ -311,6 +312,17 @@
     </div>
     <p class="gate-err" id="profileerr"></p>
   </form>
+</div>
+
+<!-- The terms. Read before the checkbox is ticked, not after. -->
+<div id="termsgate" class="gate hidden">
+  <div class="gate-card wide-card">
+    <div class="panel-head plain">
+      <h2 data-t="auth.termstitle"></h2>
+      <button class="tiny" id="termsclose" data-t="profile.cancel"></button>
+    </div>
+    <pre class="terms" id="termstext"></pre>
+  </div>
 </div>
 
 <!-- One friend's private conversation, opened from the rail. -->

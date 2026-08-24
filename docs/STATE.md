@@ -164,6 +164,18 @@ there; this is the summary.
 | T9 interface built for translation (D44) | **done** — lookup, logical layout, and a test that enforces both |
 | T10 the new lobby (D42) | **done** — not yet looked at in a browser |
 | T11 desktop application (D45) | **done** — shell builds and runs; bundle not yet installed anywhere |
+| T12 tournaments (D48) | **done as specified** — an honest placeholder, not the feature |
+| T13 terms of use | **done** — served, readable, versioned; **text needs the owner's sign-off** |
+
+**There are terms now, and they need reading.** The sign-up screen asks people
+to accept terms of use, so there is something to accept: `docs/terms-en.md`,
+served by the coordinator at `GET /v1/terms` and shown by a "Read the terms"
+link beside the checkbox. It is **engineering's draft, not legal advice**, and
+wants the owner's eyes before anybody signs up against it. Two operational
+notes: the coordinator needs `-terms-file docs/terms-en.md` (without it, it
+honestly says it is misconfigured rather than inventing an agreement), and
+editing the text means bumping `TermsVersion` in the API package — that
+constant is what makes an existing acceptance stale.
 
 **There is a desktop window, and there is a sign-in (D45, D55).**
 `desktop/` is a Tauri shell that starts the Go binary, reads the loopback
@@ -253,10 +265,11 @@ everybody but the host until T7 lands the friend graph.
 file; with one it has usernames, Argon2id passwords, sessions, durable MMR and
 terms acceptance, and the session — not the request body — decides who a
 request is from (D53). Without one it behaves exactly as it did during the
-two-PC test. **The server is still running without `-db`,** because no shipped
-client has a sign-in screen yet; turning it on before T10 would lock both test
-PCs out of their own lobby. Flipping it is one flag in
-`coordinator.service`, and it is T10's job.
+two-PC test. **The server is still running without `-db`.** That was forced until T11:
+no shipped client had a sign-in screen, so turning accounts on would have
+locked both test PCs out of their own lobby. It no longer is — the app signs
+in now. Flipping it is one flag in `coordinator.service` plus `-terms-file`,
+and it is the owner's call.
 
 **A kick is now two things.** The block that bars a kicked player for one,
 three, five minutes lives in memory with the room, and ends when the room

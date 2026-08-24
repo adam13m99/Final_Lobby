@@ -454,3 +454,19 @@ input::placeholder { color: #5a6377; }
   background: #2a2313; color: #ecc96a; border: 1px solid #4d3c17;
   font-size: .82rem;
 }
+
+/* A button that reads as a link: it opens something to read rather than
+   changing anything, and a full button beside the primary action would
+   compete with it. */
+.linkish {
+  background: none; border: 0; padding: 0; color: var(--accent2);
+  font: inherit; font-size: .84rem; text-decoration: underline;
+  cursor: pointer; align-self: flex-start;
+}
+.linkish:hover { color: var(--accent); background: none; border: 0; }
+
+.terms {
+  flex: 1; overflow-y: auto; margin: 0; padding: 1rem 1.2rem;
+  font: inherit; font-size: .86rem; color: var(--text);
+  white-space: pre-wrap; overflow-wrap: break-word;
+}
