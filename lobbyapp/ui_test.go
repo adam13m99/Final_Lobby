@@ -182,7 +182,11 @@ var (
 	htmlComment = regexp.MustCompile(`(?s)<!--.*?-->`)
 	htmlScript  = regexp.MustCompile(`(?s)<script[^>]*>.*?</script>|<style[^>]*>.*?</style>|<title[^>]*>.*?</title>`)
 	htmlTag     = regexp.MustCompile(`(?s)<[^>]*>`)
-	textAttr    = regexp.MustCompile(`(?:^|\s)(placeholder|title|alt|aria-label)="([^"]*)"`)
+	// An element marked aria-hidden is decoration, not content: a screen
+	// reader is told to skip it, and a translator would have nothing to do
+	// with it either. That is what the toolbar glyphs are.
+	decoration = regexp.MustCompile(`(?s)<span[^>]*aria-hidden="true"[^>]*>[^<]*</span>`)
+	textAttr   = regexp.MustCompile(`(?:^|\s)(placeholder|title|alt|aria-label)="([^"]*)"`)
 )
 
 // Text between tags is text a translator will never see, because it is not in
@@ -191,7 +195,8 @@ var (
 func TestNoUserFacingTextIsTypedIntoTheMarkup(t *testing.T) {
 	html := read(t, filepath.Join(uiDir, "index.html"))
 	stripped := htmlTag.ReplaceAllString(
-		htmlScript.ReplaceAllString(htmlComment.ReplaceAllString(html, ""), ""), "")
+		decoration.ReplaceAllString(
+			htmlScript.ReplaceAllString(htmlComment.ReplaceAllString(html, ""), ""), ""), "")
 
 	for _, line := range strings.Split(stripped, "\n") {
 		if strings.TrimSpace(line) != "" {
@@ -412,6 +417,75 @@ func TestTheCatalogueIsInsideTheBinary(t *testing.T) {
 	for _, name := range []string{"ui/index.html", "ui/app.js", "ui/i18n.js", "ui/app.css"} {
 		if _, err := uiFiles.ReadFile(name); err != nil {
 			t.Errorf("%s is not embedded: %v", name, err)
+		}
+	}
+}
+
+// --- the renderer and the markup have to agree --------------------------
+
+var (
+	byID     = regexp.MustCompile(`\$\("([a-zA-Z0-9_-]+)"\)`)
+	htmlID   = regexp.MustCompile(`\bid="([^"]+)"`)
+	byClass  = regexp.MustCompile(`querySelectorAll\("\.([a-zA-Z0-9_-]+)`)
+	htmlCls  = regexp.MustCompile(`class="([^"]*)"`)
+	htmlData = regexp.MustCompile(`\bdata-([a-z]+)="`)
+	jsData   = regexp.MustCompile(`\.dataset\.([a-zA-Z]+)`)
+)
+
+// Every $("something") in the renderer must be an id that exists.
+//
+// This is the failure this interface is most exposed to: it draws by reaching
+// into the document by name, so a renamed element does not raise an error, it
+// silently stops being filled in - and the first sign is a screen with a blank
+// space where the room list should be. That is expensive to notice and cheap
+// to prevent.
+func TestTheRendererOnlyReachesForElementsThatExist(t *testing.T) {
+	html := read(t, filepath.Join(uiDir, "index.html"))
+	ids := map[string]bool{}
+	for _, m := range htmlID.FindAllStringSubmatch(html, -1) {
+		ids[m[1]] = true
+	}
+	for _, m := range byID.FindAllStringSubmatch(renderSource(t), -1) {
+		if !ids[m[1]] {
+			t.Errorf("app.js reaches for #%s, which index.html does not contain", m[1])
+		}
+	}
+}
+
+// The same for the classes it selects on.
+func TestTheRendererOnlySelectsClassesThatExist(t *testing.T) {
+	html := read(t, filepath.Join(uiDir, "index.html"))
+	classes := map[string]bool{}
+	for _, m := range htmlCls.FindAllStringSubmatch(html, -1) {
+		for _, c := range strings.Fields(m[1]) {
+			classes[c] = true
+		}
+	}
+	for _, m := range byClass.FindAllStringSubmatch(renderSource(t), -1) {
+		if !classes[m[1]] {
+			t.Errorf("app.js selects .%s, which index.html does not contain", m[1])
+		}
+	}
+}
+
+// A data attribute read in the renderer must be written in the markup.
+// element.dataset.screen reads data-screen; a mismatch is undefined at
+// runtime and silently does nothing, which is the same trap as a missing id.
+func TestTheRendererOnlyReadsDataAttributesThatExist(t *testing.T) {
+	html := read(t, filepath.Join(uiDir, "index.html"))
+	attrs := map[string]bool{}
+	for _, m := range htmlData.FindAllStringSubmatch(html, -1) {
+		attrs[m[1]] = true
+	}
+	for _, m := range jsData.FindAllStringSubmatch(renderSource(t), -1) {
+		name := strings.ToLower(m[1])
+		// `sig` is written by the renderer itself to remember what it last
+		// drew, so it is never in the markup.
+		if name == "sig" {
+			continue
+		}
+		if !attrs[name] {
+			t.Errorf("app.js reads dataset.%s, so index.html needs a data-%s attribute", m[1], name)
 		}
 	}
 }

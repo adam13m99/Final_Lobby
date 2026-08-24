@@ -50,6 +50,11 @@ type server struct {
 	diagBusy bool
 	diagLast []lobby.DiagCheck
 	diagAt   time.Time
+
+	// The friends rail and the announcement strip answer to a slower clock
+	// than the lobby poll; see social.go.
+	friendsCache cached[*lobby.FriendList]
+	bannersCache cached[[]lobby.Banner]
 }
 
 type pendingUpdate struct {
@@ -92,6 +97,12 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /api/play", s.guard(s.play))
 	mux.HandleFunc("POST /api/diagnose", s.guard(s.diagnose))
 	mux.HandleFunc("POST /api/update", s.guard(s.applyUpdate))
+	mux.HandleFunc("POST /api/rooms/describe", s.guard(s.describeRoom))
+	mux.HandleFunc("POST /api/friends", s.guard(s.friendAction))
+	mux.HandleFunc("POST /api/friends/messages", s.guard(s.conversation))
+	mux.HandleFunc("POST /api/friends/invite", s.guard(s.inviteFriend))
+	mux.HandleFunc("POST /api/friends/invitations/seen", s.guard(s.invitationsSeen))
+	mux.HandleFunc("GET /api/players/find", s.guard(s.findPlayer))
 
 	return mux
 }
@@ -187,6 +198,7 @@ func (s *server) state(w http.ResponseWriter, r *http.Request) {
 
 	if cfg.PlayerID != "" && cfg.Coordinator != "" {
 		s.pull(cfg, out)
+		s.social(out)
 	}
 
 	s.mu.Lock()
@@ -383,12 +395,16 @@ func (s *server) createRoom(w http.ResponseWriter, r *http.Request) {
 func (s *server) joinRoom(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		RoomID string `json:"room_id"`
+		// Password is the only thing at the door the person types. Every
+		// other check - friends, invites, the MMR floor, a kick block - is
+		// made by the coordinator from its own records (D41).
+		Password string `json:"password"`
 	}
 	if !decode(w, r, &body) {
 		return
 	}
 	cfg := s.snapshot()
-	info, err := s.api().JoinRoom(body.RoomID, cfg.PlayerID, cfg.Nick)
+	info, err := s.api().JoinRoomWith(body.RoomID, cfg.PlayerID, cfg.Nick, body.Password)
 	if err != nil {
 		fail(w, err.Error())
 		return

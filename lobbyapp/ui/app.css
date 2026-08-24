@@ -1,22 +1,33 @@
-/* LobbyBaz - prototype UI.
+/* LobbyBaz - the lobby (D42).
+
    Dark, dense, and built for a 1366x768 laptop, because that is what most
-   players in the target audience actually have in front of them. */
+   players in the target audience actually have in front of them.
+
+   Every rule here is direction-agnostic (D44): logical properties only, no
+   `left` or `right` anywhere, so setting dir="rtl" flips the whole layout with
+   no second stylesheet. lobbyapp/ui_test.go fails the build if that slips.
+   Block-axis properties - top, bottom, border-bottom - are fine and used
+   freely: right-to-left flips the inline axis only. */
 
 :root {
   color-scheme: dark;
-  --bg:      #12141a;
-  --panel:   #1a1d26;
-  --panel2:  #21242f;
-  --line:    #2c303c;
+  --bg:      #0f1116;
+  --panel:   #171a22;
+  --panel2:  #1f232e;
+  --panel3:  #262b38;
+  --line:    #2c313e;
   --text:    #e8eaf0;
   --muted:   #8b93a7;
+  --dim:     #666e82;
   --accent:  #e04a2f;
   --accent2: #f2593d;
   --good:    #3fb96b;
   --warn:    #e0a52f;
   --bad:     #e0503f;
   --radiant: #4a9c5c;
-  --dire:    #b0483a;
+
+  --rail: 320px;
+  --bar: 86px;
 }
 
 * { box-sizing: border-box; }
@@ -26,11 +37,12 @@ body {
   background: var(--bg);
   color: var(--text);
   font: 14px/1.5 "Segoe UI", system-ui, sans-serif;
+  overflow: hidden;
 }
 
 h1, h2, h3 { margin: 0; font-weight: 650; letter-spacing: -0.01em; }
-h2 { font-size: 1.05rem; }
-h3 { font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+h2 { font-size: 1.02rem; }
+h3 { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 h3 em { font-style: normal; text-transform: none; letter-spacing: 0; opacity: .7; }
 
 .muted { color: var(--muted); }
@@ -38,30 +50,82 @@ h3 em { font-style: normal; text-transform: none; letter-spacing: 0; opacity: .7
 .pad   { padding: 1rem 1.1rem; }
 .hidden { display: none !important; }
 
-/* ---------------------------------------------------------------- header */
+/* ---------------------------------------------------------------- shell */
 
-#top {
-  display: flex; align-items: center; gap: 1.5rem;
-  padding: 0 1.1rem; height: 52px;
-  background: var(--panel); border-bottom: 1px solid var(--line);
-  position: sticky; top: 0; z-index: 20;
+/* The toolbar is a grid column rather than a positioned element, which is
+   what makes it flip sides on its own under dir="rtl". */
+#shell {
+  display: grid;
+  grid-template-columns: var(--bar) minmax(0, 1fr) var(--rail);
+  grid-template-rows: 52px auto 1fr;
+  grid-template-areas:
+    "bar head rail"
+    "bar strip rail"
+    "bar stage rail";
+  height: 100vh;
+}
+@media (max-width: 1100px) {
+  #shell { grid-template-columns: var(--bar) minmax(0, 1fr); }
+  #rail { display: none; }
+  #shell { grid-template-areas: "bar head" "bar strip" "bar stage"; }
+}
+
+/* --------------------------------------------------------------- toolbar */
+
+#toolbar {
+  grid-area: bar;
+  background: var(--panel);
+  border-inline-end: 1px solid var(--line);
+  display: flex; flex-direction: column; align-items: stretch;
+  padding: .6rem .4rem;
+  gap: .15rem;
 }
 
 .brand {
-  font-weight: 800; letter-spacing: .12em; font-size: .85rem;
-  color: var(--accent);
+  font-weight: 800; letter-spacing: .1em; font-size: .7rem;
+  color: var(--accent); text-align: center; padding: .4rem 0 .8rem;
 }
 
-.tabs { display: flex; gap: .25rem; flex: 1; }
-
-.tab {
+.nav {
   background: none; border: 0; color: var(--muted);
-  padding: .45rem .9rem; border-radius: .4rem;
-  font: inherit; font-weight: 600; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: .15rem;
+  padding: .55rem .2rem; border-radius: .45rem;
+  font: inherit; font-size: .72rem; font-weight: 600; cursor: pointer;
 }
-.tab:hover:not(:disabled) { color: var(--text); background: var(--panel2); }
-.tab.active { color: var(--text); background: var(--panel2); }
-.tab:disabled { opacity: .35; cursor: default; }
+.nav .ico { font-size: 1.05rem; line-height: 1; }
+.nav:hover:not(:disabled) { color: var(--text); background: var(--panel2); }
+.nav.active { color: var(--text); background: var(--panel3); }
+.nav:disabled { opacity: .3; cursor: default; }
+.nav-gap { flex: 1; }
+
+/* The connection light. Its colour is the whole point, so it is the one
+   thing in the toolbar that is never grey. */
+.nav.conn { cursor: default; }
+.dot { width: .6rem; height: .6rem; border-radius: 50%; background: var(--dim); }
+.dot.ok   { background: var(--good); box-shadow: 0 0 8px #3fb96b88; }
+.dot.wait { background: var(--warn); }
+.dot.bad  { background: var(--bad); }
+
+/* ---------------------------------------------------------------- header */
+
+#top {
+  grid-area: head;
+  display: flex; align-items: center; gap: .8rem;
+  padding: 0 1rem;
+  background: var(--panel); border-block-end: 1px solid var(--line);
+}
+
+.searchbox { flex: 0 1 260px; }
+.searchbox input { width: 100%; }
+
+.filters { display: flex; gap: .25rem; flex: 1; flex-wrap: wrap; }
+.chip {
+  background: none; border: 1px solid var(--line); color: var(--muted);
+  padding: .25rem .7rem; border-radius: 1rem;
+  font: inherit; font-size: .78rem; font-weight: 600; cursor: pointer;
+}
+.chip:hover { color: var(--text); }
+.chip.active { color: var(--text); background: var(--panel3); border-color: var(--panel3); }
 
 .status { display: flex; align-items: center; gap: .5rem; }
 
@@ -79,91 +143,126 @@ h3 em { font-style: normal; text-transform: none; letter-spacing: 0; opacity: .7
 .me {
   display: flex; flex-direction: column; align-items: flex-end;
   background: var(--panel2); border: 1px solid var(--line);
-  border-radius: .4rem; padding: .25rem .7rem;
+  border-radius: .4rem; padding: .22rem .7rem;
   color: var(--text); font: inherit; cursor: pointer; line-height: 1.25;
 }
 .me:hover { border-color: var(--accent); }
 .me small { color: var(--muted); font-size: .7rem; }
 
-/* --------------------------------------------------------------- banners */
+/* --------------------------------------------------------------- strips */
+
+#banners, #banner, #update { grid-area: strip; }
+#banners:empty { display: none; }
+
+.strip { display: flex; gap: .6rem; padding: .55rem 1rem; overflow-x: auto; }
+.ad {
+  flex: 0 0 auto; max-width: 30rem;
+  background: var(--panel2); border: 1px solid var(--line); border-radius: .45rem;
+  padding: .45rem .8rem; font-size: .84rem;
+  display: flex; align-items: baseline; gap: .5rem;
+}
+.ad strong { font-weight: 650; }
+.ad span { color: var(--muted); }
+.ad a { color: var(--accent2); text-decoration: none; }
+.ad a:hover { text-decoration: underline; }
 
 .banner {
-  padding: .6rem 1.1rem; font-size: .87rem;
-  background: #2a1714; color: #ffbdb2; border-bottom: 1px solid #4d241f;
+  padding: .6rem 1rem; font-size: .87rem;
+  background: #2a1714; color: #ffbdb2; border-block-end: 1px solid #4d241f;
 }
-.banner.update { background: #16281c; color: #b6f0c8; border-bottom-color: #27502f;
-                 display: flex; align-items: center; gap: 1rem; }
+.banner.update {
+  background: #16281c; color: #b6f0c8; border-block-end-color: #27502f;
+  display: flex; align-items: center; gap: 1rem;
+}
 .banner button {
   background: var(--good); border: 0; color: #06210f; font: inherit; font-weight: 700;
   padding: .3rem .9rem; border-radius: .35rem; cursor: pointer;
 }
 
-/* ---------------------------------------------------------------- layout */
+/* ---------------------------------------------------------------- stage */
 
-main { padding: 1.1rem; }
+#stage { grid-area: stage; overflow-y: auto; padding: 1rem; }
 
-.screen { display: grid; grid-template-columns: minmax(0,1fr) 340px; gap: 1.1rem; align-items: start; }
-@media (max-width: 1000px) { .screen { grid-template-columns: 1fr; } }
-
-.col-main { display: flex; flex-direction: column; gap: 1.1rem; min-width: 0; }
+.screen { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
 
 .panel {
   background: var(--panel); border: 1px solid var(--line); border-radius: .6rem;
-  overflow: hidden;
+  overflow: hidden; min-width: 0;
 }
-.panel.wide { grid-column: 1 / -1; }
-
 .panel-head {
   display: flex; align-items: center; justify-content: space-between; gap: 1rem;
-  padding: .8rem 1.1rem; border-bottom: 1px solid var(--line); background: var(--panel2);
+  padding: .7rem 1rem; border-block-end: 1px solid var(--line); background: var(--panel2);
 }
-
+.panel-head.plain { background: none; }
 .inline { display: flex; gap: .5rem; }
+.empty-state { padding: 3rem 1rem; text-align: center; }
+.empty-state h2 { margin-block-end: .5rem; }
 
 /* ------------------------------------------------------------ room list */
 
-.roomlist { display: flex; flex-direction: column; }
-
-.room {
-  display: grid; grid-template-columns: 1fr auto; gap: .75rem;
-  padding: .85rem 1.1rem; border-bottom: 1px solid var(--line);
+/* One grid shared by the header row and every room, so the columns line up
+   without either knowing the other's widths. */
+.roomhead, .room {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 5.5rem 6rem 7rem auto;
+  gap: .75rem; align-items: center;
 }
-.room:last-child { border-bottom: 0; }
-.room:hover { background: #1e212b; }
+.roomhead {
+  padding: .5rem 1rem; font-size: .72rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .05em; color: var(--dim);
+  border-block-end: 1px solid var(--line);
+}
+.roomhead .pingcol { cursor: help; text-decoration: underline dotted; }
+
+.roomlist { display: flex; flex-direction: column; }
+.room { padding: .7rem 1rem; border-block-end: 1px solid var(--line); }
+.room:last-child { border-block-end: 0; }
+.room:hover { background: #1c202a; }
 
 .room-title { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
-.room-title strong { font-size: .98rem; }
-.room-meta { color: var(--muted); font-size: .82rem; margin-top: .15rem; }
-.room-players { margin-top: .45rem; display: flex; flex-wrap: wrap; gap: .3rem; }
+.room-title strong { font-size: .97rem; }
+.room-desc { color: var(--muted); font-size: .82rem; margin-block-start: .1rem; }
+.room-players { margin-block-start: .35rem; display: flex; flex-wrap: wrap; gap: .3rem; }
+.room-count { font-variant-numeric: tabular-nums; font-weight: 650; }
+.room-count small { color: var(--dim); font-weight: 400; }
+
+/* The latency column. It is the host's number, never the reader's (D54), so
+   it is labelled in the header and again in a tooltip on every cell. */
+.room-ping { font-variant-numeric: tabular-nums; cursor: help; }
+.room-ping.good { color: var(--good); }
+.room-ping.fair { color: var(--warn); }
+.room-ping.poor { color: var(--bad); }
+.room-ping.unknown { color: var(--dim); }
 
 .tag {
   background: var(--panel2); border: 1px solid var(--line); border-radius: .3rem;
-  padding: .1rem .45rem; font-size: .76rem; color: var(--muted); white-space: nowrap;
+  padding: .05rem .4rem; font-size: .74rem; color: var(--muted); white-space: nowrap;
 }
 .tag.host { color: var(--warn); border-color: #4d3c17; }
+.tag.lock { color: var(--dim); }
 
 .badge {
-  font-size: .7rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
-  padding: .2rem .5rem; border-radius: .3rem;
-  background: #1d3a26; color: #6fd18f;
+  font-size: .68rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  padding: .15rem .45rem; border-radius: .3rem;
+  background: #1d3a26; color: #6fd18f; white-space: nowrap;
 }
 .badge.locked { background: #3a2119; color: #f0a08f; }
 .badge.replace { background: #3a331a; color: #ecc96a; }
 
-.room-actions { display: flex; flex-direction: column; gap: .4rem; justify-content: center; }
+.room-actions { display: flex; gap: .35rem; justify-content: flex-end; }
 
 /* ---------------------------------------------------------------- slots */
 
 .slots {
   display: grid; grid-template-columns: repeat(2, minmax(0,1fr));
-  gap: .5rem; padding: 1.1rem;
+  gap: .5rem; padding: 1rem;
 }
 @media (max-width: 700px) { .slots { grid-template-columns: 1fr; } }
 
 .slot {
   display: flex; align-items: center; gap: .6rem;
   background: var(--panel2); border: 1px solid var(--line);
-  border-radius: .45rem; padding: .55rem .7rem; min-height: 46px;
+  border-radius: .45rem; padding: .5rem .7rem; min-height: 44px;
 }
 .slot.empty { border-style: dashed; opacity: .5; }
 .slot.you { border-color: var(--accent); }
@@ -171,35 +270,36 @@ main { padding: 1.1rem; }
 .slot-num {
   width: 1.6rem; height: 1.6rem; flex: none; border-radius: .3rem;
   display: grid; place-items: center;
-  background: #171a22; color: var(--muted); font-size: .75rem; font-weight: 700;
+  background: #14171f; color: var(--muted); font-size: .75rem; font-weight: 700;
 }
 .slot-body { flex: 1; min-width: 0; }
 .slot-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .slot-sub { font-size: .75rem; color: var(--muted); }
 .slot button {
   background: none; border: 1px solid var(--line); color: var(--muted);
-  border-radius: .3rem; font: inherit; font-size: .75rem; padding: .15rem .5rem; cursor: pointer;
+  border-radius: .3rem; font: inherit; font-size: .75rem; padding: .1rem .5rem; cursor: pointer;
 }
 .slot button:hover { color: var(--bad); border-color: var(--bad); }
 
-.specrow { padding: 0 1.1rem 1.1rem; }
-.spectators { display: flex; gap: .5rem; margin-top: .5rem; flex-wrap: wrap; }
+.specrow { padding: 0 1rem 1rem; }
+.spectators { display: flex; gap: .5rem; margin-block-start: .5rem; flex-wrap: wrap; }
 .spectators .slot { flex: 1 1 180px; }
+
+.describerow { display: flex; gap: .5rem; padding: .8rem 1rem 0; }
+.describerow input { flex: 1; min-width: 0; }
 
 /* -------------------------------------------------------------- actions */
 
-.actions { padding: 1.1rem; display: flex; flex-direction: column; gap: .8rem; }
+.actions { padding: 1rem; display: flex; flex-direction: column; gap: .8rem; }
 .actionrow { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
 .net { color: var(--muted); font-size: .82rem; margin-inline-start: auto; font-variant-numeric: tabular-nums; }
 
-button, select, input {
-  font: inherit; border-radius: .4rem;
-}
+button, select, input { font: inherit; border-radius: .4rem; }
 button {
   background: var(--panel2); border: 1px solid var(--line); color: var(--text);
-  padding: .45rem .9rem; cursor: pointer;
+  padding: .4rem .85rem; cursor: pointer;
 }
-button:hover:not(:disabled) { border-color: #3c4252; background: #272b37; }
+button:hover:not(:disabled) { border-color: #3c4252; background: var(--panel3); }
 button:disabled { opacity: .4; cursor: default; }
 
 button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
@@ -208,44 +308,98 @@ button.launch  { background: var(--radiant); border-color: var(--radiant); color
 button.launch:hover:not(:disabled) { filter: brightness(1.12); }
 button.ghost   { background: none; }
 button.danger  { color: var(--bad); border-color: #4d241f; }
-button.big     { padding: .55rem 1.4rem; }
+button.big     { padding: .5rem 1.3rem; }
+button.tiny    { padding: .2rem .55rem; font-size: .76rem; }
 
 input, select {
-  background: #14161d; border: 1px solid var(--line); color: var(--text);
-  padding: .45rem .7rem;
+  background: #12141b; border: 1px solid var(--line); color: var(--text);
+  padding: .4rem .65rem;
 }
 input:focus, select:focus { outline: 0; border-color: var(--accent); }
-input::placeholder { color: #5c6479; }
+input::placeholder { color: #5a6377; }
 
 .field { display: flex; flex-direction: column; gap: .3rem; font-size: .82rem; color: var(--muted); }
 .field em { font-style: normal; opacity: .75; }
 .inline-field { flex-direction: row; align-items: center; gap: .5rem; }
 
+/* ----------------------------------------------------------------- rail */
+
+#rail {
+  grid-area: rail;
+  border-inline-start: 1px solid var(--line);
+  background: var(--bg);
+  display: flex; flex-direction: column; gap: .6rem;
+  padding: .6rem; min-height: 0;
+}
+.railtop { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+
+.findrow { display: flex; gap: .4rem; padding: .6rem .8rem 0; }
+.findrow input { flex: 1; min-width: 0; }
+.findresult { padding: .4rem .8rem 0; margin: 0; }
+.findresult:empty { display: none; }
+
+.friendlist { overflow-y: auto; padding: .4rem; display: flex; flex-direction: column; gap: .1rem; }
+.friend {
+  display: flex; align-items: center; gap: .5rem;
+  padding: .35rem .5rem; border-radius: .4rem;
+}
+.friend:hover { background: var(--panel2); }
+.friend .who { flex: 1; min-width: 0; }
+.friend .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.friend .where { font-size: .74rem; color: var(--dim); }
+.friend .unread {
+  background: var(--accent); color: #fff; border-radius: 1rem;
+  font-size: .68rem; font-weight: 700; padding: .05rem .4rem;
+}
+.friend .acts { display: flex; gap: .2rem; opacity: 0; }
+.friend:hover .acts { opacity: 1; }
+.friend-group { padding: .5rem .5rem .2rem; }
+.friend-empty { padding: 1rem .8rem; }
+
 /* ----------------------------------------------------------------- chat */
 
-.chatpanel { display: flex; flex-direction: column; height: calc(100vh - 140px); min-height: 320px; }
+/* Collapsed, the chat is its tab strip and nothing else - the same gesture
+   Dota's own main-menu chat uses (D42.3). */
+.chatpanel { flex: 1 1 55%; display: flex; flex-direction: column; min-height: 0; }
+.chatpanel.collapsed { flex: 0 0 auto; }
+.chatpanel.collapsed .chatbody { display: none; }
+.chatpanel.collapsed .collapse { transform: rotate(180deg); }
 
-.chatlog {
-  flex: 1; overflow-y: auto; padding: .7rem 1.1rem;
-  display: flex; flex-direction: column; gap: .35rem;
+.chattabs { padding: .3rem .4rem; gap: .2rem; justify-content: flex-start; }
+.chattab {
+  background: none; border: 0; color: var(--muted);
+  padding: .25rem .6rem; border-radius: .35rem;
+  font: inherit; font-size: .8rem; font-weight: 600; cursor: pointer;
 }
-.msg { font-size: .87rem; word-wrap: break-word; }
+.chattab:hover:not(:disabled) { color: var(--text); }
+.chattab.active { color: var(--text); background: var(--panel3); }
+.chattab:disabled { opacity: .35; cursor: default; }
+.collapse {
+  margin-inline-start: auto; background: none; border: 0; color: var(--muted);
+  padding: .1rem .4rem; cursor: pointer; line-height: 1;
+}
+
+.chatbody { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.chatlog {
+  flex: 1; overflow-y: auto; padding: .6rem .8rem;
+  display: flex; flex-direction: column; gap: .3rem;
+}
+.msg { font-size: .86rem; overflow-wrap: break-word; }
 .msg .who { font-weight: 650; color: #b9c2d6; }
 .msg .who.self { color: var(--accent2); }
-.msg.system { color: var(--muted); font-style: italic; font-size: .82rem; }
+.msg.system { color: var(--muted); font-style: italic; font-size: .8rem; }
 
-.chatbox { display: flex; gap: .4rem; padding: .7rem; border-top: 1px solid var(--line); }
+.chatbox { display: flex; gap: .4rem; padding: .6rem; border-block-start: 1px solid var(--line); }
 .chatbox input { flex: 1; min-width: 0; }
 
 /* ---------------------------------------------------------- diagnostics */
 
 .diaglist { display: flex; flex-direction: column; }
-
 .check {
   display: flex; align-items: flex-start; gap: .7rem;
-  padding: .7rem 1.1rem; border-bottom: 1px solid var(--line);
+  padding: .7rem 1rem; border-block-end: 1px solid var(--line);
 }
-.check:last-child { border-bottom: 0; }
+.check:last-child { border-block-end: 0; }
 .check .mark { font-weight: 800; width: 1.1rem; flex: none; }
 .check.ok  .mark { color: var(--good); }
 .check.bad .mark { color: var(--bad); }
@@ -258,15 +412,17 @@ input::placeholder { color: #5c6479; }
 
 .gate {
   position: fixed; inset: 0; z-index: 50;
-  background: rgba(10,11,15,.82);
+  background: rgba(8,9,13,.82);
   display: grid; place-items: center; padding: 1rem;
 }
 .gate-card {
   background: var(--panel); border: 1px solid var(--line); border-radius: .7rem;
-  padding: 1.8rem; width: min(26rem, 100%);
+  padding: 1.7rem; width: min(26rem, 100%);
   display: flex; flex-direction: column; gap: .9rem;
 }
-.gate-card h1 { font-size: 1.35rem; }
+.gate-card.wide-card { width: min(34rem, 100%); height: min(32rem, 90vh); padding: 0; gap: 0; }
+.gate-card.wide-card .chatlog { min-height: 0; }
+.gate-card h1 { font-size: 1.3rem; }
 .gate-card > p { margin: -.5rem 0 0; }
 .gate-actions { display: flex; gap: .5rem; }
 .gate-err { color: var(--bad); font-size: .85rem; margin: 0; min-height: 1.2em; }
@@ -276,12 +432,9 @@ input::placeholder { color: #5c6479; }
    first two-PC test was lost to that difference being invisible. */
 .netbanner {
   padding: .7rem .9rem;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  margin-bottom: .9rem;
-  font-size: .92rem;
-  font-weight: 600;
-  line-height: 1.4;
+  border: 1px solid transparent; border-radius: 8px;
+  margin-block-end: .3rem;
+  font-size: .92rem; font-weight: 600; line-height: 1.4;
 }
 .netbanner.ok   { color: var(--good); border-color: #27502f; background: #16281c; }
 .netbanner.bad  { color: var(--bad);  border-color: #4d241f; background: #2a1714; }

@@ -255,16 +255,55 @@ Adding Persian is now: copy `strings/en.json` to `strings/fa.json`, translate
 the values, and uncomment the `fa` line in `i18n.js`. Every test above starts
 guarding it the moment the file exists.
 
-## T10 — The new lobby *(D42)*
+## T10 — The new lobby *(D42)* — done
 
-- [ ] Room list: host, description, minimum MMR, player count, status, and the
+- [x] Room list: host, description, minimum MMR, player count, status, and the
       host's relay latency labelled as the host's, not the player's
-- [ ] Friends rail down the right
-- [ ] Tabbed collapsible chat: lobby, friends, party
-- [ ] Profile, top right
-- [ ] Left toolbar: Lobby, Room, Tournaments, Profile, connection status
-- [ ] Filter and search
-- [ ] Banner strip
+- [x] Friends rail down the right
+- [x] Tabbed collapsible chat: lobby, friends, party
+- [x] Profile, top right
+- [x] Left toolbar: Lobby, Room, Tournaments, Profile, connection status
+- [x] Filter and search
+- [x] Banner strip
+
+**Notes for whoever picks this up.**
+
+The screen is a CSS grid: toolbar, stage, rail. It is written in logical
+properties, so the toolbar is a grid *column* rather than a positioned
+element and moves to the other side on its own under `dir="rtl"`.
+
+**The latency column was the part that needed inventing**, and it is written
+up as D54. Short version: nobody in the lobby can ping a room they have not
+joined, so the column is the *host's* round trip to the relay, which the relay
+now measures by echoing keepalives. It is labelled in the header and again on
+every cell, because a player who reads it as their own ping blames the wrong
+thing. Zero is drawn as unknown, never as excellent. **The relay must be
+redeployed before the column shows anything.**
+
+**Two entries ship honest rather than absent.** Tournaments and the party chat
+tab both say they are not built. A dead link is worse than a sentence, and
+putting them in now means the toolbar and the chat do not move when they
+arrive.
+
+**The friends rail degrades on purpose.** A coordinator with no database has
+no accounts and therefore no friends list — which is what the live server is
+running right now. The rail says "this server has no friends list yet" and the
+lobby carries on. It is not an error the player caused.
+
+**The friends list and the announcement strip are cached** (`lobbyapp/social.go`),
+five seconds and five minutes, with a minute's sulk after a failure. The lobby
+polls every two seconds because rooms fill in seconds; a friends list does not,
+and an announcement changes about once a week.
+
+**Three new tests guard the thing this interface is most exposed to:** it draws
+by reaching into the document by name, so a renamed element does not raise an
+error — it silently stops being filled in, and the first sign is a blank space
+on the screen. `ui_test.go` now fails the build when the renderer reaches for an
+id, a class, or a data attribute the markup does not have.
+
+**Not verified in a browser.** Everything here passes its tests, but no human
+has looked at the rendered page. That needs `./scripts/publish.sh` and one of
+the two test PCs.
 
 ## T11 — Desktop application *(D45)*
 

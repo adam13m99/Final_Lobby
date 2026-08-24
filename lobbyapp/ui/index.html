@@ -4,7 +4,11 @@
      the whole layout without a second stylesheet (D44). Nothing below carries
      user-facing text: every string is a data-t key resolved from
      strings/<lang>.json, and lobbyapp/ui_test.go fails the build if anybody
-     types text into this file or uses a key that does not exist. -->
+     types text into this file or uses a key that does not exist.
+
+     The shape is D42's: a permanent toolbar down the side, the room list in
+     the middle, friends and chat down the other side, announcements across
+     the top. The lobby is somewhere you sit, not a list you pass through. -->
 <html lang="en" dir="ltr">
 <head>
 <meta charset="utf-8">
@@ -29,131 +33,165 @@
   </form>
 </div>
 
-<header id="top">
-  <div class="brand" data-t="app.name"></div>
+<div id="shell">
 
-  <nav class="tabs">
-    <button class="tab active" data-screen="lobby" data-t="nav.lobby"></button>
-    <button class="tab" data-screen="room" id="roomtab" disabled data-t="nav.room"></button>
-    <button class="tab" data-screen="checks" data-t="nav.checks"></button>
-  </nav>
+<!-- ---------------------------------------------------------- TOOLBAR -->
+<!-- Permanent, and in the same place on every screen (D42.5). Its last
+     entry is not navigation: it is whether this PC is on a room's network,
+     which is the state players most often get wrong. -->
+<nav id="toolbar">
+  <div class="brand" data-t="app.short"></div>
+
+  <button class="nav active" data-screen="lobby">
+    <span class="ico" aria-hidden="true">▤</span><span data-t="nav.lobby"></span>
+  </button>
+  <button class="nav" data-screen="room" id="roomtab" disabled>
+    <span class="ico" aria-hidden="true">⬢</span><span data-t="nav.room"></span>
+  </button>
+  <button class="nav" data-screen="tournaments">
+    <span class="ico" aria-hidden="true">♛</span><span data-t="nav.tournaments"></span>
+  </button>
+  <button class="nav" data-screen="checks">
+    <span class="ico" aria-hidden="true">✚</span><span data-t="nav.checks"></span>
+  </button>
+
+  <div class="nav-gap"></div>
+
+  <button class="nav conn" id="connstate">
+    <span class="dot" id="conndot" aria-hidden="true"></span>
+    <span id="conntext"></span>
+  </button>
+</nav>
+
+<!-- ----------------------------------------------------------- HEADER -->
+<header id="top">
+  <div class="searchbox">
+    <input id="search" maxlength="40" data-t-placeholder="lobby.search.placeholder" autocomplete="off">
+  </div>
+  <div class="filters" id="filters">
+    <button class="chip active" data-filter="all" data-t="lobby.filter.all"></button>
+    <button class="chip" data-filter="joinable" data-t="lobby.filter.joinable"></button>
+    <button class="chip" data-filter="waiting" data-t="lobby.filter.waiting"></button>
+    <button class="chip" data-filter="mine" data-t="lobby.filter.eligible"></button>
+  </div>
 
   <div class="status">
     <span class="pill" id="p-service"></span>
-    <span class="pill" id="p-tunnel"></span>
     <span class="pill quiet" id="p-online"></span>
-    <button class="me" id="mebtn"><span id="menick"></span><small id="memmr"></small></button>
+    <button class="me" id="mebtn">
+      <span id="menick"></span><small id="memmr"></small>
+    </button>
   </div>
 </header>
 
+<!-- Announcements, then problems. Two strips: one the staff write, one the
+     app writes about itself. -->
+<div id="banners" class="strip"></div>
 <div id="banner" class="banner hidden"></div>
 <div id="update" class="banner update hidden"></div>
 
-<main>
+<main id="stage">
 
 <!-- ------------------------------------------------------------ LOBBY -->
 <section id="screen-lobby" class="screen">
-  <div class="col-main">
-    <div class="panel">
-      <div class="panel-head">
-        <h2 data-t="lobby.rooms"></h2>
-        <form id="createform" class="inline">
-          <input id="roomname" maxlength="40" data-t-placeholder="lobby.roomname.placeholder" autocomplete="off">
-          <button class="primary" type="submit" data-t="lobby.create"></button>
-        </form>
-      </div>
-      <div id="roomlist" class="roomlist"></div>
-    </div>
-  </div>
-
-  <div class="col-side">
-    <div class="panel chatpanel">
-      <div class="panel-head"><h2 data-t="lobby.chat"></h2></div>
-      <div class="chatlog" id="lobbylog"></div>
-      <form class="chatbox" id="lobbychatform">
-        <input id="lobbychatinput" maxlength="300" data-t-placeholder="chat.placeholder" autocomplete="off">
-        <button type="submit" data-t="chat.send"></button>
+  <div class="panel roomspanel">
+    <div class="panel-head">
+      <h2 data-t="lobby.rooms"></h2>
+      <form id="createform" class="inline">
+        <input id="roomname" maxlength="40" data-t-placeholder="lobby.roomname.placeholder" autocomplete="off">
+        <button class="primary" type="submit" data-t="lobby.create"></button>
       </form>
     </div>
+    <div class="roomhead">
+      <span data-t="lobby.col.room"></span>
+      <span data-t="lobby.col.players"></span>
+      <span data-t="lobby.col.mmr"></span>
+      <span class="pingcol" data-t-title="lobby.col.ping.explain" data-t="lobby.col.ping"></span>
+      <span></span>
+    </div>
+    <div id="roomlist" class="roomlist"></div>
   </div>
 </section>
 
 <!-- ------------------------------------------------------------- ROOM -->
 <section id="screen-room" class="screen hidden">
-  <div class="col-main">
-    <div class="panel">
-      <div class="panel-head">
-        <div>
-          <h2 id="room-name" data-t="room.title"></h2>
-          <p class="muted small" id="room-sub"></p>
-        </div>
-        <span class="badge" id="room-status"></span>
+  <div class="panel">
+    <div class="panel-head">
+      <div>
+        <h2 id="room-name" data-t="room.title"></h2>
+        <p class="muted small" id="room-sub"></p>
       </div>
-
-      <div class="slots" id="slots"></div>
-
-      <div class="specrow">
-        <h3><span data-t="room.spectators"></span> <em data-t="room.spectators.note"></em></h3>
-        <div class="spectators" id="spectators"></div>
-      </div>
+      <span class="badge" id="room-status"></span>
     </div>
 
-    <div class="panel actions">
-      <!-- The network state has to be impossible to miss. The first two-PC
-           test failed because both players were in a room, neither was on
-           its network, and the only sign was a small pill in the header. -->
-      <div class="netbanner" id="netbanner" hidden></div>
+    <form class="describerow hostonly" id="describeform">
+      <input id="describe" maxlength="120" data-t-placeholder="room.describe.placeholder" autocomplete="off">
+      <button type="submit" data-t="room.describe.save"></button>
+    </form>
 
-      <div class="actionrow">
-        <button class="primary big" id="btn-connect" data-t="room.connect"></button>
-        <button class="ghost" id="btn-disconnect" data-t="room.disconnect"></button>
-        <span class="net" id="netinfo"></span>
-      </div>
+    <div class="slots" id="slots"></div>
 
-      <div class="actionrow">
-        <label class="field inline-field">
-          <span data-t="room.mode"></span>
-          <select id="mode">
-            <option value="1" data-t="room.mode.ap"></option>
-            <option value="2" data-t="room.mode.cm"></option>
-            <option value="3" data-t="room.mode.rd"></option>
-            <option value="4" data-t="room.mode.sd"></option>
-            <option value="5" data-t="room.mode.ar"></option>
-            <option value="22" data-t="room.mode.rap"></option>
-          </select>
-        </label>
-        <label class="field inline-field">
-          <span data-t="room.team"></span>
-          <select id="team">
-            <option value="good" data-t="room.team.radiant"></option>
-            <option value="bad" data-t="room.team.dire"></option>
-          </select>
-        </label>
-        <button class="launch big" id="btn-play" data-t="room.play"></button>
-      </div>
-
-      <div class="actionrow hostonly" id="hostcontrols">
-        <button id="btn-lock" data-t="room.lock"></button>
-        <button id="btn-reopen" data-t="room.reopen"></button>
-        <button id="btn-open" data-t="room.openall"></button>
-      </div>
-
-      <div class="actionrow">
-        <button class="danger ghost" id="btn-leave" data-t="room.leave"></button>
-        <button class="ghost" id="btn-tolobby" data-t="room.tolobby"></button>
-      </div>
+    <div class="specrow">
+      <h3><span data-t="room.spectators"></span> <em data-t="room.spectators.note"></em></h3>
+      <div class="spectators" id="spectators"></div>
     </div>
   </div>
 
-  <div class="col-side">
-    <div class="panel chatpanel">
-      <div class="panel-head"><h2 data-t="room.chat"></h2></div>
-      <div class="chatlog" id="roomlog"></div>
-      <form class="chatbox" id="roomchatform">
-        <input id="roomchatinput" maxlength="300" data-t-placeholder="chat.placeholder" autocomplete="off">
-        <button type="submit" data-t="chat.send"></button>
-      </form>
+  <div class="panel actions">
+    <!-- The network state has to be impossible to miss. The first two-PC
+         test failed because both players were in a room, neither was on
+         its network, and the only sign was a small pill in the header. -->
+    <div class="netbanner" id="netbanner" hidden></div>
+
+    <div class="actionrow">
+      <button class="primary big" id="btn-connect" data-t="room.connect"></button>
+      <button class="ghost" id="btn-disconnect" data-t="room.disconnect"></button>
+      <span class="net" id="netinfo"></span>
     </div>
+
+    <div class="actionrow">
+      <label class="field inline-field">
+        <span data-t="room.mode"></span>
+        <select id="mode">
+          <option value="1" data-t="room.mode.ap"></option>
+          <option value="2" data-t="room.mode.cm"></option>
+          <option value="3" data-t="room.mode.rd"></option>
+          <option value="4" data-t="room.mode.sd"></option>
+          <option value="5" data-t="room.mode.ar"></option>
+          <option value="22" data-t="room.mode.rap"></option>
+        </select>
+      </label>
+      <label class="field inline-field">
+        <span data-t="room.team"></span>
+        <select id="team">
+          <option value="good" data-t="room.team.radiant"></option>
+          <option value="bad" data-t="room.team.dire"></option>
+        </select>
+      </label>
+      <button class="launch big" id="btn-play" data-t="room.play"></button>
+    </div>
+
+    <div class="actionrow hostonly" id="hostcontrols">
+      <button id="btn-lock" data-t="room.lock"></button>
+      <button id="btn-reopen" data-t="room.reopen"></button>
+      <button id="btn-open" data-t="room.openall"></button>
+    </div>
+
+    <div class="actionrow">
+      <button class="danger ghost" id="btn-leave" data-t="room.leave"></button>
+      <button class="ghost" id="btn-tolobby" data-t="room.tolobby"></button>
+    </div>
+  </div>
+</section>
+
+<!-- ------------------------------------------------------ TOURNAMENTS -->
+<!-- The toolbar entry ships pointing at an honest "not yet" rather than a
+     dead link. Section 12 of the spec lists tournaments among the things not
+     being built, and D48 left it an open question rather than a promise. -->
+<section id="screen-tournaments" class="screen hidden">
+  <div class="panel wide empty-state">
+    <h2 data-t="tournaments.title"></h2>
+    <p class="muted" data-t="tournaments.soon"></p>
   </div>
 </section>
 
@@ -176,6 +214,46 @@
 
 </main>
 
+<!-- ------------------------------------------------------------- RAIL -->
+<!-- Friends above, chat below, both down the same side (D42.2, D42.3). The
+     chat collapses the way Dota's own does, and stays collapsed. -->
+<aside id="rail">
+  <div class="panel railtop">
+    <div class="panel-head">
+      <h2 data-t="friends.title"></h2>
+      <button class="tiny" id="btn-findfriend" data-t="friends.add"></button>
+    </div>
+    <form class="findrow hidden" id="findform">
+      <input id="findinput" maxlength="24" data-t-placeholder="friends.find.placeholder" autocomplete="off">
+      <button class="primary tiny" type="submit" data-t="friends.find"></button>
+    </form>
+    <p class="findresult muted small" id="findresult"></p>
+    <div class="friendlist" id="friendlist"></div>
+  </div>
+
+  <div class="panel chatpanel" id="chatpanel">
+    <div class="panel-head chattabs">
+      <button class="chattab active" data-chat="lobby" data-t="chat.tab.lobby"></button>
+      <button class="chattab" data-chat="room" id="chattab-room" data-t="chat.tab.room"></button>
+      <button class="chattab" data-chat="party" data-t="chat.tab.party"></button>
+      <button class="collapse" id="chatcollapse" data-t-title="chat.collapse"><span aria-hidden="true">▾</span></button>
+    </div>
+    <div class="chatbody" id="chatbody">
+      <div class="chatlog" id="lobbylog"></div>
+      <div class="chatlog hidden" id="roomlog"></div>
+      <div class="chatlog hidden" id="partylog">
+        <p class="muted small pad" data-t="chat.party.soon"></p>
+      </div>
+      <form class="chatbox" id="chatform">
+        <input id="chatinput" maxlength="300" data-t-placeholder="chat.placeholder" autocomplete="off">
+        <button type="submit" data-t="chat.send"></button>
+      </form>
+    </div>
+  </div>
+</aside>
+
+</div><!-- /shell -->
+
 <!-- Profile editor -->
 <div id="profilegate" class="gate hidden">
   <form class="gate-card" id="profileform">
@@ -194,6 +272,21 @@
     </div>
     <p class="gate-err" id="profileerr"></p>
   </form>
+</div>
+
+<!-- One friend's private conversation, opened from the rail. -->
+<div id="dmgate" class="gate hidden">
+  <div class="gate-card wide-card">
+    <div class="panel-head plain">
+      <h2 id="dmwho"></h2>
+      <button class="tiny" id="dmclose" data-t="profile.cancel"></button>
+    </div>
+    <div class="chatlog" id="dmlog"></div>
+    <form class="chatbox" id="dmform">
+      <input id="dminput" maxlength="500" data-t-placeholder="chat.placeholder" autocomplete="off">
+      <button class="primary" type="submit" data-t="chat.send"></button>
+    </form>
+  </div>
 </div>
 
 <script src="i18n.js"></script>

@@ -162,8 +162,25 @@ there; this is the summary.
 | T7 friends (D41) | **done** — graph, blocks, private chat, invites, presence |
 | T8 roles and moderation (D43, D47) | **done** — roles, sanctions, labels, banners, audit log |
 | T9 interface built for translation (D44) | **done** — lookup, logical layout, and a test that enforces both |
-| T10 the new lobby (D42) | in progress — the latency column is measured and served; the screen itself is next |
+| T10 the new lobby (D42) | **done** — not yet looked at in a browser |
 | T11 desktop application (D45) | not started |
+
+**The lobby is a place now (D42).** A permanent toolbar down one side —
+Lobby, Room, Tournaments, Diagnostics, and a connection light that is the
+permanent answer to "am I on the room's network". The room list carries the
+host, their own description of the room, the door, the player count, the MMR
+floor or average, and the host's latency. Search and four filter chips run
+against the list already on screen, so typing is instant rather than waiting
+for the next poll. Friends rail and a tabbed collapsible chat down the other
+side; announcements across the top. Tournaments and the party chat tab ship
+saying they are not built — a dead link is worse than a sentence, and the
+toolbar will not move when they arrive.
+
+**Nobody has looked at it in a browser.** Every test passes, including three
+new ones that fail the build if the renderer reaches for an element, class or
+data attribute the markup does not have — which is the failure this kind of
+interface actually has. But rendering is not tested by any of that. It wants
+`./scripts/publish.sh` and one of the two test PCs.
 
 **The lobby's latency column is real, and it is the host's (D54).** The relay
 now answers a keepalive with a keepalive carrying the same sequence number, so
