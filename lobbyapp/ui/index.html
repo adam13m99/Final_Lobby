@@ -130,6 +130,14 @@
 
 <!-- Announcements, then problems. Two strips: one the staff write, one the
      app writes about itself. -->
+<!-- Terms that changed after somebody signed up are terms they have not
+     agreed to. This says so where it cannot be missed, and offers both
+     halves: read them, then accept them. -->
+<div id="termsmoved" class="banner warn hidden">
+  <span data-t="terms.changed"></span>
+  <button class="tiny" id="termsread" data-t="terms.read"></button>
+  <button class="tiny primary" id="termsaccept" data-t="terms.accept"></button>
+</div>
 <div id="banners" class="strip"></div>
 <div id="banner" class="banner hidden"></div>
 <div id="update" class="banner update hidden"></div>
@@ -433,9 +441,42 @@
     <div class="gate-actions">
       <button class="primary" type="submit" data-t="profile.save"></button>
       <button type="button" class="ghost" id="p-cancel" data-t="profile.cancel"></button>
+      <button type="button" class="ghost hidden" id="p-password" data-t="pass.open"></button>
       <button type="button" class="ghost danger hidden" id="p-signout" data-t="auth.signout"></button>
     </div>
     <p class="gate-err" id="profileerr"></p>
+  </form>
+</div>
+
+<!-- Changing a password is its own dialog rather than three more fields on
+     the profile form. It is the one lever somebody has when they think
+     another person knows their password, and the sign-up screen says plainly
+     that a forgotten one cannot be reset. -->
+<div id="passgate" class="gate hidden">
+  <form class="gate-card" id="passform">
+    <h1 data-t="pass.title"></h1>
+    <p class="muted small" data-t="pass.note"></p>
+    <!-- Hidden, and there for the password manager rather than the person: a
+         password form with no username beside it makes managers save the new
+         password against the wrong account, or not offer to at all. -->
+    <input id="pw-user" class="offscreen" type="text" autocomplete="username" tabindex="-1" aria-hidden="true" readonly>
+    <label class="field">
+      <span data-t="pass.current"></span>
+      <input id="pw-old" type="password" maxlength="72" autocomplete="current-password" required>
+    </label>
+    <label class="field">
+      <span data-t="pass.next"></span>
+      <input id="pw-new" type="password" maxlength="72" autocomplete="new-password" required>
+    </label>
+    <label class="field">
+      <span data-t="pass.again"></span>
+      <input id="pw-again" type="password" maxlength="72" autocomplete="new-password" required>
+    </label>
+    <div class="gate-actions">
+      <button class="primary" type="submit" data-t="pass.save"></button>
+      <button type="button" class="ghost" id="pw-cancel" data-t="profile.cancel"></button>
+    </div>
+    <p class="gate-err" id="passerr"></p>
   </form>
 </div>
 

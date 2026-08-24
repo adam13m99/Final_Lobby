@@ -192,6 +192,16 @@ there; this is the summary.
 | T13 terms of use | **done** — served, readable, versioned; **text needs the owner's sign-off** |
 | T14 moderation panel | **done** — T8's tools, reachable from the product at last |
 | T15 the door, host side | **done** — a host can finally make a private room |
+| T16 password change, terms re-acceptance | **done** |
+
+**A password can be changed, and terms can move.** Changing a password is its
+own dialog off the profile card and needs the current one — a session left
+open on a shared PC must not be enough to lock somebody out of their own
+account. The coordinator ends every other session and reissues this one, so
+the window that made the change stays signed in. And when the terms change,
+everybody who agreed to the old ones now sees a strip offering to show them
+the new ones and record their agreement; the coordinator has always reported
+`terms_accepted` for exactly this and nothing had ever read it.
 
 **A host can choose the door now.** T6 built public, password, friends-only
 and invite-only rooms plus an MMR floor, and no host could pick any of them:

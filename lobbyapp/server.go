@@ -60,6 +60,9 @@ type server struct {
 	// Who holds a role. Slow, because being appointed a moderator is not a
 	// thing that happens between two polls; see admin.go.
 	staffCache cached[[]lobby.StaffMember]
+	// Who the coordinator says this account is. Asked rarely: the only thing
+	// read from it changes when somebody edits the terms.
+	whoCache cached[*lobby.Account]
 }
 
 type pendingUpdate struct {
@@ -88,6 +91,7 @@ func newServer(token string) *server {
 	srv.infoCache.every = infoEvery
 	srv.termsCache.every = infoEvery
 	srv.staffCache.every = staffEvery
+	srv.whoCache.every = infoEvery
 	return srv
 }
 
@@ -122,6 +126,8 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /api/auth/signup", s.guard(s.signUp))
 	mux.HandleFunc("POST /api/auth/signin", s.guard(s.signIn))
 	mux.HandleFunc("POST /api/auth/signout", s.guard(s.signOut))
+	mux.HandleFunc("POST /api/auth/password", s.guard(s.changePassword))
+	mux.HandleFunc("POST /api/auth/terms", s.guard(s.acceptTerms))
 	mux.HandleFunc("GET /api/terms", s.guard(s.terms))
 
 	// Moderation (admin.go). Offered to everybody and refused by the
@@ -249,6 +255,7 @@ func (s *server) state(w http.ResponseWriter, r *http.Request) {
 		s.pull(cfg, out)
 		s.social(out)
 		s.role(out)
+		s.whoami(out)
 	}
 
 	s.mu.Lock()

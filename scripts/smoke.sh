@@ -185,6 +185,9 @@ expect "a signed-in player can open a room"        '"ok":true'     "$ROOM"
 STATE=$(call GET "/api/state")
 expect "and is in it"                              '"is_host":true' "$STATE"
 ROOM_ID=$(printf '%s' "$STATE" | python -c "import sys,json;print(json.load(sys.stdin)['room_id'])")
+# The app has to know whether this account is on the terms currently in
+# force, or it cannot ask somebody to accept the new ones.
+expect "the app knows the terms were accepted"     '"terms_accepted":true' "$STATE"
 
 SYNC=$(curl -sS -X POST -H 'Content-Type: application/json' -d '{}' "$COORD/v1/sync" 2>&1)
 expect "the room is visible to a stranger"         'Smoke Room'    "$SYNC"
@@ -375,6 +378,33 @@ expect "signing back in succeeds"                 '"ok":true'    "$SIGNIN"
 
 WRONG=$(call POST /api/auth/signin '{"username":"smoketester","password":"not the password"}')
 refuse "a wrong password does not"                '"ok":true'    "$WRONG"
+
+# The one lever somebody has when they think another person knows their
+# password. The sign-up screen says plainly that a forgotten one cannot be
+# recovered, which makes this the whole of account security.
+sleep 5
+BADOLD=$(call POST /api/auth/password '{"current":"not it","next":"a brand new long one"}')
+refuse "changing a password needs the old one"    '"ok":true'    "$BADOLD"
+
+# The coordinator throttles authentication to five attempts and then one
+# every five seconds, which is the whole defence against somebody guessing a
+# password. This section makes seven, so it waits between them. Waiting is
+# the correct thing to do: a smoke test that needed the limit lifted would be
+# testing a server nobody runs.
+sleep 5
+CHANGED=$(call POST /api/auth/password '{"current":"correct horse battery","next":"a brand new long one"}')
+expect "and works with it"                        '"ok":true'    "$CHANGED"
+
+STILLIN=$(call GET "/api/state")
+expect "the window stays signed in through it"    '"signed_in":true' "$STILLIN"
+
+sleep 5
+OLDPW=$(call POST /api/auth/signin '{"username":"smoketester","password":"correct horse battery"}')
+refuse "the old password stops working"           '"ok":true'    "$OLDPW"
+
+sleep 5
+NEWPW=$(call POST /api/auth/signin '{"username":"smoketester","password":"a brand new long one"}')
+expect "and the new one works"                    '"ok":true'    "$NEWPW"
 
 say ""
 say "=== moderation ==="

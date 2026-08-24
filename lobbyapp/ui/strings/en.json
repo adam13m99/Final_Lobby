@@ -237,5 +237,17 @@
   "door.password.needed": "Choose a password, or pick a different door.",
   "door.mmr.placeholder": "Min MMR",
   "door.save": "Change door",
-  "door.now": "Currently: {door}"
+  "door.now": "Currently: {door}",
+  "pass.open": "Change password",
+  "pass.title": "Change your password",
+  "pass.note": "Every other device signed in to this account is signed out. There is still no way to recover a forgotten password, so choose one you will remember.",
+  "pass.current": "Current password",
+  "pass.next": "New password",
+  "pass.again": "New password again",
+  "pass.save": "Change it",
+  "pass.mismatch": "Those two do not match.",
+  "pass.done": "Password changed.",
+  "terms.changed": "The terms of use have changed since you agreed to them.",
+  "terms.read": "Read them",
+  "terms.accept": "Accept"
 }

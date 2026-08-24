@@ -452,6 +452,36 @@ and then admitting, a password door with no password refused, an MMR floor,
 and an invite-only room refusing somebody and admitting them after an
 invitation.
 
+## T16 — A password somebody can change, and terms that can move *(unplanned, 2026-08-25)*
+
+Two more things the client library could do and no screen offered.
+
+**Changing a password.** The sign-up screen says plainly that a forgotten
+password cannot be reset, which makes this the whole of what a person can do
+when they think somebody else knows theirs. It is its own dialog, reached from
+the profile card, and it requires the current password: a session left open on
+a shared PC must not be enough to lock the owner out of their own account. The
+coordinator ends every other session and issues this one a new token, which
+the app stores, so the window that made the change stays signed in.
+
+**Terms that changed.** `TermsVersion` is a constant, `HasAcceptedTerms` is a
+query, and the coordinator has always returned `terms_accepted` on the account
+"so the client can decide whether to show" a prompt. No client ever did. Now a
+strip appears — signed in, a version in force, this account not on it — with
+both halves of what the person needs: read them, then accept them.
+
+The coordinator throttles authentication to five attempts and then one every
+five seconds. `smoke.sh` waits rather than asking for the limit to be lifted:
+a test that needed it lifted would be testing a server nobody runs.
+
+The render check earned its place twice here. It caught a password form with
+no username field beside it — real, because password managers then save the
+new password against the wrong account — fixed with a hidden field carrying
+`autocomplete="username"`. It caught the same complaint about the room
+password box, where the right answer was the opposite: a room password is a
+shared secret typed by everybody who joins, not a credential, so
+`autocomplete="off"` is both the fix and the honest description.
+
 ---
 
 ## Open, and not blocking

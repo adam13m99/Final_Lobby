@@ -140,6 +140,12 @@ function render() {
     (s.removed ? t("err.removed") : "") ||
     (s.build_warning || ""));
 
+  // Terms that changed after somebody signed up are terms they have not
+  // agreed to. Shown only where all three facts are known: signed in, a
+  // version in force, and this account not on it.
+  $("termsmoved").classList.toggle("hidden",
+    !(s.signed_in && s.terms_version && s.terms_accepted === false));
+
   renderUpdate(s.update);
   renderAds(s.banners || []);
 
@@ -1111,12 +1117,51 @@ $("mebtn").onclick = () => {
   $("profileerr").textContent = "";
   // Signing out only exists where there is a session to end.
   $("p-signout").classList.toggle("hidden", !state.signed_in);
+  $("p-password").classList.toggle("hidden", !state.signed_in);
   $("p-who").textContent = state.username
     ? t("profile.signedin", { username: state.username })
     : t("profile.local");
   $("profilegate").classList.remove("hidden");
 };
 $("p-cancel").onclick = () => $("profilegate").classList.add("hidden");
+
+$("p-password").onclick = () => {
+  $("pw-user").value = state.username || "";
+  $("pw-old").value = "";
+  $("pw-new").value = "";
+  $("pw-again").value = "";
+  $("passerr").textContent = "";
+  $("profilegate").classList.add("hidden");
+  $("passgate").classList.remove("hidden");
+};
+$("pw-cancel").onclick = () => $("passgate").classList.add("hidden");
+
+$("passform").onsubmit = async (e) => {
+  e.preventDefault();
+  // Checked here as well as by the coordinator: a mistyped confirmation is
+  // worth catching before it becomes a password nobody knows.
+  if ($("pw-new").value !== $("pw-again").value) {
+    $("passerr").textContent = t("pass.mismatch");
+    return;
+  }
+  try {
+    await api("/api/auth/password", {
+      current: $("pw-old").value,
+      next: $("pw-new").value,
+    });
+    $("passgate").classList.add("hidden");
+    banner(t("pass.done"));
+    await refresh();
+  } catch (err) {
+    $("passerr").textContent = err.message;
+  }
+};
+
+// The terms moved under somebody who had already agreed to the old ones.
+$("termsread").onclick = () => $("readterms").onclick();
+$("termsaccept").onclick = () => act(async () => {
+  await api("/api/auth/terms", { version: state.terms_version });
+});
 
 $("p-signout").onclick = () => act(async () => {
   await api("/api/auth/signout", {});

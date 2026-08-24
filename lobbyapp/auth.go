@@ -83,6 +83,72 @@ func (s *server) signUp(w http.ResponseWriter, r *http.Request) {
 	ok(w)
 }
 
+// changePassword is the only way somebody can change theirs.
+//
+// The sign-up screen says plainly that a forgotten password cannot be reset,
+// which makes this the one lever a person has when they think somebody else
+// knows it. The current password is required: a session left open on a shared
+// PC must not be enough to lock the owner out of their own account.
+func (s *server) changePassword(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Current string `json:"current"`
+		Next    string `json:"next"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	acct, err := s.api().ChangePassword(body.Current, body.Next)
+	if err != nil {
+		fail(w, err.Error())
+		return
+	}
+	// The coordinator ends every other session when a password changes, and
+	// hands this one a new token. Storing it is what keeps this window signed
+	// in through its own change.
+	if acct != nil && acct.Session != "" {
+		s.adopt(acct.PlayerID, acct.Username, acct.DisplayName, acct.MMR, acct.Session)
+	}
+	s.whoCache.forget()
+	ok(w)
+}
+
+// acceptTerms records agreement to a new version of the terms.
+//
+// Terms that changed after somebody signed up are terms they have not agreed
+// to. The coordinator keeps both facts - which version is current, and which
+// one this account accepted - and this is how the second catches up with the
+// first.
+func (s *server) acceptTerms(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Version string `json:"version"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	if err := s.api().AcceptTerms(body.Version); err != nil {
+		fail(w, err.Error())
+		return
+	}
+	s.whoCache.forget()
+	ok(w)
+}
+
+// whoami folds what the coordinator knows about this account into the state
+// reply. Only one thing here is not already known locally: whether the terms
+// this account accepted are still the terms in force.
+func (s *server) whoami(out map[string]any) {
+	if signedIn, _ := out["signed_in"].(bool); !signedIn {
+		return
+	}
+	acct, _ := s.whoCache.get(func() (*lobby.Account, error) {
+		return s.api().Whoami()
+	})
+	if acct == nil {
+		return
+	}
+	out["terms_accepted"] = acct.TermsAccepted
+}
+
 func (s *server) signIn(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Username string `json:"username"`
