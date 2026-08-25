@@ -118,6 +118,45 @@ function el(tag, cls, text) {
   return e;
 }
 
+// ------------------------------------------------------------- portraits
+
+// Nobody uploads a picture, and asking them to would be one more thing
+// standing between installing the app and finding a game. A person is drawn
+// instead from what we already have: their initials, on a colour derived from
+// their account id.
+//
+// The colour comes from the id rather than the name, so the same person is
+// the same colour on every machine, two players called "Pudge" are still
+// told apart, and changing a display name does not change a face.
+
+function initials(name) {
+  const words = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return "?";
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+}
+
+// hueOf is a small deterministic hash. It is not security and does not need
+// to be: the worst outcome of a collision is two people being the same
+// colour, which their initials and names still separate.
+function hueOf(id) {
+  let h = 0;
+  const s = String(id || "");
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360;
+  return h;
+}
+
+function avatar(name, id, cls) {
+  const e = el("div", "avatar" + (cls ? " " + cls : ""), initials(name));
+  const h = hueOf(id);
+  // Held to one band of lightness and saturation so every face sits at the
+  // same weight against the panel and none of them shouts.
+  e.style.background =
+    "linear-gradient(145deg, hsl(" + h + " 44% 42%), hsl(" + ((h + 26) % 360) + " 46% 30%))";
+  e.title = name || "";
+  return e;
+}
+
 // ----------------------------------------------------------------- render
 
 function render() {
@@ -263,8 +302,13 @@ function renderRooms(rooms) {
   box.textContent = "";
   const shown = visible(rooms);
   if (!shown.length) {
-    box.appendChild(el("p", "muted pad",
-      t(rooms.length ? "lobby.nomatch" : "lobby.empty")));
+    // An empty list says so in the middle of its own space. A single grey
+    // line against the top edge reads as a page that failed rather than as a
+    // lobby with nothing in it yet.
+    const none = el("div", "nothing");
+    none.appendChild(el("div", "big", "▦"));
+    none.appendChild(el("p", "", t(rooms.length ? "lobby.nomatch" : "lobby.empty")));
+    box.appendChild(none);
     return;
   }
   for (const r of shown) box.appendChild(roomCard(r));
@@ -280,22 +324,57 @@ function renderRooms(rooms) {
 // rather than as an excellent connection.
 function pingCell(r) {
   const ms = r.host_relay_ms || 0;
-  if (!ms) {
-    const cell = el("span", "room-ping unknown", t("lobby.ping.unknown"));
-    cell.title = t("lobby.ping.none");
-    return cell;
+  const grade = !ms ? "unknown" : ms < 60 ? "good" : ms < 140 ? "fair" : "poor";
+  const cell = el("div", "room-ping " + grade);
+  cell.title = ms ? t("lobby.ping.explain") : t("lobby.ping.none");
+
+  // Three rising bars, the shape every network indicator uses, with the
+  // number beside them. The bars are read at a glance and the number is read
+  // when it matters; neither replaces the other.
+  const lit = grade === "good" ? 3 : grade === "fair" ? 2 : grade === "poor" ? 1 : 0;
+  const bars = el("div", "bars");
+  for (let i = 0; i < 3; i++) bars.appendChild(el("i", i < lit ? "lit" : ""));
+  cell.appendChild(bars);
+  cell.appendChild(el("span", "n",
+    ms ? t("lobby.ping.value", { n: ms }) : t("lobby.ping.unknown")));
+  return cell;
+}
+
+// seatCell draws the ten playing slots as ten marks.
+//
+// Somebody scanning the lobby is asking one question - is there room for me -
+// and a bar answers it in the time the eye takes to pass over it. "7/10"
+// makes them read and subtract. The number stays underneath for the times
+// they want to be exact.
+function seatCell(r) {
+  const cell = el("div");
+  const taken = r.seats || 0;
+  const mine = r.id === state.room_id;
+  const pips = el("div", "pips");
+  for (let i = 0; i < 10; i++) {
+    pips.appendChild(el("i", "pip" + (i < taken ? (mine ? " you" : " on") : "")));
   }
-  const grade = ms < 60 ? "good" : ms < 140 ? "fair" : "poor";
-  const cell = el("span", "room-ping " + grade, t("lobby.ping.value", { n: ms }));
-  cell.title = t("lobby.ping.explain");
+  cell.appendChild(pips);
+  const count = el("div", "room-count");
+  count.appendChild(el("b", "", String(taken)));
+  count.appendChild(el("span", "", t("lobby.of10")));
+  cell.appendChild(count);
   return cell;
 }
 
 function roomCard(r) {
   const card = el("div", "room");
+  // A stripe on the inline edge, coloured by whether this player can actually
+  // get in. It is the only part of the row that can be read without looking
+  // directly at it, so it carries the one fact that decides everything else.
+  card.classList.add(r.joinable && r.id !== state.room_id ? "can-join" : "shut");
+
+  const main = el("div", "room-main");
+  main.appendChild(avatar(r.host_nick, r.host_id));
+  card.appendChild(main);
 
   // Column 1: name, door, status, the host's sentence, and who is in it.
-  const about = el("div");
+  const about = el("div", "grow");
   const title = el("div", "room-title");
   title.appendChild(el("strong", "", r.name));
   title.appendChild(statusBadge(r.status));
@@ -310,26 +389,38 @@ function roomCard(r) {
   const who = el("div", "room-players");
   for (const m of r.members || []) {
     if (m.spectator) continue;
-    who.appendChild(el("span", "tag" + (m.is_host ? " host" : ""),
-      m.mmr ? t("lobby.player.rated", { name: m.nick, mmr: m.mmr }) : m.nick));
+    const chip = el("span", "tag" + (m.is_host ? " host" : ""));
+    chip.appendChild(el("b", "", m.nick));
+    if (m.mmr) chip.appendChild(el("span", "", t("lobby.player.mmr", { mmr: m.mmr })));
+    who.appendChild(chip);
   }
   about.appendChild(who);
-  card.appendChild(about);
+  main.appendChild(about);
 
   // Columns 2-4: the numbers a player chooses a room on.
-  const count = el("span", "room-count");
-  count.appendChild(el("span", "", String(r.seats)));
-  count.appendChild(el("small", "", t("lobby.of10")));
-  card.appendChild(count);
-
-  card.appendChild(el("span", "room-mmr muted small",
-    r.min_mmr ? t("lobby.mmr.floor", { n: r.min_mmr })
-      : r.avg_mmr ? t("lobby.mmr.average", { n: r.avg_mmr })
-        : t("lobby.mmr.any")));
-
+  card.appendChild(seatCell(r));
+  card.appendChild(mmrCell(r));
   card.appendChild(pingCell(r));
   card.appendChild(roomActions(r));
   return card;
+}
+
+// mmrCell separates the number from what it means, because the two are read
+// at different moments: the figure tells a player whether they belong here,
+// the label tells them whether it is a floor they must clear or an average
+// they are being compared against.
+function mmrCell(r) {
+  const cell = el("div", "mmr" + (r.min_mmr ? " floor" : ""));
+  if (r.min_mmr) {
+    cell.appendChild(el("span", "v", String(r.min_mmr)));
+    cell.appendChild(el("span", "k", t("lobby.mmr.min")));
+  } else if (r.avg_mmr) {
+    cell.appendChild(el("span", "v", String(r.avg_mmr)));
+    cell.appendChild(el("span", "k", t("lobby.mmr.avg")));
+  } else {
+    cell.appendChild(el("span", "k", t("lobby.mmr.any")));
+  }
+  return cell;
 }
 
 function roomActions(r) {
@@ -391,6 +482,8 @@ function statusBadge(status) {
 // ------------------------------------------------------------------ room
 
 function renderRoom(r) {
+  $("room-face").textContent = "";
+  $("room-face").appendChild(avatar(r.host_nick, r.host_id, "lg"));
   $("room-name").textContent = r.name;
   $("room-sub").textContent = r.avg_mmr
     ? t("room.meta.mmr", { seats: r.seats, host: r.host_nick, mmr: r.avg_mmr })
@@ -411,9 +504,13 @@ function renderRoom(r) {
   const seated = {};
   for (const m of r.members || []) if (!m.spectator) seated[m.slot] = m;
 
+  // Slots 0-4 are Radiant and 5-9 are Dire, which is how the game itself
+  // divides them. Drawing all ten in one list hid the only structural fact
+  // about a room: which five you would be joining.
   const box = $("slots");
   box.textContent = "";
-  for (let i = 0; i < 10; i++) box.appendChild(slotCard(i, seated[i], iAmHost));
+  box.appendChild(teamColumn("radiant", "room.team.radiant", 0, seated, iAmHost));
+  box.appendChild(teamColumn("dire", "room.team.dire", 5, seated, iAmHost));
 
   const specs = (r.members || []).filter((m) => m.spectator);
   const sbox = $("spectators");
@@ -484,11 +581,30 @@ function drawNetBanner() {
   e.textContent = t("net.off");
 }
 
+// teamColumn draws one side: a heading in that side's colour, how many of
+// its five seats are taken, and the seats themselves.
+function teamColumn(side, titleKey, first, seated, canKick) {
+  const col = el("div", "team " + side);
+  const head = el("div", "team-head");
+  head.appendChild(el("span", "swatch"));
+  head.appendChild(el("span", "", t(titleKey)));
+  let taken = 0;
+  for (let i = first; i < first + 5; i++) if (seated[i]) taken++;
+  head.appendChild(el("span", "n", t("room.team.count", { n: taken })));
+  col.appendChild(head);
+  for (let i = first; i < first + 5; i++) {
+    col.appendChild(slotCard(i, seated[i], canKick));
+  }
+  return col;
+}
+
 function slotCard(index, member, canKick, spectator) {
   const card = el("div");
   const mine = member && member.player_id === state.player_id;
   card.className = "slot" + (member ? "" : " empty") + (mine ? " you" : "");
   card.appendChild(el("div", "slot-num", spectator ? "S" + (index + 1) : String(index + 1)));
+
+  if (member) card.appendChild(avatar(member.nick, member.player_id, "sm"));
 
   const body = el("div", "slot-body");
   card.appendChild(body);
@@ -575,8 +691,13 @@ function whereabouts(f) {
 
 function friendRow(f) {
   const row = el("div", "friend");
-  const dot = el("span", "dot" + (f.online ? (f.in_game ? " wait" : " ok") : ""));
-  row.appendChild(dot);
+  // Presence sits on the face rather than beside the name. The rail is narrow
+  // and a separate column costs a word off every name in it.
+  const port = el("div", "who-av");
+  port.appendChild(avatar(f.display_name || f.player_id, f.player_id, "sm"));
+  port.appendChild(el("span",
+    "live" + (f.online ? (f.in_game ? " game" : " on") : "")));
+  row.appendChild(port);
 
   const who = el("div", "who");
   who.appendChild(el("div", "name", f.display_name || f.player_id));
@@ -1115,6 +1236,8 @@ $("nameform").onsubmit = async (e) => {
 };
 
 $("mebtn").onclick = () => {
+  $("p-face").textContent = "";
+  $("p-face").appendChild(avatar(state.nick || state.username, state.player_id, "lg"));
   $("p-nick").value = state.nick || "";
   $("p-mmr").value = state.mmr || "";
   $("mmrnote").textContent = state.mmr_locked_until

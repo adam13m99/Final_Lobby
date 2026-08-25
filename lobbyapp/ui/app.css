@@ -7,48 +7,101 @@
    `left` or `right` anywhere, so setting dir="rtl" flips the whole layout with
    no second stylesheet. lobbyapp/ui_test.go fails the build if that slips.
    Block-axis properties - top, bottom, border-bottom - are fine and used
-   freely: right-to-left flips the inline axis only. */
+   freely: right-to-left flips the inline axis only.
+
+   Depth is carried by three things and no more: a surface's own colour, one
+   hairline border, and one soft shadow. A player reads this screen for two
+   seconds before deciding where to click, so anything that does not help them
+   find a room faster is decoration that costs contrast. */
 
 :root {
   color-scheme: dark;
-  --bg:      #0f1116;
-  --panel:   #171a22;
-  --panel2:  #1f232e;
-  --panel3:  #262b38;
-  --line:    #2c313e;
-  --text:    #e8eaf0;
-  --muted:   #8b93a7;
-  --dim:     #666e82;
-  --accent:  #e04a2f;
-  --accent2: #f2593d;
-  --good:    #3fb96b;
-  --warn:    #e0a52f;
-  --bad:     #e0503f;
-  --radiant: #4a9c5c;
 
-  --rail: 320px;
-  --bar: 86px;
+  /* Surfaces, darkest to lightest. Each step is small on purpose: a lobby is
+     mostly one colour, and the eye should be drawn by the accent, never by
+     the furniture. */
+  --bg:      #0a0c11;
+  --bg2:     #0e1118;
+  --panel:   #141822;
+  --panel2:  #1a1f2b;
+  --panel3:  #232936;
+  --line:    #262c3a;
+  --line2:   #333b4c;
+
+  --text:    #eef0f6;
+  --muted:   #99a1b5;
+  --dim:     #6b7387;
+
+  /* One accent, warm, taken from Dota's own palette. The second is lighter
+     for hover rather than a different colour, so nothing on screen competes
+     with the primary action. */
+  --accent:  #f04d2a;
+  --accent2: #ff6b45;
+  --accent-soft: #2a1410;
+
+  --good:    #35c46f;
+  --good-soft: #0f2418;
+  --warn:    #e8a72b;
+  --warn-soft: #241c0c;
+  --bad:     #e8543f;
+  --bad-soft: #251110;
+
+  /* The two sides of a Dota match. Used only where the split is real. */
+  --radiant: #4ba364;
+  --dire:    #c0483c;
+
+  --rail: 330px;
+  --bar: 92px;
+
+  --r-sm: 7px;
+  --r-md: 11px;
+  --r-lg: 16px;
+
+  --lift: 0 1px 0 rgba(255,255,255,.035) inset, 0 6px 18px rgba(0,0,0,.34);
+  --lift-sm: 0 1px 0 rgba(255,255,255,.03) inset, 0 2px 6px rgba(0,0,0,.28);
+  --ring: 0 0 0 2px rgba(240,77,42,.35);
 }
 
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
-  background: var(--bg);
+  background:
+    radial-gradient(1200px 700px at 50% -10%, #161b26 0%, transparent 60%),
+    var(--bg);
   color: var(--text);
-  font: 14px/1.5 "Segoe UI", system-ui, sans-serif;
+  font: 14px/1.55 "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-feature-settings: "cv05", "ss01";
   overflow: hidden;
+  -webkit-font-smoothing: antialiased;
 }
 
-h1, h2, h3 { margin: 0; font-weight: 650; letter-spacing: -0.01em; }
+h1, h2, h3 { margin: 0; font-weight: 660; letter-spacing: -0.015em; }
+h1 { font-size: 1.32rem; }
 h2 { font-size: 1.02rem; }
-h3 { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+h3 {
+  font-size: .7rem; text-transform: uppercase; letter-spacing: .09em;
+  color: var(--dim); font-weight: 700;
+}
 h3 em { font-style: normal; text-transform: none; letter-spacing: 0; opacity: .7; }
+h4 {
+  margin: 0; font-size: .7rem; text-transform: uppercase; letter-spacing: .09em;
+  color: var(--dim); font-weight: 700;
+}
 
 .muted { color: var(--muted); }
 .small { font-size: .82rem; }
-.pad   { padding: 1rem 1.1rem; }
+.pad   { padding: 1rem 1.15rem; }
 .hidden { display: none !important; }
+.grow { flex: 1; min-width: 0; overflow-wrap: break-word; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: #262d3c; border-radius: 99px; border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background: #38415a; background-clip: content-box; }
 
 /* ---------------------------------------------------------------- shell */
 
@@ -57,7 +110,7 @@ h3 em { font-style: normal; text-transform: none; letter-spacing: 0; opacity: .7
 #shell {
   display: grid;
   grid-template-columns: var(--bar) minmax(0, 1fr) var(--rail);
-  grid-template-rows: 52px auto 1fr;
+  grid-template-rows: 56px auto 1fr;
   grid-template-areas:
     "bar head rail"
     "bar strip rail"
@@ -74,137 +127,194 @@ h3 em { font-style: normal; text-transform: none; letter-spacing: 0; opacity: .7
 
 #toolbar {
   grid-area: bar;
-  background: var(--panel);
+  background: linear-gradient(180deg, #12161f 0%, #0d1016 100%);
   border-inline-end: 1px solid var(--line);
   display: flex; flex-direction: column; align-items: stretch;
-  padding: .6rem .4rem;
-  gap: .15rem;
+  padding: .7rem .5rem .6rem;
+  gap: .2rem;
 }
 
 .brand {
-  font-weight: 800; letter-spacing: .1em; font-size: .7rem;
-  color: var(--accent); text-align: center; padding: .4rem 0 .8rem;
+  font-weight: 800; letter-spacing: .14em; font-size: .64rem;
+  color: var(--accent); text-align: center; padding: .5rem 0 1rem;
 }
 
 .nav {
-  background: none; border: 0; color: var(--muted);
-  display: flex; flex-direction: column; align-items: center; gap: .15rem;
-  padding: .55rem .2rem; border-radius: .45rem;
-  font: inherit; font-size: .72rem; font-weight: 600; cursor: pointer;
+  position: relative;
+  background: none; border: 0; color: var(--dim);
+  display: flex; flex-direction: column; align-items: center; gap: .25rem;
+  padding: .6rem .2rem; border-radius: var(--r-md);
+  font: inherit; font-size: .69rem; font-weight: 650; cursor: pointer;
+  transition: color .14s ease, background .14s ease;
 }
-.nav .ico { font-size: 1.05rem; line-height: 1; }
-.nav:hover:not(:disabled) { color: var(--text); background: var(--panel2); }
-.nav.active { color: var(--text); background: var(--panel3); }
-.nav:disabled { opacity: .3; cursor: default; }
+.nav .ico {
+  font-size: 1.1rem; line-height: 1;
+  display: grid; place-items: center; width: 1.5rem; height: 1.5rem;
+}
+.nav:hover:not(:disabled) { color: var(--text); background: rgba(255,255,255,.04); }
+.nav.active { color: var(--text); background: var(--panel3); box-shadow: var(--lift-sm); }
+/* A short bar on the inline edge marks the open screen. It reads as "you are
+   here" faster than a background change alone. */
+.nav.active::before {
+  content: ""; position: absolute; inset-block: 28%; inset-inline-start: -.5rem;
+  width: 3px; border-radius: 99px; background: var(--accent);
+}
+.nav:disabled { opacity: .28; cursor: default; }
 .nav-gap { flex: 1; }
 
 /* The connection light. Its colour is the whole point, so it is the one
    thing in the toolbar that is never grey. */
-.nav.conn { cursor: default; }
-.dot { width: .6rem; height: .6rem; border-radius: 50%; background: var(--dim); }
-.dot.ok   { background: var(--good); box-shadow: 0 0 8px #3fb96b88; }
-.dot.wait { background: var(--warn); }
-.dot.bad  { background: var(--bad); }
+.nav.conn { cursor: default; font-size: .66rem; }
+.dot {
+  width: .55rem; height: .55rem; border-radius: 50%; background: var(--dim);
+  transition: background .2s ease, box-shadow .2s ease;
+}
+.dot.ok   { background: var(--good); box-shadow: 0 0 0 4px rgba(53,196,111,.16); }
+.dot.wait { background: var(--warn); box-shadow: 0 0 0 4px rgba(232,167,43,.14); animation: pulse 1.6s ease-in-out infinite; }
+.dot.bad  { background: var(--bad);  box-shadow: 0 0 0 4px rgba(232,84,63,.14); }
+@keyframes pulse { 50% { opacity: .45; } }
 
 /* ---------------------------------------------------------------- header */
 
 #top {
   grid-area: head;
-  display: flex; align-items: center; gap: .8rem;
-  padding: 0 1rem;
-  background: var(--panel); border-block-end: 1px solid var(--line);
+  display: flex; align-items: center; gap: .7rem;
+  padding: 0 1.1rem;
+  background: linear-gradient(180deg, #141822 0%, #11151d 100%);
+  border-block-end: 1px solid var(--line);
 }
 
-.searchbox { flex: 0 1 260px; }
-.searchbox input { width: 100%; }
+.searchbox { flex: 0 1 280px; position: relative; }
+.searchbox input {
+  width: 100%; border-radius: 99px; padding-block: .45rem;
+  padding-inline: 2.1rem .9rem;
+}
+/* The magnifier is drawn by the stylesheet rather than sitting in the markup:
+   it is decoration, and decoration in the DOM ends up read aloud. */
+.searchbox::before {
+  content: "";
+  position: absolute; inset-block-start: 50%; inset-inline-start: .8rem;
+  width: .72rem; height: .72rem; margin-block-start: -.5rem;
+  border: 1.6px solid var(--dim); border-radius: 50%;
+  box-shadow: 0 0 0 0 transparent;
+  pointer-events: none;
+}
+.searchbox::after {
+  content: "";
+  position: absolute; inset-block-start: 50%; inset-inline-start: 1.42rem;
+  width: 1.6px; height: .42rem; margin-block-start: .06rem;
+  background: var(--dim); transform: rotate(-45deg); transform-origin: top;
+  pointer-events: none;
+}
 
-.filters { display: flex; gap: .25rem; flex: 1; flex-wrap: wrap; }
+.filters { display: flex; gap: .3rem; flex: 1; flex-wrap: wrap; }
 .chip {
   background: none; border: 1px solid var(--line); color: var(--muted);
-  padding: .25rem .7rem; border-radius: 1rem;
-  font: inherit; font-size: .78rem; font-weight: 600; cursor: pointer;
+  padding: .28rem .75rem; border-radius: 99px;
+  font: inherit; font-size: .77rem; font-weight: 620; cursor: pointer;
+  transition: color .14s ease, background .14s ease, border-color .14s ease;
 }
-.chip:hover { color: var(--text); }
-.chip.active { color: var(--text); background: var(--panel3); border-color: var(--panel3); }
+.chip:hover { color: var(--text); border-color: var(--line2); }
+.chip.active {
+  color: #fff; background: var(--accent); border-color: var(--accent);
+  box-shadow: 0 2px 8px rgba(240,77,42,.28);
+}
 
-.status { display: flex; align-items: center; gap: .5rem; }
+.status { display: flex; align-items: center; gap: .45rem; }
 
 .pill {
-  font-size: .72rem; font-weight: 700; letter-spacing: .03em;
-  padding: .25rem .6rem; border-radius: 1rem;
+  font-size: .71rem; font-weight: 680; letter-spacing: .02em;
+  padding: .28rem .65rem; border-radius: 99px;
   background: var(--panel2); color: var(--muted);
   border: 1px solid var(--line); white-space: nowrap;
+  display: inline-flex; align-items: center; gap: .35rem;
 }
-.pill.ok   { color: var(--good); border-color: #27502f; background: #16281c; }
-.pill.bad  { color: var(--bad);  border-color: #4d241f; background: #2a1714; }
-.pill.wait { color: var(--warn); border-color: #4d3c17; background: #2a2313; }
+.pill.ok   { color: var(--good); border-color: #1e4630; background: var(--good-soft); }
+.pill.bad  { color: var(--bad);  border-color: #4a221d; background: var(--bad-soft); }
+.pill.wait { color: var(--warn); border-color: #45360f; background: var(--warn-soft); }
 .pill.quiet { font-weight: 600; }
 
+/* The player's own card. It is a button, so it has to look pressable without
+   shouting louder than the primary action beside the room list. */
 .me {
   display: flex; flex-direction: column; align-items: flex-end;
   background: var(--panel2); border: 1px solid var(--line);
-  border-radius: .4rem; padding: .22rem .7rem;
+  border-radius: var(--r-md); padding: .3rem .8rem;
   color: var(--text); font: inherit; cursor: pointer; line-height: 1.25;
+  transition: border-color .14s ease, background .14s ease;
 }
-.me:hover { border-color: var(--accent); }
-.me small { color: var(--muted); font-size: .7rem; }
+.me:hover { border-color: var(--line2); background: var(--panel3); }
+.me strong { font-weight: 640; }
+.me small { color: var(--muted); font-size: .69rem; font-variant-numeric: tabular-nums; }
 
 /* --------------------------------------------------------------- strips */
 
-#banners, #banner, #update { grid-area: strip; }
+#banners, #banner, #update, #termsmoved { grid-area: strip; }
 #banners:empty { display: none; }
 
-.strip { display: flex; gap: .6rem; padding: .55rem 1rem; overflow-x: auto; }
+.strip { display: flex; gap: .6rem; padding: .6rem 1.1rem 0; overflow-x: auto; }
 .ad {
-  flex: 0 0 auto; max-width: 30rem;
-  background: var(--panel2); border: 1px solid var(--line); border-radius: .45rem;
-  padding: .45rem .8rem; font-size: .84rem;
+  flex: 0 0 auto; max-width: 32rem;
+  background: linear-gradient(180deg, var(--panel2) 0%, var(--panel) 100%);
+  border: 1px solid var(--line); border-radius: var(--r-md);
+  padding: .5rem .9rem; font-size: .84rem;
   display: flex; align-items: baseline; gap: .5rem;
+  box-shadow: var(--lift-sm);
 }
-.ad strong { font-weight: 650; }
+.ad strong { font-weight: 660; }
 .ad span { color: var(--muted); }
-.ad a { color: var(--accent2); text-decoration: none; }
+.ad a { color: var(--accent2); text-decoration: none; font-weight: 620; }
 .ad a:hover { text-decoration: underline; }
 
 .banner {
-  padding: .6rem 1rem; font-size: .87rem;
-  background: #2a1714; color: #ffbdb2; border-block-end: 1px solid #4d241f;
-}
-.banner.update {
-  background: #16281c; color: #b6f0c8; border-block-end-color: #27502f;
+  padding: .65rem 1.1rem; font-size: .87rem; font-weight: 550;
+  background: var(--bad-soft); color: #ffbdb2;
+  border-block-end: 1px solid #4a221d;
   display: flex; align-items: center; gap: 1rem;
 }
+.banner.update { background: var(--good-soft); color: #a9ecc0; border-block-end-color: #1e4630; }
 /* Not an error and not good news: something the person has to do. */
-.banner.warn {
-  background: #2a2414; color: #f0dfb0; border-block-end-color: #4d431f;
-  display: flex; align-items: center; gap: 1rem;
-}
+.banner.warn { background: var(--warn-soft); color: #f0dfb0; border-block-end-color: #45360f; }
 .banner.warn button { background: var(--warn); color: #221a05; }
 .banner.warn button.primary { background: var(--good); color: #06210f; }
-
 .banner button {
   background: var(--good); border: 0; color: #06210f; font: inherit; font-weight: 700;
-  padding: .3rem .9rem; border-radius: .35rem; cursor: pointer;
+  padding: .3rem .9rem; border-radius: var(--r-sm); cursor: pointer;
 }
 
 /* ---------------------------------------------------------------- stage */
 
-#stage { grid-area: stage; overflow-y: auto; padding: 1rem; }
+#stage { grid-area: stage; overflow-y: auto; padding: 1.1rem; }
 
-.screen { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+.screen { display: flex; flex-direction: column; gap: 1.1rem; min-width: 0; }
+/* A screen fills the stage rather than ending wherever its content does. The
+   old lobby left half the window empty below the last room, which reads as a
+   page that failed to load rather than as a lobby with three rooms in it. */
+#stage > .screen { min-height: 100%; }
 
 .panel {
-  background: var(--panel); border: 1px solid var(--line); border-radius: .6rem;
+  background: linear-gradient(180deg, var(--panel) 0%, #12161f 100%);
+  border: 1px solid var(--line); border-radius: var(--r-lg);
   overflow: hidden; min-width: 0;
+  box-shadow: var(--lift);
 }
 .panel-head {
   display: flex; align-items: center; justify-content: space-between; gap: 1rem;
-  padding: .7rem 1rem; border-block-end: 1px solid var(--line); background: var(--panel2);
+  padding: .85rem 1.15rem; border-block-end: 1px solid var(--line);
+  background: rgba(255,255,255,.018);
 }
 .panel-head.plain { background: none; }
-.inline { display: flex; gap: .5rem; }
-.empty-state { padding: 3rem 1rem; text-align: center; }
-.empty-state h2 { margin-block-end: .5rem; }
+.inline { display: flex; gap: .5rem; align-items: center; }
+.empty-state { padding: 4rem 1rem; text-align: center; }
+.empty-state h2 { margin-block-end: .6rem; }
+
+/* An empty list should say so in the middle of its own space rather than
+   leaving a hole the reader has to interpret. */
+.nothing {
+  display: flex; flex-direction: column; align-items: center; gap: .3rem;
+  padding: 3rem 1rem; color: var(--dim); text-align: center;
+}
+.nothing .big { font-size: 1.6rem; opacity: .5; }
 
 /* ------------------------------------------------------------ room list */
 
@@ -212,121 +322,244 @@ h3 em { font-style: normal; text-transform: none; letter-spacing: 0; opacity: .7
    without either knowing the other's widths. */
 .roomhead, .room {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 5.5rem 6rem 7rem auto;
-  gap: .75rem; align-items: center;
+  grid-template-columns: minmax(0, 1fr) 6.5rem 6.5rem 6.5rem auto;
+  gap: .9rem; align-items: center;
 }
 .roomhead {
-  padding: .5rem 1rem; font-size: .72rem; font-weight: 700;
-  text-transform: uppercase; letter-spacing: .05em; color: var(--dim);
+  padding: .55rem 1.15rem .55rem 1.15rem; font-size: .67rem; font-weight: 720;
+  text-transform: uppercase; letter-spacing: .09em; color: var(--dim);
   border-block-end: 1px solid var(--line);
+  background: rgba(0,0,0,.16);
 }
 .roomhead .pingcol { cursor: help; text-decoration: underline dotted; }
 
-.roomlist { display: flex; flex-direction: column; }
-.room { padding: .7rem 1rem; border-block-end: 1px solid var(--line); }
+/* The list scrolls inside its own panel, so the column headings stay put and
+   the panel keeps its shape however many rooms are open. */
+.roomspanel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.roomlist { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+.room {
+  position: relative;
+  padding: .85rem 1.15rem;
+  border-block-end: 1px solid var(--line);
+  transition: background .14s ease;
+}
 .room:last-child { border-block-end: 0; }
-.room:hover { background: #1c202a; }
+.room:hover { background: rgba(255,255,255,.028); }
+/* A stripe on the inline edge, coloured by whether the room can be entered.
+   It is the only thing on the row that can be read without focusing. */
+.room::before {
+  content: ""; position: absolute; inset-block: .55rem; inset-inline-start: 0;
+  width: 3px; border-radius: 99px; background: transparent;
+  transition: background .14s ease;
+}
+.room.can-join::before { background: var(--good); }
+.room.shut::before { background: var(--line2); }
 
-.room-title { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
-.room-title strong { font-size: .97rem; }
-.room-desc { color: var(--muted); font-size: .82rem; margin-block-start: .1rem; }
-.room-players { margin-block-start: .35rem; display: flex; flex-wrap: wrap; gap: .3rem; }
-.room-count { font-variant-numeric: tabular-nums; font-weight: 650; }
-.room-count small { color: var(--dim); font-weight: 400; }
+.room-main { display: flex; gap: .7rem; align-items: flex-start; min-width: 0; }
+.room-head-who { display: flex; align-items: center; gap: .8rem; min-width: 0; }
+.room-title { display: flex; align-items: center; gap: .45rem; flex-wrap: wrap; }
+.room-title strong { font-size: .98rem; font-weight: 660; letter-spacing: -.01em; }
+.room-desc {
+  color: var(--muted); font-size: .82rem; margin-block-start: .12rem;
+  overflow-wrap: anywhere;
+}
+.room-players { margin-block-start: .4rem; display: flex; flex-wrap: wrap; gap: .3rem; }
+
+/* An avatar is initials on a colour derived from the account id, so the same
+   person is the same colour on every machine and nobody has to upload
+   anything. Two players with the same initials still differ by hue. */
+.avatar {
+  flex: none; display: grid; place-items: center;
+  width: 2.1rem; height: 2.1rem; border-radius: var(--r-md);
+  font-size: .74rem; font-weight: 750; letter-spacing: .01em;
+  color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.4);
+  border: 1px solid rgba(255,255,255,.09);
+  box-shadow: var(--lift-sm);
+}
+.avatar.sm { width: 1.55rem; height: 1.55rem; border-radius: var(--r-sm); font-size: .62rem; }
+.avatar.lg { width: 2.5rem; height: 2.5rem; font-size: .84rem; }
+
+/* Ten seats drawn as ten marks. A player deciding which room to join is
+   asking "is there room for me", and a filled bar answers that in the time
+   it takes to move the eye past it - "7/10" does not. */
+.pips { display: flex; gap: 2px; align-items: center; }
+.pip {
+  width: 6px; height: 17px; border-radius: 2px;
+  background: #20263300; box-shadow: inset 0 0 0 1px var(--line);
+}
+.pip.on { background: var(--accent); box-shadow: none; }
+.pip.you { background: var(--good); box-shadow: none; }
+.room-count {
+  font-variant-numeric: tabular-nums; font-weight: 680; font-size: .82rem;
+  margin-block-start: .2rem; color: var(--muted);
+}
+.room-count b { color: var(--text); font-weight: 700; }
 
 /* The latency column. It is the host's number, never the reader's (D54), so
    it is labelled in the header and again in a tooltip on every cell. */
-.room-ping { font-variant-numeric: tabular-nums; cursor: help; }
-.room-ping.good { color: var(--good); }
-.room-ping.fair { color: var(--warn); }
-.room-ping.poor { color: var(--bad); }
-.room-ping.unknown { color: var(--dim); }
+.room-ping {
+  font-variant-numeric: tabular-nums; cursor: help;
+  display: flex; align-items: center; gap: .45rem;
+}
+.room-ping .n { font-weight: 660; font-size: .86rem; }
+.room-ping.good .n { color: var(--good); }
+.room-ping.fair .n { color: var(--warn); }
+.room-ping.poor .n { color: var(--bad); }
+.room-ping.unknown .n { color: var(--dim); }
+/* Three rising bars, the shape every network indicator uses. */
+.bars { display: flex; align-items: flex-end; gap: 2px; height: 13px; flex: none; }
+.bars i { width: 4px; border-radius: 1px; background: var(--panel3); display: block; }
+.bars i:nth-child(1) { height: 40%; }
+.bars i:nth-child(2) { height: 70%; }
+.bars i:nth-child(3) { height: 100%; }
+.room-ping.good .bars i.lit { background: var(--good); }
+.room-ping.fair .bars i.lit { background: var(--warn); }
+.room-ping.poor .bars i.lit { background: var(--bad); }
+
+.mmr {
+  display: inline-flex; align-items: baseline; gap: .25rem;
+  font-variant-numeric: tabular-nums;
+}
+.mmr .v { font-weight: 680; font-size: .88rem; }
+.mmr .k { font-size: .68rem; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; }
+.mmr.floor .v { color: var(--warn); }
 
 .tag {
-  background: var(--panel2); border: 1px solid var(--line); border-radius: .3rem;
-  padding: .05rem .4rem; font-size: .74rem; color: var(--muted); white-space: nowrap;
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 99px;
+  padding: .12rem .55rem; font-size: .73rem; color: var(--muted); white-space: nowrap;
+  display: inline-flex; align-items: center; gap: .3rem;
 }
-.tag.host { color: var(--warn); border-color: #4d3c17; }
+.tag.host { color: var(--warn); border-color: #45360f; background: var(--warn-soft); }
 .tag.lock { color: var(--dim); }
+.tag b { color: var(--text); font-weight: 640; }
 
 .badge {
-  font-size: .68rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
-  padding: .15rem .45rem; border-radius: .3rem;
-  background: #1d3a26; color: #6fd18f; white-space: nowrap;
+  font-size: .64rem; font-weight: 760; letter-spacing: .07em; text-transform: uppercase;
+  padding: .2rem .5rem; border-radius: 99px;
+  background: var(--good-soft); color: #6fd18f; border: 1px solid #1e4630;
+  white-space: nowrap;
 }
-.badge.locked { background: #3a2119; color: #f0a08f; }
-.badge.replace { background: #3a331a; color: #ecc96a; }
+/* A badge with nothing in it is a status nobody has set yet, not a status. */
+.badge:empty { display: none; }
+.badge.locked { background: var(--bad-soft); color: #f0a08f; border-color: #4a221d; }
+.badge.replace { background: var(--warn-soft); color: #ecc96a; border-color: #45360f; }
 
-.room-actions { display: flex; gap: .35rem; justify-content: flex-end; }
+.room-actions { display: flex; gap: .4rem; justify-content: flex-end; }
 
 /* ---------------------------------------------------------------- slots */
 
-.slots {
+/* Dota is five against five, and a lobby that does not say which five you are
+   joining is hiding the only structural fact about the room. The two columns
+   are the two teams, headed and coloured as the game colours them. */
+.teams {
   display: grid; grid-template-columns: repeat(2, minmax(0,1fr));
-  gap: .5rem; padding: 1rem;
+  gap: .9rem; padding: 1.1rem;
 }
-@media (max-width: 700px) { .slots { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .teams { grid-template-columns: 1fr; } }
+
+.team { display: flex; flex-direction: column; gap: .4rem; min-width: 0; }
+.team-head {
+  display: flex; align-items: center; gap: .5rem;
+  font-size: .68rem; font-weight: 760; text-transform: uppercase; letter-spacing: .1em;
+  padding-block-end: .15rem;
+}
+.team-head .swatch { width: .55rem; height: .55rem; border-radius: 2px; }
+.team-head .n { margin-inline-start: auto; color: var(--dim); font-variant-numeric: tabular-nums; }
+.team.radiant .team-head { color: var(--radiant); }
+.team.radiant .swatch { background: var(--radiant); }
+.team.dire .team-head { color: var(--dire); }
+.team.dire .swatch { background: var(--dire); }
 
 .slot {
-  display: flex; align-items: center; gap: .6rem;
+  display: flex; align-items: center; gap: .65rem;
   background: var(--panel2); border: 1px solid var(--line);
-  border-radius: .45rem; padding: .5rem .7rem; min-height: 44px;
+  border-radius: var(--r-md); padding: .5rem .7rem; min-height: 50px;
+  transition: border-color .14s ease, background .14s ease;
 }
-.slot.empty { border-style: dashed; opacity: .5; }
-.slot.you { border-color: var(--accent); }
+.slot.empty {
+  border-style: dashed; background: rgba(255,255,255,.012);
+  color: var(--dim);
+}
+.slot.you { border-color: var(--accent); background: var(--accent-soft); }
+.team.radiant .slot:not(.empty) { border-inline-start: 2px solid var(--radiant); }
+.team.dire .slot:not(.empty) { border-inline-start: 2px solid var(--dire); }
 
 .slot-num {
-  width: 1.6rem; height: 1.6rem; flex: none; border-radius: .3rem;
-  display: grid; place-items: center;
-  background: #14171f; color: var(--muted); font-size: .75rem; font-weight: 700;
+  width: 1.5rem; flex: none; text-align: center;
+  color: var(--dim); font-size: .74rem; font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 .slot-body { flex: 1; min-width: 0; }
-.slot-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.slot-sub { font-size: .75rem; color: var(--muted); }
+.slot-name { font-weight: 640; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.slot-sub { font-size: .74rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 .slot button {
   background: none; border: 1px solid var(--line); color: var(--muted);
-  border-radius: .3rem; font: inherit; font-size: .75rem; padding: .1rem .5rem; cursor: pointer;
+  border-radius: var(--r-sm); font: inherit; font-size: .74rem;
+  padding: .15rem .55rem; cursor: pointer;
 }
-.slot button:hover { color: var(--bad); border-color: var(--bad); }
+.slot button:hover { color: var(--bad); border-color: var(--bad); background: var(--bad-soft); }
 
-.specrow { padding: 0 1rem 1rem; }
+.specrow { padding: 0 1.1rem 1.1rem; }
 .spectators { display: flex; gap: .5rem; margin-block-start: .5rem; flex-wrap: wrap; }
-.spectators .slot { flex: 1 1 180px; }
+.spectators .slot { flex: 1 1 190px; }
 
-.describerow { display: flex; gap: .5rem; padding: .8rem 1rem 0; }
-.describerow input { flex: 1; min-width: 0; }
+.describerow { display: flex; gap: .5rem; padding: .9rem 1.15rem 0; flex-wrap: wrap; }
+.describerow input { flex: 1; min-width: 10rem; }
 
 /* -------------------------------------------------------------- actions */
 
-.actions { padding: 1rem; display: flex; flex-direction: column; gap: .8rem; }
-.actionrow { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
-.net { color: var(--muted); font-size: .82rem; margin-inline-start: auto; font-variant-numeric: tabular-nums; }
+.actions { padding: 1.1rem; display: flex; flex-direction: column; gap: .9rem; }
+.actionrow { display: flex; align-items: center; gap: .55rem; flex-wrap: wrap; }
+.net {
+  color: var(--muted); font-size: .8rem; margin-inline-start: auto;
+  font-variant-numeric: tabular-nums;
+}
 
-button, select, input { font: inherit; border-radius: .4rem; }
+button, select, input, textarea { font: inherit; border-radius: var(--r-sm); }
 button {
   background: var(--panel2); border: 1px solid var(--line); color: var(--text);
-  padding: .4rem .85rem; cursor: pointer;
+  padding: .45rem .9rem; cursor: pointer; font-weight: 580;
+  transition: background .14s ease, border-color .14s ease, transform .08s ease, box-shadow .14s ease;
 }
-button:hover:not(:disabled) { border-color: #3c4252; background: var(--panel3); }
-button:disabled { opacity: .4; cursor: default; }
+button:hover:not(:disabled) { border-color: var(--line2); background: var(--panel3); }
+button:active:not(:disabled) { transform: translateY(1px); }
+button:disabled { opacity: .35; cursor: default; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 0; box-shadow: var(--ring);
+}
 
-button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
-button.primary:hover:not(:disabled) { background: var(--accent2); border-color: var(--accent2); }
-button.launch  { background: var(--radiant); border-color: var(--radiant); color: #fff; font-weight: 600; }
-button.launch:hover:not(:disabled) { filter: brightness(1.12); }
+button.primary {
+  background: linear-gradient(180deg, var(--accent2) 0%, var(--accent) 100%);
+  border-color: #c53c1f; color: #fff; font-weight: 660;
+  box-shadow: 0 2px 10px rgba(240,77,42,.3);
+}
+button.primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, #ff7d5b 0%, var(--accent2) 100%);
+  border-color: var(--accent2);
+}
+button.launch {
+  background: linear-gradient(180deg, #5cb87a 0%, var(--radiant) 100%);
+  border-color: #3d8a53; color: #fff; font-weight: 660;
+  box-shadow: 0 2px 10px rgba(75,163,100,.26);
+}
+button.launch:hover:not(:disabled) { filter: brightness(1.1); }
 button.ghost   { background: none; }
-button.danger  { color: var(--bad); border-color: #4d241f; }
-button.big     { padding: .5rem 1.3rem; }
-button.tiny    { padding: .2rem .55rem; font-size: .76rem; }
+button.danger  { color: var(--bad); border-color: #4a221d; background: var(--bad-soft); }
+button.danger:hover:not(:disabled) { background: #331715; border-color: var(--bad); }
+button.big     { padding: .55rem 1.4rem; font-size: .95rem; }
+button.tiny    { padding: .2rem .6rem; font-size: .75rem; }
 
-input, select {
-  background: #12141b; border: 1px solid var(--line); color: var(--text);
-  padding: .4rem .65rem;
+input, select, textarea {
+  background: #0d1017; border: 1px solid var(--line); color: var(--text);
+  padding: .45rem .7rem;
+  transition: border-color .14s ease, box-shadow .14s ease;
 }
-input:focus, select:focus { outline: 0; border-color: var(--accent); }
-input::placeholder { color: #5a6377; }
+input:hover, select:hover, textarea:hover { border-color: var(--line2); }
+input:focus, select:focus, textarea:focus { outline: 0; border-color: var(--accent); box-shadow: var(--ring); }
+input::placeholder, textarea::placeholder { color: #5a6377; }
+select { cursor: pointer; }
 
-.field { display: flex; flex-direction: column; gap: .3rem; font-size: .82rem; color: var(--muted); }
+.field { display: flex; flex-direction: column; gap: .35rem; font-size: .8rem; color: var(--muted); }
 .field em { font-style: normal; opacity: .75; }
 .inline-field { flex-direction: row; align-items: center; gap: .5rem; }
 
@@ -335,131 +568,180 @@ input::placeholder { color: #5a6377; }
 #rail {
   grid-area: rail;
   border-inline-start: 1px solid var(--line);
-  background: var(--bg);
-  display: flex; flex-direction: column; gap: .6rem;
-  padding: .6rem; min-height: 0;
+  background: var(--bg2);
+  display: flex; flex-direction: column; gap: .7rem;
+  padding: .7rem; min-height: 0;
 }
-.railtop { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+/* The friends panel takes the height its list needs, up to a share of the
+   rail, and the chat takes the rest. Splitting the rail evenly left a hole
+   under a short friends list and a cramped chat beside it. */
+.railtop { flex: 0 1 auto; max-height: 46%; display: flex; flex-direction: column; min-height: 0; }
 
 .findrow { display: flex; gap: .4rem; padding: .6rem .8rem 0; }
 .findrow input { flex: 1; min-width: 0; }
-.findresult { padding: .4rem .8rem 0; margin: 0; }
+.findresult { padding: .45rem .8rem 0; margin: 0; }
 .findresult:empty { display: none; }
 
-.friendlist { overflow-y: auto; padding: .4rem; display: flex; flex-direction: column; gap: .1rem; }
+.friendlist {
+  overflow-y: auto; padding: .45rem; display: flex; flex-direction: column; gap: .1rem;
+}
 .friend {
-  display: flex; align-items: center; gap: .5rem;
-  padding: .35rem .5rem; border-radius: .4rem;
+  display: flex; align-items: center; gap: .6rem;
+  padding: .4rem .5rem; border-radius: var(--r-md);
+  transition: background .14s ease;
 }
 .friend:hover { background: var(--panel2); }
 .friend .who { flex: 1; min-width: 0; }
-.friend .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.friend .where { font-size: .74rem; color: var(--dim); }
-.friend .unread {
-  background: var(--accent); color: #fff; border-radius: 1rem;
-  font-size: .68rem; font-weight: 700; padding: .05rem .4rem;
+.friend .name { font-weight: 620; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.friend .where {
+  font-size: .73rem; color: var(--dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.friend .acts { display: flex; gap: .2rem; opacity: 0; }
+.friend .unread {
+  background: var(--accent); color: #fff; border-radius: 99px;
+  font-size: .67rem; font-weight: 750; padding: .05rem .45rem;
+}
+.friend .acts { display: flex; gap: .25rem; opacity: 0; transition: opacity .14s ease; }
 .friend:hover .acts { opacity: 1; }
-.friend-group { padding: .5rem .5rem .2rem; }
-.friend-empty { padding: 1rem .8rem; }
+.friend-group { padding: .6rem .5rem .25rem; }
+.friend-empty { padding: 1.2rem .8rem; }
+
+/* A dot on the avatar rather than beside the name: presence belongs to the
+   person, and the rail is narrow enough that a separate column costs a word
+   off every name. */
+.who-av { position: relative; flex: none; }
+.who-av .live {
+  position: absolute; inset-block-end: -2px; inset-inline-end: -2px;
+  width: .55rem; height: .55rem; border-radius: 50%;
+  border: 2px solid var(--bg2); background: var(--dim);
+}
+.who-av .live.on { background: var(--good); }
+.who-av .live.game { background: var(--warn); }
 
 /* ----------------------------------------------------------------- chat */
 
 /* Collapsed, the chat is its tab strip and nothing else - the same gesture
    Dota's own main-menu chat uses (D42.3). */
-.chatpanel { flex: 1 1 55%; display: flex; flex-direction: column; min-height: 0; }
+.chatpanel { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
 .chatpanel.collapsed { flex: 0 0 auto; }
 .chatpanel.collapsed .chatbody { display: none; }
 .chatpanel.collapsed .collapse { transform: rotate(180deg); }
 
-.chattabs { padding: .3rem .4rem; gap: .2rem; justify-content: flex-start; }
+.chattabs { padding: .35rem .4rem; gap: .2rem; justify-content: flex-start; }
 .chattab {
-  background: none; border: 0; color: var(--muted);
-  padding: .25rem .6rem; border-radius: .35rem;
-  font: inherit; font-size: .8rem; font-weight: 600; cursor: pointer;
+  background: none; border: 0; color: var(--dim);
+  padding: .3rem .7rem; border-radius: var(--r-sm);
+  font: inherit; font-size: .79rem; font-weight: 640; cursor: pointer;
 }
-.chattab:hover:not(:disabled) { color: var(--text); }
+.chattab:hover:not(:disabled) { color: var(--text); background: rgba(255,255,255,.04); }
 .chattab.active { color: var(--text); background: var(--panel3); }
-.chattab:disabled { opacity: .35; cursor: default; }
+.chattab:disabled { opacity: .3; cursor: default; }
 .collapse {
-  margin-inline-start: auto; background: none; border: 0; color: var(--muted);
+  margin-inline-start: auto; background: none; border: 0; color: var(--dim);
   padding: .1rem .4rem; cursor: pointer; line-height: 1;
+  transition: transform .18s ease, color .14s ease;
 }
+.collapse:hover { color: var(--text); background: none; border: 0; }
 
 .chatbody { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 .chatlog {
-  flex: 1; overflow-y: auto; padding: .6rem .8rem;
-  display: flex; flex-direction: column; gap: .3rem;
+  flex: 1; overflow-y: auto; padding: .7rem .85rem;
+  display: flex; flex-direction: column; gap: .4rem;
 }
-.msg { font-size: .86rem; overflow-wrap: break-word; }
-.msg .who { font-weight: 650; color: #b9c2d6; }
+.msg { font-size: .855rem; overflow-wrap: anywhere; line-height: 1.45; }
+.msg .who { font-weight: 660; color: #b9c2d6; }
 .msg .who.self { color: var(--accent2); }
-.msg.system { color: var(--muted); font-style: italic; font-size: .8rem; }
+/* Somebody arriving or a room opening is context, not conversation. It sits
+   quieter so the eye skips it when catching up. */
+.msg.system {
+  color: var(--dim); font-size: .79rem; font-style: italic;
+  padding-inline-start: .6rem; border-inline-start: 2px solid var(--line);
+}
 
-.chatbox { display: flex; gap: .4rem; padding: .6rem; border-block-start: 1px solid var(--line); }
+.chatbox {
+  display: flex; gap: .45rem; padding: .6rem;
+  border-block-start: 1px solid var(--line); background: rgba(0,0,0,.16);
+}
 .chatbox input { flex: 1; min-width: 0; }
 
 /* ---------------------------------------------------------- diagnostics */
 
 .diaglist { display: flex; flex-direction: column; }
 .check {
-  display: flex; align-items: flex-start; gap: .7rem;
-  padding: .7rem 1rem; border-block-end: 1px solid var(--line);
+  display: flex; align-items: flex-start; gap: .8rem;
+  padding: .8rem 1.15rem; border-block-end: 1px solid var(--line);
 }
 .check:last-child { border-block-end: 0; }
-.check .mark { font-weight: 800; width: 1.1rem; flex: none; }
-.check.ok  .mark { color: var(--good); }
-.check.bad .mark { color: var(--bad); }
+.check .mark {
+  flex: none; width: 1.35rem; height: 1.35rem; border-radius: 50%;
+  display: grid; place-items: center;
+  font-weight: 800; font-size: .78rem;
+}
+.check.ok  .mark { color: var(--good); background: var(--good-soft); border: 1px solid #1e4630; }
+.check.bad .mark { color: var(--bad);  background: var(--bad-soft);  border: 1px solid #4a221d; }
 .check .body { flex: 1; }
-.check .name { font-weight: 600; }
+.check .name { font-weight: 620; }
 .check .detail { color: var(--muted); font-size: .83rem; }
-.check .ms { color: var(--muted); font-size: .8rem; font-variant-numeric: tabular-nums; }
+.check .ms {
+  color: var(--dim); font-size: .78rem; font-variant-numeric: tabular-nums;
+  padding-block-start: .2rem;
+}
 
 /* ---------------------------------------------------------------- gates */
 
 .gate {
   position: fixed; inset: 0; z-index: 50;
-  background: rgba(8,9,13,.82);
+  background: rgba(5,6,10,.72);
+  backdrop-filter: blur(6px);
   display: grid; place-items: center; padding: 1rem;
+  animation: fade .16s ease;
 }
+@keyframes fade { from { opacity: 0; } }
 .gate-card {
-  background: var(--panel); border: 1px solid var(--line); border-radius: .7rem;
-  padding: 1.7rem; width: min(26rem, 100%);
+  background: linear-gradient(180deg, #171c27 0%, #12161f 100%);
+  border: 1px solid var(--line2); border-radius: var(--r-lg);
+  padding: 1.8rem; width: min(27rem, 100%);
   display: flex; flex-direction: column; gap: .9rem;
+  box-shadow: 0 24px 60px rgba(0,0,0,.55);
+  animation: rise .18s ease;
 }
-.gate-card.wide-card { width: min(34rem, 100%); height: min(32rem, 90vh); padding: 0; gap: 0; }
+@keyframes rise { from { transform: translateY(8px); opacity: 0; } }
+.gate-card.wide-card { width: min(36rem, 100%); height: min(33rem, 90vh); padding: 0; gap: 0; }
 .gate-card.wide-card .chatlog { min-height: 0; }
-.gate-card h1 { font-size: 1.3rem; }
 .gate-card > p { margin: -.5rem 0 0; }
-.gate-actions { display: flex; gap: .5rem; }
+/* A face at the top of a dialog about a person, so it is obvious whose
+   account is being changed on a shared PC. */
+.gate-who { display: flex; align-items: center; gap: .8rem; }
+.gate-who h1 { font-size: 1.28rem; }
+.gate-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
 .gate-err { color: var(--bad); font-size: .85rem; margin: 0; min-height: 1.2em; }
 
 /* The network banner. Deliberately the loudest thing on the room screen:
    being in a room and being on its network are different states, and the
    first two-PC test was lost to that difference being invisible. */
 .netbanner {
-  padding: .7rem .9rem;
-  border: 1px solid transparent; border-radius: 8px;
+  padding: .8rem 1rem;
+  border: 1px solid transparent; border-radius: var(--r-md);
   margin-block-end: .3rem;
-  font-size: .92rem; font-weight: 600; line-height: 1.4;
+  font-size: .92rem; font-weight: 620; line-height: 1.4;
+  display: flex; align-items: center; gap: .6rem;
 }
-.netbanner.ok   { color: var(--good); border-color: #27502f; background: #16281c; }
-.netbanner.bad  { color: var(--bad);  border-color: #4d241f; background: #2a1714; }
-.netbanner.wait { color: var(--warn); border-color: #4d3c17; background: #2a2313; }
+.netbanner.ok   { color: var(--good); border-color: #1e4630; background: var(--good-soft); }
+.netbanner.bad  { color: var(--bad);  border-color: #4a221d; background: var(--bad-soft); }
+.netbanner.wait { color: var(--warn); border-color: #45360f; background: var(--warn-soft); }
 
-/* ------------------------------------------------------------ the gate */
+/* ------------------------------------------------------------- the gate */
 
-.modetabs { display: flex; gap: .2rem; margin-block-end: .3rem; }
+.modetabs { display: flex; gap: .25rem; margin-block-end: .3rem; }
 .checkrow { display: flex; align-items: center; gap: .5rem; font-size: .85rem; color: var(--muted); }
-.checkrow input { width: auto; }
+.checkrow input { width: auto; accent-color: var(--accent); }
 #nickonly, #accountform { display: flex; flex-direction: column; gap: .8rem; }
 #nickonly.hidden, #accountform.hidden { display: none; }
 
 /* Said before a password is chosen, not after it is forgotten. */
 .warn-note {
-  margin: 0; padding: .5rem .7rem; border-radius: .4rem;
-  background: #2a2313; color: #ecc96a; border: 1px solid #4d3c17;
+  margin: 0; padding: .55rem .75rem; border-radius: var(--r-sm);
+  background: var(--warn-soft); color: #ecc96a; border: 1px solid #45360f;
   font-size: .82rem;
 }
 
@@ -474,7 +756,7 @@ input::placeholder { color: #5a6377; }
 .linkish:hover { color: var(--accent); background: none; border: 0; }
 
 .terms {
-  flex: 1; overflow-y: auto; margin: 0; padding: 1rem 1.2rem;
+  flex: 1; overflow-y: auto; margin: 0; padding: 1.1rem 1.3rem;
   font: inherit; font-size: .86rem; color: var(--text);
   white-space: pre-wrap; overflow-wrap: break-word;
 }
@@ -484,25 +766,22 @@ input::placeholder { color: #5a6377; }
    audit entries, rooms, announcements. They share one shape so a moderator
    reading four panels is reading one layout four times. */
 
-.record { border-block-start: 1px solid var(--line); padding: 1rem 1.2rem; }
-.record h4 {
-  margin: 1.2rem 0 .5rem; font-size: .78rem; letter-spacing: .08em;
-  text-transform: uppercase; color: var(--dim);
-}
+.record { border-block-start: 1px solid var(--line); padding: 1.1rem 1.3rem; }
+.record h4 { margin: 1.3rem 0 .55rem; }
+.record h4:first-of-type { margin-block-start: .4rem; }
 
 .loglist { display: flex; flex-direction: column; }
 .logrow {
   display: flex; align-items: center; gap: .6rem;
-  padding: .5rem 1.2rem; border-block-start: 1px solid var(--line);
-  font-size: .86rem;
+  padding: .55rem 1.3rem; border-block-start: 1px solid var(--line);
+  font-size: .85rem;
 }
 .logrow:first-child { border-block-start: 0; }
-.grow { flex: 1; min-width: 0; overflow-wrap: break-word; }
 
-.labelrow { display: flex; flex-wrap: wrap; gap: .4rem; margin-block-end: .6rem; }
+.labelrow { display: flex; flex-wrap: wrap; gap: .4rem; margin-block-end: .7rem; }
 .labeltag {
-  display: inline-flex; align-items: center; gap: .35rem;
-  padding: .18rem .5rem; border-radius: 999px;
+  display: inline-flex; align-items: center; gap: .4rem;
+  padding: .2rem .55rem; border-radius: 99px;
   background: var(--panel3); border: 1px solid var(--line);
   font-size: .78rem;
 }
@@ -510,22 +789,24 @@ input::placeholder { color: #5a6377; }
 .sanctionform, .bannerform {
   display: flex; flex-wrap: wrap; gap: .6rem; align-items: center;
 }
-.bannerform { flex-direction: column; align-items: stretch; padding: 0 1.2rem 1rem; }
+.bannerform { flex-direction: column; align-items: stretch; padding: 0 1.3rem 1.1rem; }
 .sanctionform #mod-reason { flex: 1; min-width: 14rem; }
 .sanctionform #mod-minutes { width: 6rem; }
-.bannerform textarea {
-  resize: vertical; font: inherit; font-size: .88rem;
-  background: #12141b; color: var(--text);
-  border: 1px solid var(--line); padding: .5rem .6rem;
-}
+.bannerform textarea { resize: vertical; font-size: .88rem; }
 
 /* A number that is at most five digits should not take the width of a
    sentence. Used by the MMR floor beside the door. */
-.narrow { width: 7rem; }
+.narrow { width: 7.5rem; }
 
 /* Present for assistive technology and password managers, absent from the
    layout. Not display:none, which both of those ignore. */
 .offscreen {
   position: absolute; width: 1px; height: 1px;
   padding: 0; border: 0; overflow: hidden; clip-path: inset(50%);
+}
+
+/* Somebody who has asked their system for less movement gets less movement.
+   Nothing here carries meaning that only the animation conveys. */
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }

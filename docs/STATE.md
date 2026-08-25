@@ -31,7 +31,13 @@ curl -s -H "Authorization: Bearer $TOKEN" http://87.107.110.199:7001/v1/diag
 | Command | What it proves | Cost |
 |---|---|---|
 | `bash scripts/check.sh` | every module builds, vets, passes its own tests; the front-end JS and string files parse; no secret is tracked; the Rust shell compiles | seconds |
+| `bash scripts/preview.sh <name>` | nothing — it photographs. Boots a real coordinator and app on throwaway data, seeds four players and three rooms with different doors, and drives headless Chrome through every screen into `scripts/shots/<name>/` | ~40s |
 | `bash scripts/smoke.sh` | a real coordinator with accounts switched on and **two** real apps: browsing without an account, the terms, signing up, hosting a room, signing out and back in, a wrong password refused, the friend graph and a private message between the two, then a head admin appointed across a restart who sanctions, lifts, labels, closes and announces — and the page rendered in headless Chrome as both a player and a moderator | ~60s |
+
+**Design work needs to be looked at.** `check.sh` proves the CSS parses and
+`smoke.sh` proves the page renders with a quiet console; neither can tell you
+the room list is ugly or that half the window is empty. `preview.sh` is the
+answer to that, and it is how the interface was redesigned on 2026-08-25.
 
 **The interface is rendered, not just parsed.** The last section of
 `smoke.sh` drives headless Chrome in a throwaway profile at the running app
@@ -193,6 +199,34 @@ there; this is the summary.
 | T14 moderation panel | **done** — T8's tools, reachable from the product at last |
 | T15 the door, host side | **done** — a host can finally make a private room |
 | T16 password change, terms re-acceptance | **done** |
+| T17 visual redesign | **done** — looked at, at 1440 and at 1366 |
+
+**The interface was redesigned on 2026-08-25** at the owner's request: the
+old one was flat, grey and mostly empty space. What changed, beyond colour
+and spacing:
+
+- **Faces.** Nobody uploads a picture — asking would be one more thing between
+  installing and finding a game — so a person is drawn from their initials on
+  a colour derived from their **account id**. Same person, same colour on
+  every machine; two players called Pudge still differ; renaming yourself does
+  not change your face.
+- **Ten seats drawn as ten marks.** Somebody scanning the lobby is asking "is
+  there room for me", and a bar answers that in the time the eye takes to pass
+  over it. `7/10` makes them read and subtract. The number stays underneath.
+- **The host's latency as a signal meter**, three rising bars plus the number.
+  Still labelled as the host's, everywhere, for the reason in D54.
+- **The room screen is two teams**, Radiant and Dire, in the game's own
+  colours with a count each. Ten slots in one list hid the only structural
+  fact about a room: which five you would be joining.
+- **A stripe down the inline edge of each room row**, coloured by whether this
+  player can actually get in. It is the only part of a row that can be read
+  without looking directly at it, so it carries the fact that decides
+  everything else.
+- The stage fills the window, so three rooms look like a lobby with three
+  rooms rather than a page that failed to load.
+
+All of it stays inside D44: logical properties only, every string through the
+lookup, and the tests that enforce both still pass.
 
 **A password can be changed, and terms can move.** Changing a password is its
 own dialog off the profile card and needs the current one — a session left

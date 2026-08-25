@@ -66,3 +66,9 @@ desktop/gen/
 # unanchored `dist/` rule above would otherwise swallow it.
 !desktop/dist/
 !desktop/dist/**
+
+# Screenshots from scripts/preview.sh: build output, not source.
+scripts/shots/
+
+# Go leaves this behind when a build is interrupted.
+*.exe~

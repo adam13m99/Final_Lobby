@@ -107,9 +107,6 @@
   "lobby.col.ping.explain": "How far the host is from the relay, not how far you are. A host with a poor connection makes a poor game for everyone who joins them.",
   "lobby.hostedby": "Hosted by {host}",
   "lobby.of10": "/10",
-  "lobby.player.rated": "{name} · {mmr}",
-  "lobby.mmr.floor": "{n}+ needed",
-  "lobby.mmr.average": "~{n} avg",
   "lobby.mmr.any": "any",
   "lobby.ping.value": "{n} ms",
   "lobby.ping.unknown": "—",
@@ -251,5 +248,9 @@
   "terms.read": "Read them",
   "terms.accept": "Accept",
   "mod.staff.appoint": "Make this player an admin",
-  "mod.staff.appoint.note": "They can then sanction, label and close rooms. Only you can undo it."
+  "mod.staff.appoint.note": "They can then sanction, label and close rooms. Only you can undo it.",
+  "lobby.mmr.min": "min",
+  "lobby.mmr.avg": "avg",
+  "lobby.player.mmr": "· {mmr}",
+  "room.team.count": "{n}/5"
 }

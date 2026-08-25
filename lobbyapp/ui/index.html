@@ -180,9 +180,12 @@
 <section id="screen-room" class="screen hidden">
   <div class="panel">
     <div class="panel-head">
-      <div>
-        <h2 id="room-name" data-t="room.title"></h2>
-        <p class="muted small" id="room-sub"></p>
+      <div class="room-head-who">
+        <div id="room-face"></div>
+        <div>
+          <h2 id="room-name" data-t="room.title"></h2>
+          <p class="muted small" id="room-sub"></p>
+        </div>
       </div>
       <span class="badge" id="room-status"></span>
     </div>
@@ -207,7 +210,9 @@
       <span class="muted small" id="doornow"></span>
     </form>
 
-    <div class="slots" id="slots"></div>
+    <!-- Two columns because a Dota match is two teams. Filled by app.js,
+         which knows which five slots belong to which side. -->
+    <div class="teams" id="slots"></div>
 
     <div class="specrow">
       <h3><span data-t="room.spectators"></span> <em data-t="room.spectators.note"></em></h3>
@@ -436,8 +441,13 @@
 <!-- Profile editor -->
 <div id="profilegate" class="gate hidden">
   <form class="gate-card" id="profileform">
-    <h1 data-t="profile.title"></h1>
-    <p class="muted small" id="p-who"></p>
+    <div class="gate-who">
+      <div id="p-face"></div>
+      <div>
+        <h1 data-t="profile.title"></h1>
+        <p class="muted small" id="p-who"></p>
+      </div>
+    </div>
     <label class="field">
       <span data-t="profile.name"></span>
       <input id="p-nick" maxlength="20" autocomplete="off" required>
