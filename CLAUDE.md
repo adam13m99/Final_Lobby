@@ -71,6 +71,10 @@ the predecessor platform. Reasons are in `docs/decisions.md`.
   is bought before launch. Survey before assuming: it changes.
 - **Physical test capacity is two PCs**, one host one client. Anything larger
   is simulated via `loadtest/`.
+- **To look at the product, run `./scripts/try.sh`.** A whole LobbyBaz on
+  loopback with a seeded lobby, opened in the browser, deleted on Ctrl-C. It
+  is the only way to click through the interface without publishing, and
+  `./scripts/preview.sh <name>` is the same sandbox photographed instead.
 - **To put a build on a test PC, run `./scripts/publish.sh`.** It stamps the
   server details into the binaries, uploads one installer, and prints a
   link. Installed copies pick up later builds themselves. Never go back to

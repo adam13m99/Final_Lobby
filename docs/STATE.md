@@ -11,6 +11,12 @@ app and installer all work on the development PC; Dota 2 launches and its
 listen server comes up. What remains is Task 16 itself - the real two-PC
 match - which needs a second machine and a person at each.
 
+**To look at the product on this PC:** run `./scripts/try.sh`. It builds a
+coordinator and an app, starts both on loopback, fills the lobby so there is
+something to see, and opens it. No installer, no server, no tunnel — so the
+room screen will say the network service is not running, and everything else
+is real. Ctrl-C stops it and deletes the throwaway database.
+
 **To test on a second PC:** run `./scripts/publish.sh`. It builds, stamps
 the server details into the binaries, uploads, and prints a link. Open that
 link on each PC, run the file, allow one prompt, pick a name. Then follow
@@ -31,6 +37,7 @@ curl -s -H "Authorization: Bearer $TOKEN" http://87.107.110.199:7001/v1/diag
 | Command | What it proves | Cost |
 |---|---|---|
 | `bash scripts/check.sh` | every module builds, vets, passes its own tests; the front-end JS and string files parse; no secret is tracked; the Rust shell compiles | seconds |
+| `./scripts/try.sh` | nothing — it runs the product. A coordinator and an app on this PC, a lobby seeded with four players and three rooms, opened in the browser. Ctrl-C deletes everything it made | ~40s |
 | `bash scripts/preview.sh <name>` | nothing — it photographs. Boots a real coordinator and app on throwaway data, seeds four players and three rooms with different doors, and drives headless Chrome through every screen into `scripts/shots/<name>/` | ~40s |
 | `bash scripts/smoke.sh` | a real coordinator with accounts switched on and **two** real apps: browsing without an account, the terms, signing up, hosting a room, signing out and back in, a wrong password refused, the friend graph and a private message between the two, then a head admin appointed across a restart who sanctions, lifts, labels, closes and announces — and the page rendered in headless Chrome as both a player and a moderator | ~60s |
 
