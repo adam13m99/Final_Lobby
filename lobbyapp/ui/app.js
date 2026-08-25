@@ -729,17 +729,24 @@ function friendRow(f) {
 
   if (f.unread) row.appendChild(el("span", "unread", String(f.unread)));
 
-  const acts = el("div", "acts");
-  const msg = el("button", "tiny", t("friends.message"));
-  msg.onclick = () => openConversation(f);
-  acts.appendChild(msg);
+  // The row is the button. A "Message" button beside every name cost the
+  // rail most of its width, and now that a conversation opens as a tab in
+  // the dock rather than as a dialog, clicking the person is the whole
+  // gesture.
+  row.classList.add("clickable");
+  row.title = t("friends.message");
+  row.onclick = () => openConversation(f);
 
   if (state.room_id) {
+    const acts = el("div", "acts");
     const inv = el("button", "tiny", t("friends.invite"));
-    inv.onclick = () => act(() => api("/api/friends/invite", { target_id: f.player_id }));
+    inv.onclick = (e) => {
+      e.stopPropagation();
+      act(() => api("/api/friends/invite", { target_id: f.player_id }));
+    };
     acts.appendChild(inv);
+    row.appendChild(acts);
   }
-  row.appendChild(acts);
   return row;
 }
 

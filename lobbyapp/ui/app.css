@@ -52,6 +52,11 @@
 
   --rail: 330px;
   --bar: 167px;
+  /* The room list's fixed columns. Held in variables because the header row
+     and the rows are separate grids and would otherwise resolve differently
+     the moment either had to give ground. */
+  --statw: 7.5rem;
+  --actw: 9.5rem;
 
   --r-sm: 7px;
   --r-md: 11px;
@@ -118,6 +123,19 @@ h4 {
     "bar chat rail";
   height: 100vh;
 }
+/* A narrower window takes it out of the numbers, not out of the room name:
+   a name that has to wrap costs a player the one thing the row is for. */
+@media (max-width: 1560px) { :root { --statw: 6rem; --actw: 8.2rem; } }
+/* Below this the sides give ground before the middle does. The toolbar keeps
+   its icons and loses padding; the rail keeps the friends list and loses
+   width. Both are furniture; the room list is the product. */
+@media (max-width: 1320px) {
+  :root { --statw: 5.2rem; --actw: 7.4rem; --rail: 272px; --bar: 128px; }
+  .nav { padding: .8rem .25rem; font-size: .93rem; }
+  .nav .ico { font-size: 1.7rem; width: 2.2rem; height: 2.2rem; }
+  .searchbox { flex: 1 1 8rem; }
+}
+
 @media (max-width: 1100px) {
   #shell {
     grid-template-columns: var(--bar) minmax(0, 1fr);
@@ -257,6 +275,7 @@ h4 {
   transition: border-color .14s ease, background .14s ease;
 }
 .me:hover { border-color: var(--line2); background: var(--panel3); }
+.me span, .me small { white-space: nowrap; }
 .me strong { font-weight: 640; }
 .me small { color: var(--muted); font-size: .69rem; font-variant-numeric: tabular-nums; }
 
@@ -339,8 +358,8 @@ h4 {
    up. Nothing here sizes to its content. */
 .roomhead, .room {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 7.5rem 7.5rem 7.5rem 9.5rem;
-  gap: .9rem; align-items: center;
+  grid-template-columns: minmax(0, 1fr) repeat(3, var(--statw)) var(--actw);
+  gap: .75rem; align-items: center;
 }
 .roomhead > span + span, .room > .stat { text-align: center; }
 
@@ -636,6 +655,7 @@ select { cursor: pointer; }
   transition: background .14s ease;
 }
 .friend:hover { background: var(--panel2); }
+.friend.clickable { cursor: pointer; }
 .friend .who { flex: 1; min-width: 0; }
 .friend .name { font-weight: 620; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .friend .where {

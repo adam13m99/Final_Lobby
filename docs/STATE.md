@@ -413,6 +413,14 @@ look when it needs changing again:
 - **Room rows are a grid of fixed columns**, so players, MMR and ping line up
   down the list whatever their values.
 - The toolbar down the inline edge is a third larger than it was.
+- **A friend row is itself the button** that opens a conversation. The
+  "Message" button beside every name cost the rail most of its width, and a
+  conversation is a tab in the dock now rather than a dialog.
+- **The window gives ground from the sides inward.** Below 1560px the room
+  list's number columns narrow; below 1320px the toolbar and the rail narrow
+  too. The room name is the last thing allowed to wrap, because it is the one
+  thing the row exists to show. `--statw`, `--actw`, `--bar` and `--rail` in
+  `app.css` are the whole mechanism.
 
 `bash scripts/preview.sh <name>` photographs all of it; `SHOTS` may be set to
 a JSON array of `[name, script]` pairs to photograph something else, and
