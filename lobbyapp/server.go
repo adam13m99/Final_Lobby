@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"net/http"
 	"os"
@@ -26,6 +27,9 @@ const chatKeep = 200
 
 type server struct {
 	token string
+
+	// dev is empty in every build a player runs. See devUI.
+	dev devUI
 
 	mu  sync.Mutex
 	cfg *session.Config
@@ -73,6 +77,12 @@ type pendingUpdate struct {
 }
 
 func newServer(token string) *server {
+	return newServerWithUI(token, "")
+}
+
+// newServerWithUI is newServer plus the development flag: a directory to
+// serve the interface from instead of the copy inside the binary.
+func newServerWithUI(token, uiDir string) *server {
 	cfg, err := session.Load()
 	if err != nil {
 		cfg = &session.Config{}
@@ -82,7 +92,7 @@ func newServer(token string) *server {
 	if cfg.Prepare() {
 		_ = cfg.Save()
 	}
-	srv := &server{token: token, cfg: cfg}
+	srv := &server{token: token, cfg: cfg, dev: devUI{dir: uiDir}}
 	// Each of these answers to its own clock; see social.go. Without an
 	// interval they would refetch on every poll, which is the thing they
 	// exist to stop.
@@ -98,8 +108,12 @@ func newServer(token string) *server {
 func (s *server) routes() http.Handler {
 	mux := http.NewServeMux()
 
-	ui, _ := fs.Sub(uiFiles, "ui")
-	mux.Handle("/", http.FileServer(http.FS(ui)))
+	if s.dev.dir != "" {
+		mux.Handle("/", noStore(http.FileServer(http.Dir(s.dev.dir))))
+	} else {
+		ui, _ := fs.Sub(uiFiles, "ui")
+		mux.Handle("/", http.FileServer(http.FS(ui)))
+	}
 
 	mux.HandleFunc("GET /api/state", s.guard(s.state))
 	mux.HandleFunc("POST /api/profile", s.guard(s.saveProfile))
@@ -198,6 +212,59 @@ func (s *server) api() *lobby.Client {
 	return c
 }
 
+
+// --- development: the interface, served from disk ------------------------
+
+// devUI holds the directory the interface is being served from when the app
+// was started with -dev-ui, and nothing at all otherwise.
+//
+// The installed app serves its interface out of the binary (go:embed), which
+// is right for a player and useless for looking at a change: every edit to a
+// stylesheet would mean a rebuild, a restart, and a window that has lost
+// wherever it was. With -dev-ui the same files are read from disk on every
+// request, and the page is told to reload itself the moment one of them
+// changes. Nothing a player runs passes the flag.
+type devUI struct {
+	dir string
+}
+
+// stamp is one value that changes whenever any file under the interface
+// directory changes. Modification time, total size and file count folded
+// together - not a hash, because this runs on every poll and the answer only
+// has to be different, not meaningful.
+func (d devUI) stamp() string {
+	if d.dir == "" {
+		return ""
+	}
+	var newest, total, count int64
+	_ = filepath.WalkDir(d.dir, func(_ string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			return nil
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return nil
+		}
+		if t := info.ModTime().UnixNano(); t > newest {
+			newest = t
+		}
+		total += info.Size()
+		count++
+		return nil
+	})
+	return fmt.Sprintf("%d-%d-%d", newest, total, count)
+}
+
+// noStore stops the browser holding on to a file the developer has just
+// changed. A live window showing yesterday's stylesheet is worse than no
+// live window.
+func noStore(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		h.ServeHTTP(w, r)
+	})
+}
+
 // --- state --------------------------------------------------------------
 
 // state is the single call the page polls. One request per tick returns
@@ -272,6 +339,10 @@ func (s *server) state(w http.ResponseWriter, r *http.Request) {
 	}
 	if upd != nil {
 		out["update"] = upd
+	}
+	// Development only. The page reloads itself when this changes.
+	if stamp := s.dev.stamp(); stamp != "" {
+		out["ui_stamp"] = stamp
 	}
 
 	s.diagMu.Lock()

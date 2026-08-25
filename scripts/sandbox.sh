@@ -15,6 +15,9 @@
 #     never leaves the server.
 # It never contacts 87.107.110.199.
 
+# Extra arguments for the app, used by scripts/live.sh to pass -dev-ui.
+SANDBOX_APP_ARGS=()
+
 sandbox_port() {
   python -c "import socket;s=socket.socket();s.bind(('127.0.0.1',0));print(s.getsockname()[1]);s.close()"
 }
@@ -28,9 +31,12 @@ sandbox_cleanup() {
 }
 
 # sandbox_build - compile the two binaries this needs, into the temp dir.
+# PORT and APP_PORT may be set before calling, which is how scripts/live.sh
+# keeps one address working for hours across restarts. Left unset, the
+# operating system picks both and nothing outside this run can guess them.
 sandbox_build() {
-  WORK=$(mktemp -d)
-  PORT=$(sandbox_port)
+  WORK=${WORK:-$(mktemp -d)}
+  PORT=${PORT:-$(sandbox_port)}
   COORD="http://127.0.0.1:$PORT"
   python -c "import secrets;print(secrets.token_hex(32))" > "$WORK/relay.pub"
 
@@ -60,7 +66,7 @@ sandbox_coordinator() {
 # sandbox_app - start the app and read back the address it printed.
 sandbox_app() {
   export APPDATA="$(cygpath -w "$WORK" 2>/dev/null || echo "$WORK")"
-  "$WORK/lobbyapp.exe" -no-browser -url-only -listen 127.0.0.1:0 > "$WORK/app.log" 2>&1 &
+  "$WORK/lobbyapp.exe" -no-browser -url-only -listen "127.0.0.1:${APP_PORT:-0}"     "${SANDBOX_APP_ARGS[@]}" > "$WORK/app.log" 2>&1 &
   APP_PID=$!
   for _ in $(seq 1 40); do
     APP_URL=$(head -1 "$WORK/app.log" 2>/dev/null)

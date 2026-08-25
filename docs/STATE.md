@@ -11,6 +11,14 @@ app and installer all work on the development PC; Dota 2 launches and its
 listen server comes up. What remains is Task 16 itself - the real two-PC
 match - which needs a second machine and a person at each.
 
+**To watch the product while it is being changed:** run `bash scripts/live.sh`,
+open the address it prints once, and leave that window open. It serves the
+interface from disk and tells the page when a file changed, so every edit to
+the stylesheet, the page, the scripts or the strings shows up by itself within
+two seconds. Go changes are rebuilt and the app restarted at the same address.
+The address is the same every run — the token is kept in `scripts/.live-token`,
+which is gitignored — so the window can be pinned and left for days.
+
 **To look at the product on this PC:** run `./scripts/try.sh`. It builds a
 coordinator and an app, starts both on loopback, fills the lobby so there is
 something to see, and opens it. No installer, no server, no tunnel — so the
@@ -39,6 +47,7 @@ curl -s -H "Authorization: Bearer $TOKEN" http://87.107.110.199:7001/v1/diag
 | `bash scripts/check.sh` | every module builds, vets, passes its own tests; the front-end JS and string files parse; no secret is tracked; the Rust shell compiles | seconds |
 | `./scripts/try.sh` | nothing — it runs the product. A coordinator and an app on this PC, a lobby seeded with four players and three rooms, opened in the browser. Ctrl-C deletes everything it made | ~40s |
 | `bash scripts/preview.sh <name>` | nothing — it photographs. Boots a real coordinator and app on throwaway data, seeds four players and three rooms with different doors, and drives headless Chrome through every screen into `scripts/shots/<name>/` | ~40s |
+| `bash scripts/live.sh` | nothing — it **is** the product, running, at one fixed address, updating itself. Front-end edits appear in the open window within two seconds; Go edits are rebuilt and the app restarted at the same address. Open it once and leave it | ~60s to start, then stays up |
 | `bash scripts/chatcheck.sh` | that a private message arriving **opens the chat dock by itself and gives the sender a tab** — driven live over the DevTools Protocol, because the dock reacts to a change between two polls and a single snapshot can never show it | ~50s |
 | `bash scripts/smoke.sh` | a real coordinator with accounts switched on and **two** real apps: browsing without an account, the terms, signing up, hosting a room, signing out and back in, a wrong password refused, the friend graph and a private message between the two, then a head admin appointed across a restart who sanctions, lifts, labels, closes and announces — and the page rendered in headless Chrome as both a player and a moderator | ~60s |
 

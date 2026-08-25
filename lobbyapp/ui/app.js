@@ -1674,9 +1674,22 @@ $("btn-diag").onclick = () => act(() => api("/api/diagnose", {}));
 
 // ----------------------------------------------------------------- poll
 
+// uiStamp is only ever set by an app started with -dev-ui. It changes when a
+// file of the interface changes on disk, and the window reloads itself - the
+// whole point of scripts/live.sh. The first value is remembered rather than
+// acted on, or every start-up would reload once for nothing.
+let uiStamp = null;
+
 async function refresh() {
   try {
     state = await api("/api/state");
+    if (state.ui_stamp) {
+      if (uiStamp !== null && uiStamp !== state.ui_stamp) {
+        location.reload();
+        return;
+      }
+      uiStamp = state.ui_stamp;
+    }
     render();
   } catch (e) {
     banner(t("err.dead", { error: e.message }));

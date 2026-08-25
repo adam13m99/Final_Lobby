@@ -44,11 +44,25 @@ func main() {
 	// anything else on the machine to guess.
 	urlOnly := flag.Bool("url-only", false, "print the address on the first line, for the desktop shell")
 	addr := flag.String("listen", "127.0.0.1:0", "loopback address to serve on")
+	// devUI serves the interface from a directory instead of from inside the
+	// binary, and makes the page reload itself whenever a file in it changes.
+	// It is what scripts/live.sh runs; no installed copy passes it.
+	devUI := flag.String("dev-ui", "", "development: serve the interface from this directory and reload the page when it changes")
 	flag.Parse()
 
 	token, err := randomToken()
 	if err != nil {
 		log.Fatalf("could not generate a session token: %v", err)
+	}
+	// A development window is meant to be left open for hours across restarts,
+	// which a fresh token every run makes impossible: the address changes and
+	// whatever is open is pointing at a dead one. Only in development, and
+	// only from the environment - which is to say only from whatever launched
+	// this process, and anything that can set our environment already owns us.
+	if *devUI != "" {
+		if t := os.Getenv("LOBBYBAZ_DEV_TOKEN"); t != "" {
+			token = t
+		}
 	}
 
 	l, err := net.Listen("tcp", *addr)
@@ -57,7 +71,7 @@ func main() {
 	}
 	url := fmt.Sprintf("http://%s/?t=%s", l.Addr().String(), token)
 
-	app := newServer(token)
+	app := newServerWithUI(token, *devUI)
 	go app.checkForUpdate()
 
 	srv := &http.Server{
@@ -74,6 +88,13 @@ func main() {
 		fmt.Println("  ", url)
 		fmt.Println()
 		fmt.Println("Leave this window open while you play. Close it to quit.")
+	}
+
+	// After the address, never before it: -url-only promises the address on
+	// the first line and nothing ahead of it, and the desktop shell reads that
+	// line to find us (D45).
+	if *devUI != "" {
+		fmt.Fprintf(os.Stderr, "development mode: the interface is being served from %s\n", *devUI)
 	}
 
 	if !*noBrowser {

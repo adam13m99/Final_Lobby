@@ -72,3 +72,7 @@ scripts/shots/
 
 # Go leaves this behind when a build is interrupted.
 *.exe~
+
+# scripts/live.sh keeps its address stable between runs.
+scripts/.live-token
+scripts/.live-url
