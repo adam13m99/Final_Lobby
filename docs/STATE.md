@@ -39,12 +39,22 @@ curl -s -H "Authorization: Bearer $TOKEN" http://87.107.110.199:7001/v1/diag
 | `bash scripts/check.sh` | every module builds, vets, passes its own tests; the front-end JS and string files parse; no secret is tracked; the Rust shell compiles | seconds |
 | `./scripts/try.sh` | nothing — it runs the product. A coordinator and an app on this PC, a lobby seeded with four players and three rooms, opened in the browser. Ctrl-C deletes everything it made | ~40s |
 | `bash scripts/preview.sh <name>` | nothing — it photographs. Boots a real coordinator and app on throwaway data, seeds four players and three rooms with different doors, and drives headless Chrome through every screen into `scripts/shots/<name>/` | ~40s |
+| `bash scripts/chatcheck.sh` | that a private message arriving **opens the chat dock by itself and gives the sender a tab** — driven live over the DevTools Protocol, because the dock reacts to a change between two polls and a single snapshot can never show it | ~50s |
 | `bash scripts/smoke.sh` | a real coordinator with accounts switched on and **two** real apps: browsing without an account, the terms, signing up, hosting a room, signing out and back in, a wrong password refused, the friend graph and a private message between the two, then a head admin appointed across a restart who sanctions, lifts, labels, closes and announces — and the page rendered in headless Chrome as both a player and a moderator | ~60s |
 
 **Design work needs to be looked at.** `check.sh` proves the CSS parses and
 `smoke.sh` proves the page renders with a quiet console; neither can tell you
 the room list is ugly or that half the window is empty. `preview.sh` is the
 answer to that, and it is how the interface was redesigned on 2026-08-25.
+
+**Some behaviour only exists over time.** The chat dock opens itself when a
+message turns up in a tab nobody is reading — a change between one poll and
+the next. Every one-shot check in the ladder sees it minimised whatever the
+code does, which is what `chatcheck.sh` exists for: it drives the live page,
+has a second account write to it, and looks again. The tone it plays is the
+one thing still unasserted; a headless browser has no audio device, and the
+code path that would complain about it is covered by `smoke.sh`'s rule that
+the console must say nothing.
 
 **The interface is rendered, not just parsed.** The last section of
 `smoke.sh` drives headless Chrome in a throwaway profile at the running app
