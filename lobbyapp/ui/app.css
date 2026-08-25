@@ -51,7 +51,7 @@
   --dire:    #c0483c;
 
   --rail: 330px;
-  --bar: 124px;
+  --bar: 167px;
 
   --r-sm: 7px;
   --r-md: 11px;
@@ -110,17 +110,20 @@ h4 {
 #shell {
   display: grid;
   grid-template-columns: var(--bar) minmax(0, 1fr) var(--rail);
-  grid-template-rows: 56px auto 1fr;
+  grid-template-rows: 56px auto minmax(0, 1fr) auto;
   grid-template-areas:
     "bar head rail"
     "bar strip rail"
-    "bar stage rail";
+    "bar stage rail"
+    "bar chat rail";
   height: 100vh;
 }
 @media (max-width: 1100px) {
-  #shell { grid-template-columns: var(--bar) minmax(0, 1fr); }
+  #shell {
+    grid-template-columns: var(--bar) minmax(0, 1fr);
+    grid-template-areas: "bar head" "bar strip" "bar stage" "bar chat";
+  }
   #rail { display: none; }
-  #shell { grid-template-areas: "bar head" "bar strip" "bar stage"; }
 }
 
 /* --------------------------------------------------------------- toolbar */
@@ -135,21 +138,21 @@ h4 {
 }
 
 .brand {
-  font-weight: 800; letter-spacing: .14em; font-size: .82rem;
+  font-weight: 800; letter-spacing: .14em; font-size: 1rem;
   color: var(--accent); text-align: center; padding: .6rem 0 1.1rem;
 }
 
 .nav {
   position: relative;
   background: none; border: 0; color: var(--dim);
-  display: flex; flex-direction: column; align-items: center; gap: .35rem;
-  padding: .85rem .25rem; border-radius: var(--r-md);
-  font: inherit; font-size: .93rem; font-weight: 650; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: .45rem;
+  padding: 1.15rem .3rem; border-radius: var(--r-md);
+  font: inherit; font-size: 1.05rem; font-weight: 650; cursor: pointer;
   transition: color .14s ease, background .14s ease;
 }
 .nav .ico {
-  font-size: 1.5rem; line-height: 1;
-  display: grid; place-items: center; width: 2rem; height: 2rem;
+  font-size: 2rem; line-height: 1;
+  display: grid; place-items: center; width: 2.7rem; height: 2.7rem;
 }
 .nav:hover:not(:disabled) { color: var(--text); background: rgba(255,255,255,.04); }
 .nav.active { color: var(--text); background: var(--panel3); box-shadow: var(--lift-sm); }
@@ -507,6 +510,14 @@ h4 {
   color: var(--dim);
 }
 .slot.you { border-color: var(--accent); background: var(--accent-soft); }
+/* An empty seat you may take says so and lights up under the pointer. A card
+   that invites a click has to look like one. */
+.slot.takeable { cursor: pointer; color: var(--muted); }
+.slot.takeable:hover {
+  border-style: solid; border-color: var(--accent);
+  background: var(--accent-soft); color: var(--text);
+}
+.slot.takeable:hover .slot-name { color: var(--accent2); }
 .team.radiant .slot:not(.empty) { border-inline-start: 2px solid var(--radiant); }
 .team.dire .slot:not(.empty) { border-inline-start: 2px solid var(--dire); }
 
@@ -534,7 +545,14 @@ h4 {
 
 /* -------------------------------------------------------------- actions */
 
-.actions { padding: 1.1rem; display: flex; flex-direction: column; gap: .9rem; }
+/* Connect, Launch and Leave are the reason this screen exists, so they stay
+   in view while the seats scroll behind them. The first version put them
+   below ten slots and a spectator row, where a player with the chat open
+   never saw them at all. */
+.actions {
+  padding: 1.1rem; display: flex; flex-direction: column; gap: .9rem;
+  position: sticky; inset-block-end: 0; z-index: 5;
+}
 .actionrow { display: flex; align-items: center; gap: .55rem; flex-wrap: wrap; }
 .net {
   color: var(--muted); font-size: .8rem; margin-inline-start: auto;
@@ -598,10 +616,11 @@ select { cursor: pointer; }
   display: flex; flex-direction: column; gap: .7rem;
   padding: .7rem; min-height: 0;
 }
-/* The friends panel takes the height its list needs, up to a share of the
-   rail, and the chat takes the rest. Splitting the rail evenly left a hole
-   under a short friends list and a cramped chat beside it. */
-.railtop { flex: 0 1 auto; max-height: 46%; display: flex; flex-direction: column; min-height: 0; }
+/* Friends now own the whole rail. The chat that used to share it went to
+   the bottom dock, and half an empty column beside a short friends list was
+   the worst of both. */
+.railtop { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+.friendlist { flex: 1; }
 
 .findrow { display: flex; gap: .4rem; padding: .6rem .8rem 0; }
 .findrow input { flex: 1; min-width: 0; }
@@ -646,35 +665,90 @@ select { cursor: pointer; }
 
 /* ----------------------------------------------------------------- chat */
 
-/* Collapsed, the chat is its tab strip and nothing else - the same gesture
+/* The dock is a row of the shell grid, not something floating over it, so
+   opening it takes height off the stage instead of covering rooms. */
+.chatdock {
+  grid-area: chat;
+  position: relative;
+  display: flex; flex-direction: column;
+  height: 34vh; min-height: 12rem; max-height: 26rem;
+  background: linear-gradient(180deg, var(--panel) 0%, #10141c 100%);
+  border-block-start: 1px solid var(--line2);
+  box-shadow: 0 -14px 34px rgba(0,0,0,.34);
+  transition: height .16s ease;
+}
+/* Minimised, the dock is its tab strip and nothing else - the same gesture
    Dota's own main-menu chat uses (D42.3). */
-.chatpanel { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
-.chatpanel.collapsed { flex: 0 0 auto; }
-.chatpanel.collapsed .chatbody { display: none; }
-.chatpanel.collapsed .collapse { transform: rotate(180deg); }
+.chatdock.collapsed { height: auto; min-height: 0; box-shadow: none; }
+.chatdock.collapsed .chatbody,
+.chatdock.collapsed .tabmenu { display: none; }
+.chatdock.collapsed .tabmin span { transform: rotate(180deg); }
 
-.chattabs { padding: .35rem .4rem; gap: .2rem; justify-content: flex-start; }
+.chattabs {
+  position: relative;
+  display: flex; align-items: stretch; gap: 2px;
+  padding: 0 .5rem; background: #0c0f16;
+  border-block-end: 1px solid var(--line);
+}
+.tabstrip { display: flex; align-items: stretch; gap: 2px; min-width: 0; overflow-x: auto; }
+.tabgap { flex: 1; }
+
+/* Browser tabs: they sit on the edge, the open one is lit, and the one with
+   something waiting in it glows until it is read. */
 .chattab {
-  background: none; border: 0; color: var(--dim);
-  padding: .3rem .7rem; border-radius: var(--r-sm);
-  font: inherit; font-size: .79rem; font-weight: 640; cursor: pointer;
+  display: flex; align-items: center; gap: .45rem;
+  background: none; border: 0; border-block-end: 2px solid transparent;
+  color: var(--dim); padding: .55rem .9rem; max-width: 12rem;
+  font: inherit; font-size: .8rem; font-weight: 640; cursor: pointer;
+  white-space: nowrap; transition: color .14s ease, background .14s ease;
 }
+.chattab > span:first-child { overflow: hidden; text-overflow: ellipsis; }
 .chattab:hover:not(:disabled) { color: var(--text); background: rgba(255,255,255,.04); }
-.chattab.active { color: var(--text); background: var(--panel3); }
-.chattab:disabled { opacity: .3; cursor: default; }
-.collapse {
-  margin-inline-start: auto; background: none; border: 0; color: var(--dim);
-  padding: .1rem .4rem; cursor: pointer; line-height: 1;
-  transition: transform .18s ease, color .14s ease;
+.chattab.active {
+  color: var(--text); background: var(--panel2);
+  border-block-end-color: var(--accent);
 }
-.collapse:hover { color: var(--text); background: none; border: 0; }
+.chattab:disabled { opacity: .3; cursor: default; }
+.chattab.unread { color: var(--accent2); }
+.chattab.unread::before {
+  content: ""; width: .42rem; height: .42rem; border-radius: 50%;
+  background: var(--accent); flex: none;
+}
+.chattab .x {
+  color: var(--dim); font-size: .95rem; line-height: 1;
+  padding: 0 .1rem; border-radius: var(--r-sm);
+}
+.chattab .x:hover { color: var(--text); background: rgba(255,255,255,.1); }
+
+.tabadd, .tabmin {
+  background: none; border: 0; color: var(--dim);
+  padding: 0 .7rem; font-size: 1rem; line-height: 1; cursor: pointer;
+}
+.tabadd:hover, .tabmin:hover { color: var(--text); background: rgba(255,255,255,.05); }
+.tabmin span { display: inline-block; transition: transform .16s ease; }
+
+.tabmenu {
+  position: absolute; inset-block-start: 100%; inset-inline-start: .5rem;
+  z-index: 20; min-width: 14rem; max-height: 15rem; overflow-y: auto;
+  background: var(--panel2); border: 1px solid var(--line2);
+  border-radius: var(--r-md); box-shadow: var(--lift);
+  padding: .3rem;
+}
+.menurow {
+  display: flex; align-items: center; gap: .55rem; width: 100%;
+  background: none; border: 0; color: var(--text);
+  padding: .4rem .5rem; border-radius: var(--r-sm);
+  font: inherit; font-size: .84rem; cursor: pointer; text-align: start;
+}
+.menurow:hover { background: var(--panel3); }
+.menurow .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
 .chatbody { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 .chatlog {
-  flex: 1; overflow-y: auto; padding: .7rem .85rem;
+  flex: 1; overflow-y: auto; padding: .8rem 1rem;
   display: flex; flex-direction: column; gap: .4rem;
 }
-.msg { font-size: .855rem; overflow-wrap: anywhere; line-height: 1.45; }
+.msg { font-size: .87rem; overflow-wrap: anywhere; line-height: 1.5; }
 .msg .who { font-weight: 660; color: #b9c2d6; }
 .msg .who.self { color: var(--accent2); }
 /* Somebody arriving or a room opening is context, not conversation. It sits
@@ -685,8 +759,17 @@ select { cursor: pointer; }
 }
 
 .chatbox {
-  display: flex; gap: .45rem; padding: .6rem;
-  border-block-start: 1px solid var(--line); background: rgba(0,0,0,.16);
+  display: flex; align-items: center; gap: .5rem; padding: .6rem .7rem;
+  border-block-start: 1px solid var(--line); background: rgba(0,0,0,.22);
+}
+/* The box says where the words are going. One input serves every tab, so
+   without this a private message and a room line look identical to type. */
+.chatto {
+  flex: none; max-width: 11rem; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; font-size: .76rem; font-weight: 660;
+  color: var(--accent2); background: var(--accent-soft);
+  border: 1px solid rgba(240,77,42,.3); border-radius: 99px;
+  padding: .24rem .65rem;
 }
 .chatbox input { flex: 1; min-width: 0; }
 
@@ -733,7 +816,6 @@ select { cursor: pointer; }
 }
 @keyframes rise { from { transform: translateY(8px); opacity: 0; } }
 .gate-card.wide-card { width: min(36rem, 100%); height: min(33rem, 90vh); padding: 0; gap: 0; }
-.gate-card.wide-card .chatlog { min-height: 0; }
 .gate-card > p { margin: -.5rem 0 0; }
 /* A face at the top of a dialog about a person, so it is obvious whose
    account is being changed on a shared PC. */

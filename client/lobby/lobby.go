@@ -319,6 +319,13 @@ func (c *Client) Kick(roomID, playerID, targetID string) error {
 		map[string]string{"player_id": playerID, "target_id": targetID}, nil)
 }
 
+// MoveSlot puts a seated player in a different playing slot, which is how
+// they change team: slots 0-4 are Radiant and 5-9 are Dire.
+func (c *Client) MoveSlot(roomID, playerID string, slot int) error {
+	return c.do("POST", "/v1/rooms/"+roomID+"/slot",
+		map[string]any{"player_id": playerID, "slot": slot}, nil)
+}
+
 func (c *Client) SetStatus(roomID, playerID, status string) error {
 	return c.do("POST", "/v1/rooms/"+roomID+"/status",
 		map[string]string{"player_id": playerID, "status": status}, nil)

@@ -233,10 +233,17 @@
     <div class="actionrow">
       <button class="primary big" id="btn-connect" data-t="room.connect"></button>
       <button class="ghost" id="btn-disconnect" data-t="room.disconnect"></button>
+      <button class="launch big" id="btn-play" data-t="room.play"></button>
       <span class="net" id="netinfo"></span>
     </div>
 
-    <div class="actionrow">
+    <!-- The host's controls, and only the host's. The game mode is a
+         property of the match the host's own copy of Dota creates, and the
+         door and the lock decide who may walk in; the coordinator refuses
+         all of them from anybody else, so hiding them is a courtesy that
+         keeps the panel honest rather than a defence. Which team a player
+         is on is not here at all any more - it is which seat they sit in. -->
+    <div class="actionrow hostonly" id="hostcontrols">
       <label class="field inline-field">
         <span data-t="room.mode"></span>
         <select id="mode">
@@ -248,17 +255,7 @@
           <option value="22" data-t="room.mode.rap"></option>
         </select>
       </label>
-      <label class="field inline-field">
-        <span data-t="room.team"></span>
-        <select id="team">
-          <option value="good" data-t="room.team.radiant"></option>
-          <option value="bad" data-t="room.team.dire"></option>
-        </select>
-      </label>
-      <button class="launch big" id="btn-play" data-t="room.play"></button>
-    </div>
-
-    <div class="actionrow hostonly" id="hostcontrols">
+      <div class="head-gap"></div>
       <button id="btn-lock" data-t="room.lock"></button>
       <button id="btn-reopen" data-t="room.reopen"></button>
       <button id="btn-open" data-t="room.openall"></button>
@@ -419,26 +416,44 @@
     <div class="friendlist" id="friendlist"></div>
   </div>
 
-  <div class="panel chatpanel" id="chatpanel">
-    <div class="panel-head chattabs">
+</aside>
+
+<!-- ------------------------------------------------------------ CHAT -->
+<!-- Docked along the bottom and always there, the way Dota's own is: a tab
+     strip when it is minimised, opening upward when somebody uses it or when
+     a message arrives. Every conversation is a tab, private ones included, so
+     starting one does not cover the lobby with a dialog. -->
+<section id="chatdock" class="chatdock collapsed">
+  <div class="chattabs" id="chattabs">
+    <div class="tabstrip" id="tabstrip">
       <button class="chattab active" data-chat="lobby" data-t="chat.tab.lobby"></button>
       <button class="chattab" data-chat="room" id="chattab-room" data-t="chat.tab.room"></button>
       <button class="chattab" data-chat="party" data-t="chat.tab.party"></button>
-      <button class="collapse" id="chatcollapse" data-t-title="chat.collapse"><span aria-hidden="true">▾</span></button>
     </div>
-    <div class="chatbody" id="chatbody">
-      <div class="chatlog" id="lobbylog"></div>
-      <div class="chatlog hidden" id="roomlog"></div>
-      <div class="chatlog hidden" id="partylog">
-        <p class="muted small pad" data-t="chat.party.soon"></p>
-      </div>
-      <form class="chatbox" id="chatform">
-        <input id="chatinput" maxlength="300" data-t-placeholder="chat.placeholder" autocomplete="off">
-        <button type="submit" data-t="chat.send"></button>
-      </form>
-    </div>
+    <button class="tabadd" id="chatadd" data-t-title="chat.new">
+      <span aria-hidden="true">+</span>
+    </button>
+    <div class="tabgap"></div>
+    <button class="tabmin" id="chatmin" data-t-title="chat.minimise">
+      <span aria-hidden="true">&#9662;</span>
+    </button>
+
+    <!-- Who to start a conversation with. Opened by the + on the strip, and
+         hung off the strip rather than opened as a dialog: picking a friend
+         is not worth losing sight of the lobby. -->
+    <div class="tabmenu hidden" id="chatmenu"></div>
   </div>
-</aside>
+
+
+  <div class="chatbody">
+    <div class="chatlog" id="chatlog"></div>
+    <form class="chatbox" id="chatform">
+      <span class="chatto" id="chatto"></span>
+      <input id="chatinput" maxlength="300" data-t-placeholder="chat.placeholder" autocomplete="off">
+      <button class="primary" type="submit" data-t="chat.send"></button>
+    </form>
+  </div>
+</section>
 
 </div><!-- /shell -->
 
@@ -510,21 +525,6 @@
       <button class="tiny" id="termsclose" data-t="profile.cancel"></button>
     </div>
     <pre class="terms" id="termstext"></pre>
-  </div>
-</div>
-
-<!-- One friend's private conversation, opened from the rail. -->
-<div id="dmgate" class="gate hidden">
-  <div class="gate-card wide-card">
-    <div class="panel-head plain">
-      <h2 id="dmwho"></h2>
-      <button class="tiny" id="dmclose" data-t="profile.cancel"></button>
-    </div>
-    <div class="chatlog" id="dmlog"></div>
-    <form class="chatbox" id="dmform">
-      <input id="dminput" maxlength="500" data-t-placeholder="chat.placeholder" autocomplete="off">
-      <button class="primary" type="submit" data-t="chat.send"></button>
-    </form>
   </div>
 </div>
 

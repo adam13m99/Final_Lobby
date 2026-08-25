@@ -19,8 +19,15 @@ let chatTab = "lobby";
 let filter = "all";
 let query = "";
 let busy = false;
-let dmWith = null;
 let authMode = "signin";
+
+// The chat dock. dmTabs is what the tab strip shows, dmLogs what each of
+// those tabs holds, and seen the last thing this window noticed in a tab -
+// which is how an arriving message gets to ring exactly once.
+let dmTabs = [];
+let dmLogs = {};
+let seen = {};
+let audio = null;
 
 const $ = (id) => document.getElementById(id);
 
@@ -195,13 +202,9 @@ function render() {
   if (!inRoom && chatTab === "room") showChat("lobby");
 
   renderRooms(s.rooms || []);
-  renderChat("lobbylog", s.lobby_chat || []);
   renderFriends(s.friends, s.friends_error);
-
-  if (inRoom) {
-    renderRoom(s.room);
-    renderChat("roomlog", s.room_chat || []);
-  }
+  if (inRoom) renderRoom(s.room);
+  renderChatDock(s);
   renderDiag();
   renderMod(s);
 }
@@ -597,6 +600,20 @@ function teamColumn(side, titleKey, first, seated, canKick) {
   return col;
 }
 
+// canTakeSeat answers whether clicking this empty seat would do anything.
+//
+// Which slot you sit in is which team you are on, so this is how a player
+// picks a side. The refusals mirror the coordinator's exactly, because a card
+// that invites a click and then shows an error is worse than one that does
+// not invite it: slot 0 is the host's for the room's whole life, the host
+// does not move out of it, and a locked room is a match already running.
+function canTakeSeat(index, spectator) {
+  if (spectator || index === 0 || state.is_host) return false;
+  if (!state.room || state.room.status === "locked_in_game") return false;
+  return (state.room.members || [])
+    .some((m) => m.player_id === state.player_id && !m.spectator);
+}
+
 function slotCard(index, member, canKick, spectator) {
   const card = el("div");
   const mine = member && member.player_id === state.player_id;
@@ -608,7 +625,14 @@ function slotCard(index, member, canKick, spectator) {
   const body = el("div", "slot-body");
   card.appendChild(body);
   if (!member) {
-    body.appendChild(el("div", "slot-name muted", t("room.slot.empty")));
+    if (canTakeSeat(index, spectator)) {
+      card.classList.add("takeable");
+      card.title = t("room.slot.take.note");
+      body.appendChild(el("div", "slot-name", t("room.slot.take")));
+      card.onclick = () => act(() => api("/api/rooms/slot", { slot: index }));
+    } else {
+      body.appendChild(el("div", "slot-name muted", t("room.slot.empty")));
+    }
     return card;
   }
 
@@ -740,46 +764,210 @@ function requestRow(f) {
 
 // --- one friend's private conversation ----------------------------------
 
-async function openConversation(f) {
-  dmWith = f;
-  $("dmwho").textContent = f.display_name || f.player_id;
-  $("dmgate").classList.remove("hidden");
-  $("dmlog").textContent = "";
-  await loadConversation();
-  $("dminput").focus();
+// openConversation puts a friend in a tab of the dock rather than in a dialog
+// over the lobby. Talking to somebody is not a thing you stop doing other
+// things to do.
+function openConversation(f) {
+  if (!dmTabs.some((d) => d.player_id === f.player_id)) {
+    dmTabs.push({ player_id: f.player_id, display_name: f.display_name || f.player_id });
+  }
+  drawTabs();
+  showChat("dm:" + f.player_id);
+  openDock();
+  $("chatinput").focus();
+  loadConversation();
+}
+
+function closeConversation(id) {
+  dmTabs = dmTabs.filter((d) => d.player_id !== id);
+  delete dmLogs[id];
+  drawTabs();
+  if (chatTab === "dm:" + id) showChat("lobby");
+}
+
+function dmOpen() {
+  return chatTab.startsWith("dm:") ? chatTab.slice(3) : "";
 }
 
 async function loadConversation(send) {
-  if (!dmWith) return;
+  const id = dmOpen();
+  if (!id) return;
   try {
-    const out = await api("/api/friends/messages",
-      { target_id: dmWith.player_id, send: send || "" });
-    const log = $("dmlog");
-    log.textContent = "";
-    // A private message carries who sent it but not their name - the server
-    // does not repeat what both ends already know. There are only two people
-    // in the conversation, so anything not from them is from me.
-    for (const m of out.messages || []) {
-      const theirs = m.from_id === dmWith.player_id;
-      const line = el("div", "msg");
-      line.appendChild(el("span", "who" + (theirs ? "" : " self"),
-        t("chat.said", { name: theirs ? (dmWith.display_name || dmWith.player_id) : (state.nick || t("chat.me")) })));
-      line.appendChild(document.createTextNode(" " + m.body));
-      log.appendChild(line);
-    }
-    log.scrollTop = log.scrollHeight;
+    const out = await api("/api/friends/messages", { target_id: id, send: send || "" });
+    dmLogs[id] = out.messages || [];
+    if (dmOpen() === id) drawLog();
   } catch (e) {
     banner(e.message);
   }
 }
 
-// ------------------------------------------------------------------ chat
+// ------------------------------------------------- the chat dock (D56)
 
-function renderChat(id, msgs) {
-  const log = $(id);
+// renderChatDock is called on every poll. It redraws the tab strip, notices
+// anything that arrived in a tab the reader is not looking at, and redraws
+// the open log.
+function renderChatDock(s) {
+  // A friend with unread messages gets a tab whether or not anybody opened
+  // one. Somebody writing to you is the thing most worth interrupting for,
+  // and a message that waits behind a button nobody pressed is a message
+  // that was not delivered.
+  for (const f of (s.friends && s.friends.friends) || []) {
+    if (f.unread && !dmTabs.some((d) => d.player_id === f.player_id)) {
+      dmTabs.push({ player_id: f.player_id, display_name: f.display_name || f.player_id });
+    }
+  }
+  drawTabs();
+
+  notice("lobby", signature(s.lobby_chat || []));
+  if (s.room_id) notice("room", signature(s.room_chat || []));
+  for (const f of (s.friends && s.friends.friends) || []) noticeDM(f);
+  if (dmOpen()) loadConversation();
+  drawLog();
+}
+
+function signature(msgs) {
+  return msgs.length ? msgs[msgs.length - 1].id + ":" + msgs.length : "0";
+}
+
+// notice decides whether something new turned up in a tab, and what to do
+// about it. The first sighting of a tab is not new - it is the backlog that
+// was already there when the window opened, and announcing it would make
+// every start-up ring.
+function notice(tab, sig) {
+  const first = !(tab in seen);
+  const changed = seen[tab] !== sig;
+  seen[tab] = sig;
+  if (!first && changed) flag(tab);
+}
+
+// A conversation is counted, not signed: reading it sets the count back to
+// zero, so "different from last time" would ring on the way down as well as
+// on the way up. Only a count that grew is a message that arrived.
+function noticeDM(f) {
+  const tab = "dm:" + f.player_id;
+  const now = f.unread || 0;
+  const first = !(tab in seen);
+  const before = seen[tab] || 0;
+  seen[tab] = now;
+  if (!first && now > before) flag(tab);
+}
+
+function flag(tab) {
+  if (tab === chatTab && dockIsOpen()) return;
+  const btn = document.querySelector('.chattab[data-chat="' + cssSafe(tab) + '"]');
+  if (btn && tab !== chatTab) btn.classList.add("unread");
+  openDock();
+  ping();
+}
+
+// cssSafe hands the id to the browser's own escaper rather than guessing
+// at the grammar. Ids are hex today, and a selector that works only
+// because of what ids happen to look like breaks when that changes.
+function cssSafe(v) {
+  return window.CSS && CSS.escape ? CSS.escape(String(v)) : String(v);
+}
+
+// ping is the sound. The audio device is only ever created from a real click
+// or keystroke, because a browser asked to make noise before anybody has
+// touched the page refuses and says so in the console - and a console that
+// says things is a console nobody reads.
+function ping() {
+  if (!audio) return;
+  try {
+    const osc = audio.createOscillator();
+    const gain = audio.createGain();
+    osc.connect(gain);
+    gain.connect(audio.destination);
+    osc.type = "sine";
+    osc.frequency.value = 720;
+    gain.gain.setValueAtTime(0.0001, audio.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.07, audio.currentTime + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + 0.18);
+    osc.start();
+    osc.stop(audio.currentTime + 0.2);
+  } catch (_) {
+    // A machine that will not make a sound is not a machine with a problem.
+  }
+}
+
+function armAudio() {
+  if (audio) return;
+  try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) { /* none */ }
+}
+document.addEventListener("pointerdown", armAudio, { once: true });
+document.addEventListener("keydown", armAudio, { once: true });
+
+// --- the tab strip -------------------------------------------------------
+
+function drawTabs() {
+  const strip = $("tabstrip");
+  // The three fixed tabs live in the markup; only the conversations are
+  // drawn, so a redraw every two seconds cannot lose a tab's own state.
+  for (const gone of strip.querySelectorAll(".chattab.dm")) gone.remove();
+
+  for (const d of dmTabs) {
+    const id = "dm:" + d.player_id;
+    const tab = el("button", "chattab dm");
+    tab.dataset.chat = id;
+    tab.appendChild(el("span", "", d.display_name));
+    const shut = el("span", "x", "\u00d7");
+    shut.title = t("chat.close");
+    shut.onclick = (e) => { e.stopPropagation(); closeConversation(d.player_id); };
+    tab.appendChild(shut);
+    tab.onclick = () => { showChat(id); openDock(); };
+    strip.appendChild(tab);
+  }
+  for (const tab of strip.querySelectorAll(".chattab")) {
+    tab.classList.toggle("active", tab.dataset.chat === chatTab);
+    if (tab.dataset.chat === chatTab) tab.classList.remove("unread");
+  }
+}
+
+function showChat(which) {
+  chatTab = which;
+  drawTabs();
+  // Party is present and honest about itself: parties are not built, and a
+  // tab that silently does nothing is worse than one that says so.
+  $("chatform").classList.toggle("hidden", which === "party");
+  // Only a private conversation is labelled. On the lobby and room tabs the
+  // lit tab already says where the words go, and a second label saying the
+  // same thing is furniture.
+  const dm = which.indexOf("dm:") === 0;
+  $("chatto").classList.toggle("hidden", !dm);
+  $("chatto").textContent = dm ? t("chat.to", { where: tabName(which) }) : "";
+  drawLog();
+}
+
+function tabName(which) {
+  if (which === "lobby") return t("chat.tab.lobby");
+  if (which === "room") return t("chat.tab.room");
+  if (which === "party") return t("chat.tab.party");
+  const who = dmTabs.find((d) => "dm:" + d.player_id === which);
+  return who ? who.display_name : "";
+}
+
+// --- the log -------------------------------------------------------------
+
+function drawLog() {
+  const log = $("chatlog");
+  const msgs = chatTab === "lobby" ? (state.lobby_chat || [])
+    : chatTab === "room" ? (state.room_chat || [])
+      : chatTab === "party" ? null
+        : dmLogs[dmOpen()] || [];
+
+  if (msgs === null) {
+    log.dataset.sig = "party";
+    log.textContent = "";
+    log.appendChild(el("p", "muted small pad", t("chat.party.soon")));
+    return;
+  }
+
   // Only redraw when something changed, or the log scrolls away from under
   // the reader every two seconds.
-  const sig = msgs.length ? msgs[msgs.length - 1].id + ":" + msgs.length : "0";
+  const dm = chatTab.indexOf("dm:") === 0;
+  const sig = chatTab + "|" + (dm
+    ? msgs.length + ":" + (msgs.length ? msgs[msgs.length - 1].at : "")
+    : signature(msgs));
   if (log.dataset.sig === sig) return;
   log.dataset.sig = sig;
 
@@ -790,29 +978,48 @@ function renderChat(id, msgs) {
       log.appendChild(el("div", "msg system", m.text));
       continue;
     }
+    // A private message carries who sent it but not their name - the server
+    // does not repeat what both ends already know. There are only two people
+    // in a conversation, so anything not from them is from me.
+    const mine = dm ? m.from_id !== dmOpen() : m.player_id === state.player_id;
+    const name = dm
+      ? (mine ? (state.nick || t("chat.me")) : tabName(chatTab))
+      : m.nick;
     const line = el("div", "msg");
-    line.appendChild(el("span", "who" + (m.player_id === state.player_id ? " self" : ""),
-      t("chat.said", { name: m.nick })));
-    line.appendChild(document.createTextNode(" " + m.text));
+    line.appendChild(el("span", "who" + (mine ? " self" : ""), t("chat.said", { name: name })));
+    line.appendChild(document.createTextNode(" " + (dm ? m.body : m.text)));
     log.appendChild(line);
   }
   if (atBottom) log.scrollTop = log.scrollHeight;
 }
 
-// showChat switches the tab strip (D42.3). Party is present and honest about
-// itself: parties are not built, and a tab that silently does nothing is
-// worse than one that says so.
-function showChat(which) {
-  chatTab = which;
-  for (const id of ["lobbylog", "roomlog", "partylog"]) {
-    $(id).classList.add("hidden");
+// --- open and shut -------------------------------------------------------
+
+function dockIsOpen() { return !$("chatdock").classList.contains("collapsed"); }
+function openDock() { $("chatdock").classList.remove("collapsed"); }
+function shutDock() {
+  $("chatdock").classList.add("collapsed");
+  $("chatmenu").classList.add("hidden");
+}
+
+// The + on the tab strip: who is there to talk to. Friends, because a
+// private message to a stranger is the first thing a lobby gets abused for.
+function drawChatMenu() {
+  const menu = $("chatmenu");
+  menu.textContent = "";
+  const friends = ((state.friends && state.friends.friends) || [])
+    .filter((f) => !dmTabs.some((d) => d.player_id === f.player_id));
+  if (!friends.length) {
+    menu.appendChild(el("p", "muted small pad", t("chat.nobody")));
+    return;
   }
-  $(which === "room" ? "roomlog" : which === "party" ? "partylog" : "lobbylog")
-    .classList.remove("hidden");
-  for (const tab of document.querySelectorAll(".chattab")) {
-    tab.classList.toggle("active", tab.dataset.chat === which);
+  for (const f of friends) {
+    const row = el("button", "menurow");
+    row.appendChild(avatar(f.display_name || f.player_id, f.player_id, "sm"));
+    row.appendChild(el("span", "grow", f.display_name || f.player_id));
+    row.onclick = () => { menu.classList.add("hidden"); openConversation(f); };
+    menu.appendChild(row);
   }
-  $("chatform").classList.toggle("hidden", which === "party");
 }
 
 // ----------------------------------------------------------- diagnostics
@@ -1114,11 +1321,29 @@ function show(name) {
 document.querySelectorAll(".nav[data-screen]").forEach((nav) => {
   nav.onclick = () => show(nav.dataset.screen);
 });
-document.querySelectorAll(".chattab").forEach((tab) => {
-  tab.onclick = () => showChat(tab.dataset.chat);
+// The three fixed tabs. Conversation tabs get their handler in drawTabs,
+// where they are made.
+document.querySelectorAll("#tabstrip .chattab").forEach((tab) => {
+  tab.onclick = () => { showChat(tab.dataset.chat); openDock(); };
 });
 
-$("chatcollapse").onclick = () => $("chatpanel").classList.toggle("collapsed");
+// The dock opens by any route into it and shuts only when asked. Clicking
+// into the box is a person about to type; that is the moment to make room.
+$("chatmin").onclick = () => (dockIsOpen() ? shutDock() : openDock());
+$("chatinput").onfocus = openDock;
+$("chatadd").onclick = () => {
+  const menu = $("chatmenu");
+  if (!menu.classList.contains("hidden")) { menu.classList.add("hidden"); return; }
+  drawChatMenu();
+  menu.classList.remove("hidden");
+  openDock();
+};
+document.addEventListener("click", (e) => {
+  if (!$("chatmenu").contains(e.target) && e.target !== $("chatadd")
+    && !$("chatadd").contains(e.target)) {
+    $("chatmenu").classList.add("hidden");
+  }
+});
 
 // Moderation. Each form sends what the coordinator requires and nothing it
 // does not: a reason with every action, and a duration the moderator chose
@@ -1355,12 +1580,15 @@ $("describeform").onsubmit = (e) => {
   act(() => api("/api/rooms/describe", { description: $("describe").value }));
 };
 
+// One box, whichever tab is open. A private message goes down a different
+// road from a room line, but a person typing should not have to know that.
 $("chatform").onsubmit = (e) => {
   e.preventDefault();
   if (needName("namegate.why.chat")) return;
   const text = $("chatinput").value.trim();
   if (!text) return;
   $("chatinput").value = "";
+  if (dmOpen()) { loadConversation(text); return; }
   act(() => api("/api/chat", { channel: chatTab === "room" ? "room" : "lobby", text }));
 };
 
@@ -1405,15 +1633,6 @@ $("readterms").onclick = async () => {
 };
 $("termsclose").onclick = () => $("termsgate").classList.add("hidden");
 
-$("dmclose").onclick = () => { dmWith = null; $("dmgate").classList.add("hidden"); };
-$("dmform").onsubmit = (e) => {
-  e.preventDefault();
-  const text = $("dminput").value.trim();
-  if (!text) return;
-  $("dminput").value = "";
-  loadConversation(text);
-};
-
 $("btn-connect").onclick = () => act(() => api("/api/connect", {}));
 $("btn-disconnect").onclick = () => act(() => api("/api/disconnect", {}));
 $("btn-leave").onclick = () => act(async () => {
@@ -1426,10 +1645,23 @@ $("btn-lock").onclick = () => act(() => api("/api/rooms/status", { status: "lock
 $("btn-reopen").onclick = () => act(() => api("/api/rooms/status", { status: "open_to_new_players" }));
 $("btn-open").onclick = () => act(() => api("/api/rooms/status", { status: "open" }));
 
+// The team is not asked for any more: it is which seat the player is sitting
+// in. Slots 1-5 are Radiant and 6-10 are Dire, which is what the room screen
+// already shows, so a dropdown that could disagree with the seat was one
+// place too many for the same fact to live.
 $("btn-play").onclick = () => act(() => api("/api/play", {
   mode: Number($("mode").value),
-  team: $("team").value,
+  team: myTeam(),
 }));
+
+// myTeam reads the side out of the slot the player is sitting in. A
+// spectator, and anybody the room has not told us about yet, is Radiant -
+// the game requires a side and that is the one it defaults to.
+function myTeam() {
+  const me = ((state.room && state.room.members) || [])
+    .find((m) => m.player_id === state.player_id && !m.spectator);
+  return me && me.slot >= 5 ? "bad" : "good";
+}
 
 $("btn-diag").onclick = () => act(() => api("/api/diagnose", {}));
 

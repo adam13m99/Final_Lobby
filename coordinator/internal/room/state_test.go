@@ -275,3 +275,74 @@ func TestClosedRoomRejectsEverything(t *testing.T) {
 		t.Fatalf("err = %v, want ErrRoomClosed", err)
 	}
 }
+
+// --- changing seats ------------------------------------------------------
+
+// Which slot you sit in is which team you are on, so moving between them is
+// how a player picks a side without leaving and rejoining until the numbers
+// come out right.
+func TestAPlayerCanMoveToAFreeSlot(t *testing.T) {
+	r := newRoom(t)
+	if _, err := r.Join(room.Anyone("p2"), t0); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Move("p2", 7); err != nil {
+		t.Fatal(err)
+	}
+	if r.Slots[1] != "" {
+		t.Errorf("the old slot still holds %q", r.Slots[1])
+	}
+	if r.Slots[7] != "p2" {
+		t.Errorf("slot 7 = %q, want p2", r.Slots[7])
+	}
+}
+
+func TestMovingOntoSomebodyElseIsRefused(t *testing.T) {
+	r := newRoom(t)
+	r.Join(room.Anyone("p2"), t0)
+	r.Join(room.Anyone("p3"), t0)
+	if err := r.Move("p2", 2); !errors.Is(err, room.ErrSlotTaken) {
+		t.Fatalf("err = %v, want ErrSlotTaken", err)
+	}
+}
+
+// Slot 0 belongs to the host for the room's whole life: the client, the relay
+// and the room list all read the host out of it.
+func TestNobodyMovesIntoOrOutOfTheHostSlot(t *testing.T) {
+	r := newRoom(t)
+	r.Join(room.Anyone("p2"), t0)
+	if err := r.Move("p2", 0); !errors.Is(err, room.ErrHostSlot) {
+		t.Fatalf("moving into slot 0: err = %v, want ErrHostSlot", err)
+	}
+	if err := r.Move("host-1", 4); !errors.Is(err, room.ErrHostSlot) {
+		t.Fatalf("the host moving out: err = %v, want ErrHostSlot", err)
+	}
+}
+
+// A locked room is a match in progress. Changing team halfway through it puts
+// a player on the wrong team inside Dota, which nothing here can undo.
+func TestSeatsDoNotChangeDuringAMatch(t *testing.T) {
+	r := newRoom(t)
+	r.Join(room.Anyone("p2"), t0)
+	if err := r.SetStatus("host-1", room.StatusLocked, t0); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Move("p2", 6); !errors.Is(err, room.ErrRoomLocked) {
+		t.Fatalf("err = %v, want ErrRoomLocked", err)
+	}
+}
+
+func TestMovingOutOfRangeIsRefused(t *testing.T) {
+	r := newRoom(t)
+	r.Join(room.Anyone("p2"), t0)
+	if err := r.Move("p2", 10); !errors.Is(err, room.ErrNoSuchSlot) {
+		t.Fatalf("err = %v, want ErrNoSuchSlot", err)
+	}
+}
+
+func TestSomebodyNotInTheRoomCannotTakeASeat(t *testing.T) {
+	r := newRoom(t)
+	if err := r.Move("stranger", 5); !errors.Is(err, room.ErrNotMemberOfRoom) {
+		t.Fatalf("err = %v, want ErrNotMemberOfRoom", err)
+	}
+}

@@ -211,6 +211,18 @@ func (s *Store) Leave(roomID, playerID string, now time.Time) error {
 	return nil
 }
 
+// Move changes which playing slot a player sits in, which is how a player
+// changes team.
+func (s *Store) Move(roomID, playerID string, slot int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r, ok := s.rooms[roomID]
+	if !ok {
+		return ErrNotFound
+	}
+	return r.Move(playerID, slot)
+}
+
 // Kick removes a player and bars them, host only.
 func (s *Store) Kick(roomID, actorID, targetID string, now time.Time) error {
 	s.mu.Lock()

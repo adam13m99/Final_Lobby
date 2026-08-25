@@ -392,6 +392,32 @@ ranges, and different rules: an observer may not enter a locked room, an admin
 may. `POST /v1/rooms/{id}/spectate` seats an **observer**; the admin seat is
 reached separately and arrives with T8.
 
+## The interface, as of 2026-08-25
+
+The redesign asked for on 2026-08-24 is finished. What changed, and where to
+look when it needs changing again:
+
+- **The chat is a dock along the bottom** (D56), minimised to its tab strip
+  until somebody types in it or a message arrives — at which point it opens
+  itself and plays a tone. Every private conversation is a tab with a × on
+  it. `renderChatDock` in `lobbyapp/ui/app.js` is the whole engine; the
+  `.chatdock` block in `app.css` is the whole appearance.
+- **The friends list owns the entire right rail**, which is what the chat
+  leaving it made room for.
+- **Clicking an empty seat moves you into it** (D57), which is how a player
+  picks a side. `Room.Move` in the coordinator, `POST /v1/rooms/{id}/slot`,
+  `POST /api/rooms/slot` in the app. The team dropdown is gone.
+- **The room's action bar is pinned to the bottom** of the screen and split:
+  Connect / Disconnect / Launch for everybody, the host's game mode and lock
+  controls in their own row.
+- **Room rows are a grid of fixed columns**, so players, MMR and ping line up
+  down the list whatever their values.
+- The toolbar down the inline edge is a third larger than it was.
+
+`bash scripts/preview.sh <name>` photographs all of it; `SHOTS` may be set to
+a JSON array of `[name, script]` pairs to photograph something else, and
+`WIDE`/`TALL` change the window size.
+
 ## Open questions
 
 1. **Can a new player take over an abandoned slot in a running Dota LAN match?**

@@ -43,6 +43,11 @@ echo "app: $APP_URL"
 CH_PID=$!
 sleep 3
 
-export SHOTS='[["lobby",""],["room","show(\"room\")"],["mod","show(\"mod\")"],["checks","show(\"checks\")"],["profile","$(\"mebtn\").click()"]]'
+# The caller may name their own screens; SHOTS is a JSON array of
+# [name, script] pairs, the script run in the page before the shutter.
+export SHOTS="${SHOTS:-$(cat <<'JSON'
+[["lobby",""],["room","show(\"room\")"],["mod","show(\"mod\")"],["checks","show(\"checks\")"],["profile","$(\"mebtn\").click()"]]
+JSON
+)}"
 node "$SP/preview-shots.js" "$APP_URL" "$(cygpath -w "$OUT")" "$CDP"
 echo "wrote $OUT"

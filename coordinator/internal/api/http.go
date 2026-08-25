@@ -234,6 +234,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /v1/rooms/{id}/join", s.signedIn(s.limitJoin, s.joinRoom))
 	mux.HandleFunc("POST /v1/rooms/{id}/leave", s.signedIn(s.limitManage, s.leaveRoom))
 	mux.HandleFunc("POST /v1/rooms/{id}/kick", s.signedIn(s.limitManage, s.kickPlayer))
+	mux.HandleFunc("POST /v1/rooms/{id}/slot", s.signedIn(s.limitManage, s.moveSlot))
 	mux.HandleFunc("POST /v1/rooms/{id}/status", s.signedIn(s.limitManage, s.setStatus))
 	mux.HandleFunc("POST /v1/rooms/{id}/privacy", s.signedIn(s.limitManage, s.setPrivacy))
 	mux.HandleFunc("POST /v1/rooms/{id}/description", s.signedIn(s.limitManage, s.setDescription))
@@ -670,6 +671,37 @@ func (s *Server) kickPlayer(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+// moveSlot is a player picking their side by picking their seat. Slots 0-4
+// are Radiant, 5-9 are Dire, and the room screen draws them that way, so
+// clicking an empty seat is the whole gesture.
+func (s *Server) moveSlot(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		PlayerID string `json:"player_id"`
+		Slot     *int   `json:"slot"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	// The session decides who this is; the body only suggests it.
+	body.PlayerID = s.actor(r, body.PlayerID)
+	if body.Slot == nil {
+		writeErr(w, http.StatusBadRequest, "slot is required")
+		return
+	}
+	id := r.PathValue("id")
+	if err := s.rooms.Move(id, body.PlayerID, *body.Slot); err != nil {
+		writeErr(w, statusFor(err), err.Error())
+		return
+	}
+	// A player's virtual IP is derived from their slot, so the ticket they are
+	// holding now names an address that is no longer theirs - and the relay's
+	// anti-spoof check would drop everything they sent. Revoking here forces
+	// the client to ask for a ticket that matches where they now sit.
+	s.tickets.RevokePlayerRoom(body.PlayerID, id)
+	s.log.Info("player changed slot", "room", id, "player", body.PlayerID, "slot", *body.Slot)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "slot": *body.Slot})
+}
+
 func (s *Server) setStatus(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		PlayerID string `json:"player_id"`
@@ -743,13 +775,15 @@ func statusFor(err error) int {
 	case errors.Is(err, room.ErrNotFound),
 		errors.Is(err, room.ErrNotMember):
 		return http.StatusNotFound
-	case errors.Is(err, room.ErrNotHost):
+	case errors.Is(err, room.ErrNotHost),
+		errors.Is(err, room.ErrHostSlot):
 		return http.StatusForbidden
 	case errors.Is(err, room.ErrRoomLocked),
 		errors.Is(err, room.ErrKickBlocked),
 		errors.Is(err, room.ErrRoomClosed):
 		return http.StatusForbidden
-	case errors.Is(err, room.ErrRoomFull):
+	case errors.Is(err, room.ErrRoomFull),
+		errors.Is(err, room.ErrSlotTaken):
 		return http.StatusConflict
 	case errors.Is(err, room.ErrAlreadyJoined):
 		return http.StatusConflict

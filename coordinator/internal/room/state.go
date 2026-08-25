@@ -82,6 +82,9 @@ var (
 	ErrAlreadyJoined  = errors.New("room: already in this room")
 	ErrNoObserverSeat = errors.New("room: no free observer seat")
 	ErrNoAdminSeat    = errors.New("room: no free admin seat")
+	ErrSlotTaken      = errors.New("room: that slot is taken")
+	ErrNoSuchSlot     = errors.New("room: there is no such slot")
+	ErrHostSlot       = errors.New("room: the host sits in the first slot")
 	// ErrNotMemberOfRoom is returned when somebody is asked to take a role in
 	// a room they are not playing in.
 	ErrNotMemberOfRoom = errors.New("room: they are not playing in that room")
@@ -309,6 +312,46 @@ func (r *Room) SlotOf(playerID string) (int, SeatKind, bool) {
 		}
 	}
 	return 0, SeatPlayer, false
+}
+
+// Move puts a seated player in a different playing slot.
+//
+// Which slot you are in is which team you are on: 0-4 are Radiant and 5-9 are
+// Dire, exactly as the game divides them. Picking a side is therefore picking
+// a slot, and it is the one thing every player in a room wants to do that
+// previously required leaving and rejoining until the numbers came out right.
+//
+// The rules are the boring ones. A locked room is a match in progress, and a
+// player who changes team halfway through it is a player on the wrong team in
+// Dota. Slot 0 belongs to the host for the room's whole life, so nobody moves
+// into it and the host does not move out - the client, the relay and the room
+// list all read the host out of slot 0.
+func (r *Room) Move(playerID string, slot int) error {
+	if r.Status == StatusClosed {
+		return ErrRoomClosed
+	}
+	if r.Status == StatusLocked {
+		return ErrRoomLocked
+	}
+	if slot < 0 || slot >= len(r.Slots) {
+		return ErrNoSuchSlot
+	}
+	if slot == 0 || playerID == r.HostID {
+		return ErrHostSlot
+	}
+	from, kind, seated := r.SlotOf(playerID)
+	if !seated || kind != SeatPlayer {
+		return ErrNotMemberOfRoom
+	}
+	if from == slot {
+		return nil
+	}
+	if r.Slots[slot] != "" {
+		return ErrSlotTaken
+	}
+	r.Slots[from] = ""
+	r.Slots[slot] = playerID
+	return nil
 }
 
 // Leave vacates a player's seat, whichever kind it is. If the host leaves,

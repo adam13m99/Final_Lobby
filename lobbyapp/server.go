@@ -110,6 +110,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /api/rooms/leave", s.guard(s.leaveRoom))
 	mux.HandleFunc("POST /api/rooms/status", s.guard(s.setStatus))
 	mux.HandleFunc("POST /api/rooms/kick", s.guard(s.kick))
+	mux.HandleFunc("POST /api/rooms/slot", s.guard(s.takeSlot))
 	mux.HandleFunc("POST /api/connect", s.guard(s.connect))
 	mux.HandleFunc("POST /api/disconnect", s.guard(s.disconnect))
 	mux.HandleFunc("POST /api/play", s.guard(s.play))
@@ -647,6 +648,57 @@ func (s *server) kick(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ok(w)
+}
+
+// takeSlot is a player clicking an empty seat to change team.
+//
+// The address a player is given comes from the slot they sit in, so the
+// coordinator throws away their ticket when they move. Reconnecting is
+// therefore part of the move rather than something the player is left to
+// work out, and only for a player who was already connected: somebody
+// picking a side before anybody has pressed Connect should not have a tunnel
+// brought up under them.
+func (s *server) takeSlot(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Slot int `json:"slot"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	cfg := s.snapshot()
+	if cfg.RoomID == "" {
+		fail(w, "Join a room first.")
+		return
+	}
+	if err := s.api().MoveSlot(cfg.RoomID, cfg.PlayerID, body.Slot); err != nil {
+		fail(w, err.Error())
+		return
+	}
+	if tunnelUp(r.Context()) {
+		ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
+		defer cancel()
+		if err := s.bringUpTunnel(ctx); err != nil {
+			s.mu.Lock()
+			s.connectErr = err.Error()
+			s.mu.Unlock()
+			fail(w, err.Error())
+			return
+		}
+		s.mu.Lock()
+		s.connectErr = ""
+		s.mu.Unlock()
+	}
+	ok(w)
+}
+
+// tunnelUp asks the service whether this PC is on a room network right now.
+// A service that will not answer counts as down: the worst outcome is a
+// player having to press Connect themselves.
+func tunnelUp(parent context.Context) bool {
+	ctx, cancel := context.WithTimeout(parent, 3*time.Second)
+	defer cancel()
+	resp, err := ipc.Call(ctx, ipc.Request{Op: ipc.OpStatus})
+	return err == nil && resp.Connected
 }
 
 // --- network ------------------------------------------------------------

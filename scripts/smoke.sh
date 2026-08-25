@@ -264,6 +264,19 @@ if [ -n "$CHROME" ]; then
     *hidden*) ok "an ordinary player is not offered the moderation tools" ;;
     *)        bad "an ordinary player is offered the moderation tools" ;;
   esac
+
+  # The chat is docked along the bottom and always present, minimised to its
+  # tab strip until somebody uses it or a message arrives (D56). It was a
+  # panel in the rail before, which is why the rail had no room for friends.
+  DOM=$(cat "$WORK/player.html" 2>/dev/null)
+  DOCK=$(grep -o '<section[^>]*id="chatdock"[^>]*>' "$WORK/player.html" 2>/dev/null | head -1)
+  case "$DOCK" in
+    *collapsed*) ok "the chat is docked, and starts minimised" ;;
+    *)           bad "the chat dock is missing or starts open: $DOCK" ;;
+  esac
+  expect "with a tab for the lobby"   'data-chat="lobby"' "$DOM"
+  expect "and one for the room"       'data-chat="room"'  "$DOM"
+  expect "and a way to start another" 'id="chatadd"'      "$DOM"
 fi
 
 say ""
@@ -367,6 +380,43 @@ expect "and can leave again"                      '"ok":true'    "$LEFT"
 
 BACK=$(call POST /api/rooms/privacy '{"privacy":"public"}')
 expect "and open the door again"                  '"privacy":"public"' "$BACK"
+
+say ""
+say "=== picking a side ==="
+# Which slot you sit in is which team you are on: 0-4 are Radiant, 5-9 Dire.
+# Clicking an empty seat is therefore how a player picks a side, and it
+# replaced a dropdown that could disagree with the seat.
+REJOIN=$(callb POST /api/rooms/join "{\"room_id\":\"$ROOM_ID\"}")
+expect "the second player is back in the room"    '"ok":true'    "$REJOIN"
+
+MOVED=$(callb POST /api/rooms/slot '{"slot":7}')
+expect "a player can move to a free seat"         '"ok":true'    "$MOVED"
+
+SEATED=$(call GET "/api/state")
+expect "and the room says they are sitting there" "\"slot\":7" "$SEATED"
+
+HOSTSEAT=$(callb POST /api/rooms/slot '{"slot":0}')
+refuse "nobody may take the host's seat"          '"ok":true'    "$HOSTSEAT"
+
+HOSTMOVE=$(call POST /api/rooms/slot '{"slot":4}')
+refuse "and the host may not leave it"            '"ok":true'    "$HOSTMOVE"
+
+OFFEND=$(callb POST /api/rooms/slot '{"slot":10}')
+refuse "there is no eleventh seat"                '"ok":true'    "$OFFEND"
+
+# A locked room is a match already running. Changing team halfway through it
+# puts a player on the wrong team inside Dota, which nothing here can undo.
+LOCK=$(call POST /api/rooms/status '{"status":"locked_in_game"}')
+expect "the host can start the match"             '"ok":true'    "$LOCK"
+
+MIDGAME=$(callb POST /api/rooms/slot '{"slot":3}')
+refuse "seats do not move during a match"         '"ok":true'    "$MIDGAME"
+
+UNLOCK=$(call POST /api/rooms/status '{"status":"open"}')
+expect "and the host can open it again"           '"ok":true'    "$UNLOCK"
+
+GONE=$(callb POST /api/rooms/leave '{}')
+expect "the second player leaves again"           '"ok":true'    "$GONE"
 
 # Left until here because signing out forgets which room this installation
 # was in, and the door checks above need it to still know.

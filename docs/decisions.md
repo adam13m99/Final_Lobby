@@ -1047,3 +1047,92 @@ running without a window is a held port and an unwatched tunnel.
 binary and cannot reach the string catalogue the real interface uses (D44), so
 rather than hard-code one language's sentence where the lookup cannot see it,
 it shows the mark and nothing else.
+
+## D56 — The chat is a dock along the bottom, and every conversation is a tab
+
+Asked for on 2026-08-25, with Dota 2's own main menu as the reference.
+
+The chat used to be a panel sharing the right rail with the friends list. It
+had three problems at once, and they were the same problem seen three ways.
+
+**The rail could not hold both.** Friends took a share of the height and the
+chat took the rest, so a short friends list left a hole and a long one left a
+chat four lines tall. Neither half was ever the right size.
+
+**A private message opened a dialog over the lobby.** Talking to somebody is
+not a thing you stop doing other things to do. Answering a friend meant
+covering the room list, and closing the dialog meant losing the conversation.
+
+**Nothing announced itself.** A message that arrives in a panel nobody is
+looking at has not been delivered.
+
+**What it is now.** A bar across the bottom of the window, always present,
+minimised to its tab strip until it is used. Lobby, Room and Party are fixed
+tabs; every private conversation opens another, the way a browser opens a tab,
+with a × on it. One input box serves whichever tab is open, and it wears a
+label naming the person when — and only when — the words are going to one
+person rather than to a room.
+
+**It opens itself, and it makes a sound.** Anything arriving in a tab the
+reader is not looking at lights that tab, opens the dock and plays a short
+tone. Three details matter and each is a bug avoided:
+
+- **The first sighting of a tab is never announced.** That is the backlog that
+  was already there when the window opened, and announcing it would make every
+  start-up ring.
+- **A conversation is counted, not signed.** Reading a conversation sets its
+  unread count back to zero, so "different from last time" would ring on the
+  way down as well as on the way up. Only a count that grew is a message that
+  arrived.
+- **The audio device is created from a real click or keystroke, never before.**
+  A browser asked to make noise before anybody has touched the page refuses and
+  says so in the console — and `smoke.sh` fails on a console that says
+  anything (D44).
+
+**A friend with unread messages gets a tab whether or not anybody opened one.**
+Somebody writing to you is the thing most worth interrupting for.
+
+**Party is present and does nothing, on purpose.** Parties are not built. A tab
+that says so is better than a chat whose tabs move once they are.
+
+**The friends list now owns the whole rail**, which is what the request asked
+for and what the rail was always the wrong shape for.
+
+## D57 — Your seat is your team
+
+Also 2026-08-25: *"a player can switch slot in a room by clicking the slot."*
+
+Slots 0-4 are Radiant and 5-9 are Dire — that is how the game divides them,
+and how the room screen has drawn them since D42. Picking a side was
+nonetheless a dropdown in the action bar, filled in separately from the seat,
+and the two could disagree. Changing which five you were joining meant leaving
+the room and rejoining until the numbers came out right.
+
+Clicking an empty seat now moves you into it, and **the dropdown is gone**. One
+fact, one place.
+
+**The refusals are the same on both sides of the wire**, so a card only invites
+a click when the click would work:
+
+- **Slot 0 belongs to the host for the room's whole life.** Nobody moves into
+  it and the host does not move out — the client, the relay and the room list
+  all read the host out of slot 0.
+- **A locked room is a match already running.** A player who changes team
+  halfway through is a player on the wrong team inside Dota, and nothing here
+  can undo that.
+- **A taken seat is taken.** No swapping, no bumping.
+
+**Moving throws your ticket away.** A player's virtual IP is derived from their
+slot, so after a move the ticket they are holding names an address that is no
+longer theirs — and the relay's anti-spoof check would drop everything they
+sent. The coordinator revokes on a successful move and the app reconnects as
+part of the same action, but only for a player who was already connected:
+somebody picking a side before anybody has pressed Connect should not have a
+tunnel brought up under them.
+
+**The game mode moved to the host's row.** It is a property of the match the
+host's own copy of Dota creates; a client sending one changed nothing and
+suggested it might. The action bar is now Connect / Disconnect / Launch for
+everybody, the host's controls in their own row beneath, and Leave last — and
+it stays pinned to the bottom of the room screen, because with the chat dock
+open it otherwise sat below ten seats where nobody saw it.
