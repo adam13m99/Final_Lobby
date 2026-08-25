@@ -51,7 +51,7 @@
   --dire:    #c0483c;
 
   --rail: 330px;
-  --bar: 92px;
+  --bar: 124px;
 
   --r-sm: 7px;
   --r-md: 11px;
@@ -135,21 +135,21 @@ h4 {
 }
 
 .brand {
-  font-weight: 800; letter-spacing: .14em; font-size: .64rem;
-  color: var(--accent); text-align: center; padding: .5rem 0 1rem;
+  font-weight: 800; letter-spacing: .14em; font-size: .82rem;
+  color: var(--accent); text-align: center; padding: .6rem 0 1.1rem;
 }
 
 .nav {
   position: relative;
   background: none; border: 0; color: var(--dim);
-  display: flex; flex-direction: column; align-items: center; gap: .25rem;
-  padding: .6rem .2rem; border-radius: var(--r-md);
-  font: inherit; font-size: .69rem; font-weight: 650; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: .35rem;
+  padding: .85rem .25rem; border-radius: var(--r-md);
+  font: inherit; font-size: .93rem; font-weight: 650; cursor: pointer;
   transition: color .14s ease, background .14s ease;
 }
 .nav .ico {
-  font-size: 1.1rem; line-height: 1;
-  display: grid; place-items: center; width: 1.5rem; height: 1.5rem;
+  font-size: 1.5rem; line-height: 1;
+  display: grid; place-items: center; width: 2rem; height: 2rem;
 }
 .nav:hover:not(:disabled) { color: var(--text); background: rgba(255,255,255,.04); }
 .nav.active { color: var(--text); background: var(--panel3); box-shadow: var(--lift-sm); }
@@ -164,7 +164,7 @@ h4 {
 
 /* The connection light. Its colour is the whole point, so it is the one
    thing in the toolbar that is never grey. */
-.nav.conn { cursor: default; font-size: .66rem; }
+.nav.conn { cursor: default; font-size: .8rem; }
 .dot {
   width: .55rem; height: .55rem; border-radius: 50%; background: var(--dim);
   transition: background .2s ease, box-shadow .2s ease;
@@ -178,13 +178,13 @@ h4 {
 
 #top {
   grid-area: head;
-  display: flex; align-items: center; gap: .7rem;
+  display: flex; align-items: center; gap: .8rem;
   padding: 0 1.1rem;
   background: linear-gradient(180deg, #141822 0%, #11151d 100%);
   border-block-end: 1px solid var(--line);
 }
 
-.searchbox { flex: 0 1 280px; position: relative; }
+.searchbox { flex: 0 1 300px; position: relative; }
 .searchbox input {
   width: 100%; border-radius: 99px; padding-block: .45rem;
   padding-inline: 2.1rem .9rem;
@@ -207,18 +207,28 @@ h4 {
   pointer-events: none;
 }
 
-.filters { display: flex; gap: .3rem; flex: 1; flex-wrap: wrap; }
+/* One segmented control rather than four loose pills. The filters are a
+   single choice, and four separate outlines make them look like four
+   separate switches. */
+.filters {
+  display: flex; gap: 2px; flex: 0 0 auto;
+  background: #0d1017; border: 1px solid var(--line);
+  border-radius: 99px; padding: 3px;
+}
 .chip {
-  background: none; border: 1px solid var(--line); color: var(--muted);
-  padding: .28rem .75rem; border-radius: 99px;
-  font: inherit; font-size: .77rem; font-weight: 620; cursor: pointer;
-  transition: color .14s ease, background .14s ease, border-color .14s ease;
+  background: none; border: 0; color: var(--muted);
+  padding: .32rem .85rem; border-radius: 99px;
+  font: inherit; font-size: .78rem; font-weight: 620; cursor: pointer;
+  white-space: nowrap;
+  transition: color .14s ease, background .14s ease;
 }
-.chip:hover { color: var(--text); border-color: var(--line2); }
+.chip:hover { color: var(--text); background: rgba(255,255,255,.05); }
 .chip.active {
-  color: #fff; background: var(--accent); border-color: var(--accent);
-  box-shadow: 0 2px 8px rgba(240,77,42,.28);
+  color: #fff;
+  background: linear-gradient(180deg, var(--accent2) 0%, var(--accent) 100%);
+  box-shadow: 0 2px 8px rgba(240,77,42,.3);
 }
+.head-gap { flex: 1; }
 
 .status { display: flex; align-items: center; gap: .45rem; }
 
@@ -320,10 +330,24 @@ h4 {
 
 /* One grid shared by the header row and every room, so the columns line up
    without either knowing the other's widths. */
+/* Every column is a fixed width, including the one holding the button. The
+   old last column was `auto`, so a row with two buttons pushed its numbers
+   one way and a row with one pushed them the other, and no two rows lined
+   up. Nothing here sizes to its content. */
 .roomhead, .room {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 6.5rem 6.5rem 6.5rem auto;
+  grid-template-columns: minmax(0, 1fr) 7.5rem 7.5rem 7.5rem 9.5rem;
   gap: .9rem; align-items: center;
+}
+.roomhead > span + span, .room > .stat { text-align: center; }
+
+/* One box per fact, all the same size, so the eye can run down a column
+   without re-finding where the numbers are on every row. */
+.stat {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: .15rem; height: 3.2rem;
+  border: 1px solid var(--line); border-radius: var(--r-md);
+  background: rgba(255,255,255,.022);
 }
 .roomhead {
   padding: .55rem 1.15rem .55rem 1.15rem; font-size: .67rem; font-weight: 720;
@@ -390,8 +414,8 @@ h4 {
 .pip.on { background: var(--accent); box-shadow: none; }
 .pip.you { background: var(--good); box-shadow: none; }
 .room-count {
-  font-variant-numeric: tabular-nums; font-weight: 680; font-size: .82rem;
-  margin-block-start: .2rem; color: var(--muted);
+  font-variant-numeric: tabular-nums; font-weight: 680; font-size: .78rem;
+  color: var(--muted);
 }
 .room-count b { color: var(--text); font-weight: 700; }
 
@@ -401,6 +425,7 @@ h4 {
   font-variant-numeric: tabular-nums; cursor: help;
   display: flex; align-items: center; gap: .45rem;
 }
+.stat[title] { cursor: help; }
 .room-ping .n { font-weight: 660; font-size: .86rem; }
 .room-ping.good .n { color: var(--good); }
 .room-ping.fair .n { color: var(--warn); }
@@ -444,7 +469,8 @@ h4 {
 .badge.locked { background: var(--bad-soft); color: #f0a08f; border-color: #4a221d; }
 .badge.replace { background: var(--warn-soft); color: #ecc96a; border-color: #45360f; }
 
-.room-actions { display: flex; gap: .4rem; justify-content: flex-end; }
+.room-actions { display: flex; gap: .4rem; }
+.room-actions button { flex: 1; }
 
 /* ---------------------------------------------------------------- slots */
 

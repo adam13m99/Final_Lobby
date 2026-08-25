@@ -325,8 +325,10 @@ function renderRooms(rooms) {
 function pingCell(r) {
   const ms = r.host_relay_ms || 0;
   const grade = !ms ? "unknown" : ms < 60 ? "good" : ms < 140 ? "fair" : "poor";
+  const outer = el("div", "stat");
   const cell = el("div", "room-ping " + grade);
-  cell.title = ms ? t("lobby.ping.explain") : t("lobby.ping.none");
+  outer.appendChild(cell);
+  outer.title = ms ? t("lobby.ping.explain") : t("lobby.ping.none");
 
   // Three rising bars, the shape every network indicator uses, with the
   // number beside them. The bars are read at a glance and the number is read
@@ -337,7 +339,7 @@ function pingCell(r) {
   cell.appendChild(bars);
   cell.appendChild(el("span", "n",
     ms ? t("lobby.ping.value", { n: ms }) : t("lobby.ping.unknown")));
-  return cell;
+  return outer;
 }
 
 // seatCell draws the ten playing slots as ten marks.
@@ -347,7 +349,7 @@ function pingCell(r) {
 // makes them read and subtract. The number stays underneath for the times
 // they want to be exact.
 function seatCell(r) {
-  const cell = el("div");
+  const cell = el("div", "stat");
   const taken = r.seats || 0;
   const mine = r.id === state.room_id;
   const pips = el("div", "pips");
@@ -410,16 +412,18 @@ function roomCard(r) {
 // the label tells them whether it is a floor they must clear or an average
 // they are being compared against.
 function mmrCell(r) {
-  const cell = el("div", "mmr" + (r.min_mmr ? " floor" : ""));
+  const cell = el("div", "stat");
+  const box = el("div", "mmr" + (r.min_mmr ? " floor" : ""));
   if (r.min_mmr) {
-    cell.appendChild(el("span", "v", String(r.min_mmr)));
-    cell.appendChild(el("span", "k", t("lobby.mmr.min")));
+    box.appendChild(el("span", "v", String(r.min_mmr)));
+    box.appendChild(el("span", "k", t("lobby.mmr.min")));
   } else if (r.avg_mmr) {
-    cell.appendChild(el("span", "v", String(r.avg_mmr)));
-    cell.appendChild(el("span", "k", t("lobby.mmr.avg")));
+    box.appendChild(el("span", "v", String(r.avg_mmr)));
+    box.appendChild(el("span", "k", t("lobby.mmr.avg")));
   } else {
-    cell.appendChild(el("span", "k", t("lobby.mmr.any")));
+    box.appendChild(el("span", "k", t("lobby.mmr.any")));
   }
+  cell.appendChild(box);
   return cell;
 }
 
@@ -439,14 +443,9 @@ function roomActions(r) {
   join.onclick = () => joinRoom(r);
   acts.appendChild(join);
 
-  const spec = el("button", "ghost tiny", t("room.spectate"));
-  spec.disabled = !!state.room_id;
-  spec.title = t("room.spectate.note");
-  spec.onclick = () => {
-    if (needName("namegate.why.join")) return;
-    act(() => api("/api/rooms/spectate", { room_id: r.id }));
-  };
-  acts.appendChild(spec);
+  // No spectate button here. Watching is an admin's seat and an observer's
+  // deliberate choice, not something to offer beside Join on every row - it
+  // was one more thing to read on a line that has to be read at a glance.
   return acts;
 }
 
