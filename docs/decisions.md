@@ -1281,3 +1281,52 @@ them:
 room screen's scarcest inches telling somebody what they had just read. It is
 kept for one case the three steps cannot express: the reason a connection was
 refused.
+
+---
+
+## D60 — Accounts switched on in production
+
+**2026-08-26 (T21).** The owner asked for the new build on the live server so
+they could test it, and chose to turn accounts on at the same time.
+
+`coordinator.service` now carries `-db /var/lib/finallobby/db/lobby.db` and
+`-terms-file /etc/finallobby/terms-en.md`. Everything that needed a database
+started working at once: sign-up and sign-in, sessions, Argon2id passwords,
+durable MMR with its once-a-week rule, the friend graph, private messages,
+room invitations, last-seen times, roles and the whole moderation record.
+Without it the server had been what it was during the two-PC test — type a
+name and play — and most of T19 and T20 would have been invisible.
+
+**Why now rather than later.** T11 shipped a client that can sign in, which is
+what had been blocking it: turning accounts on before that would have locked
+both test PCs out of their own lobby. The cost of the flip is that everybody
+must create an account and there is no password recovery (D37), and that cost
+grows with every person who installs the app. Today it is two test PCs.
+
+**The database lives at `/var/lib/finallobby/db/`, not beside the installer.**
+The unit has `ProtectSystem=strict` and `ReadOnlyPaths=/var/lib/finallobby`,
+so the published installer cannot be written by the service that serves it.
+The database needs the opposite, and SQLite needs the *directory* writable
+rather than the file — the write-ahead log and the shared-memory index are
+created beside it. `ReadWritePaths=/var/lib/finallobby/db` wins on the
+subpath, so the installer directory stays read-only and the database does
+not.
+
+**The relay was redeployed too.** It had been running the 23 August build,
+which predates the keepalive echo that makes latency measurable (D54). The
+per-player ping the owner asked for would have shown nothing without it.
+`/etc/finallobby/relay.key` was **not** regenerated — the deploy script only
+generates when the file is absent, and the public key on the server is still
+`1e0779…`, which is what shipped clients carry.
+
+**There is no head admin yet.** `-head-admin` takes an account id, and no
+account existed when the flag would have been set. It is one restart once the
+owner has signed up, and until then nobody can appoint a moderator — which is
+correct: an unattended server that grants itself staff is worse than one with
+none.
+
+**A `deploycheck` account and one room were created over the real internet**
+to prove the path end to end: sign-up against the live terms, a room hosted,
+and a ping reported on the heartbeat coming back on the right seat. The room
+closes on the host grace. The account is harmless and can be sanctioned or
+ignored.

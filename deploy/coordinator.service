@@ -11,15 +11,19 @@ User=finallobby
 Group=finallobby
 
 # Bound to all interfaces so both test PCs can reach it, and gated by a
-# shared bearer token because there are no accounts yet. When the desktop
-# client ships this moves behind TLS and real authentication.
+# shared bearer token in front of the player API. Accounts are switched
+# on (D60): -db gives it usernames, Argon2id passwords, sessions, durable
+# MMR, the friend graph, moderation and last-seen times, and makes the
+# session rather than the request body decide who a call is from (D53).
 ExecStart=/opt/finallobby/coordinator \
     -listen 0.0.0.0:7001 \
     -relay-addr 87.107.110.199:443 \
     -relay-pub /etc/finallobby/relay.pub \
     -auth-token-file /etc/finallobby/api.token \
     -dist-dir /var/lib/finallobby/dist \
-    -download-key-file /etc/finallobby/download.key
+    -download-key-file /etc/finallobby/download.key \
+    -db /var/lib/finallobby/db/lobby.db \
+    -terms-file /etc/finallobby/terms-en.md
 
 Restart=always
 RestartSec=2s
@@ -40,6 +44,12 @@ ReadOnlyPaths=/etc/finallobby
 # read-only, and the coordinator only ever reads it - scripts/publish.sh is
 # what writes, over SSH as root.
 ReadOnlyPaths=/var/lib/finallobby
+# The one thing it writes. SQLite needs the *directory* writable, not just
+# the file: the write-ahead log and the shared-memory index are created
+# beside it. Listed after ReadOnlyPaths on purpose - ReadWritePaths wins on
+# a subpath, which is how the installer directory stays read-only while the
+# database does not.
+ReadWritePaths=/var/lib/finallobby/db
 
 LimitNOFILE=65535
 

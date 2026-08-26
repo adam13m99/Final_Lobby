@@ -213,7 +213,7 @@ there; this is the summary.
 | T2 rooms move to a /27, 18 seats (D38) | **done** |
 | T3 room lifecycle: 1-minute host grace (D40) | **done** |
 | T4 kick escalation 1/3/5/7 min (D39) | **done** — live block in memory, durable record in `kick_events` (D52) |
-| T5 accounts (D37) | **done** — server and client library; **not switched on yet, see below** |
+| T5 accounts (D37) | **done** — and **switched on in production 2026-08-26** (D60) |
 | T6 room privacy (D41) | **done** — all four doors, plus an MMR floor |
 | T7 friends (D41) | **done** — graph, blocks, private chat, invites, presence |
 | T8 roles and moderation (D43, D47) | **done** — roles, sanctions, labels, banners, audit log |
@@ -229,6 +229,7 @@ there; this is the summary.
 | T18 a live window that updates itself | **done** — `scripts/live.sh`, one address, kept for days |
 | T19 the owner's design, adopted (D58) | **done** — looked at, at 1440 and at 1366 |
 | T20 the owner's answers, and the last unwired routes (D59) | **done** — ping, last seen, watching seats, invitations |
+| T21 deployed to production with accounts on (D60) | **done** — build 2026.08.26-0846, verified over the real internet |
 
 **The interface was redesigned on 2026-08-25** at the owner's request: the
 old one was flat, grey and mostly empty space. What changed, beyond colour
@@ -324,9 +325,11 @@ before any of that** — `POST /v1/sync` no longer needs a session, and without
 one answers with the room list, the lobby chat and the online count and
 nothing belonging to a person.
 
-**The `-db` flip is now unblocked.** The app can sign in, so turning accounts
-on no longer locks the test PCs out. It is still the owner's call and still one
-flag in `coordinator.service`; what changed is that it is now safe to do.
+**The `-db` flip happened on 2026-08-26** (D60). It had been blocked until
+T11 shipped a client that could sign in; the owner made the call the day the
+first full build went up, which is the cheapest moment it will ever be — the
+cost is that everybody must create an account and a forgotten password cannot
+be recovered (D37), and that cost grows with every install.
 
 **The lobby is a place now (D42).** A permanent toolbar down one side —
 Lobby, Room, Tournaments, Diagnostics, and a connection light that is the
@@ -390,15 +393,14 @@ records — a client supplies only the password it was told to type. Staff walk
 past the door; nobody walks past a kick block. Friends-only rooms refuse
 everybody but the host until T7 lands the friend graph.
 
-**Accounts exist but are not switched on.** The coordinator takes a `-db`
-file; with one it has usernames, Argon2id passwords, sessions, durable MMR and
-terms acceptance, and the session — not the request body — decides who a
-request is from (D53). Without one it behaves exactly as it did during the
-two-PC test. **The server is still running without `-db`.** That was forced until T11:
-no shipped client had a sign-in screen, so turning accounts on would have
-locked both test PCs out of their own lobby. It no longer is — the app signs
-in now. Flipping it is one flag in `coordinator.service` plus `-terms-file`,
-and it is the owner's call.
+**Accounts are switched on in production** since 2026-08-26 (D60). The
+coordinator runs with `-db /var/lib/finallobby/db/lobby.db` and
+`-terms-file /etc/finallobby/terms-en.md`, so it has usernames, Argon2id
+passwords, sessions, durable MMR and terms acceptance, and the session — not
+the request body — decides who a request is from (D53). **There is no head
+admin yet:** `-head-admin` takes an account id and none existed when the
+server was deployed. Setting one is a single restart once somebody has signed
+up, and until then nobody can appoint a moderator.
 
 **A kick is now two things.** The block that bars a kicked player for one,
 three, five minutes lives in memory with the room, and ends when the room
