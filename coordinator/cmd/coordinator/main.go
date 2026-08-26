@@ -176,6 +176,7 @@ func main() {
 	defer stop()
 
 	go runTimers(ctx, rooms, tickets, board, *tickEvery, log)
+	go flushPresence(ctx, players, accounts, log)
 
 	httpSrv := &http.Server{
 		Addr:              *listen,
@@ -222,6 +223,41 @@ func runTimers(ctx context.Context, rooms *room.Store, tickets *ticket.Store, bo
 			board.Drop(id)
 		}
 		tickets.Purge(now)
+	}
+}
+
+// PresenceFlush is how often the registry's last-seen times are written to
+// the database. Coarse on purpose: nobody reads "last seen" more precisely
+// than to the minute, and writing a row per heartbeat would be hundreds of
+// writes a second at a thousand players for a number that changes meaning
+// once an hour.
+const PresenceFlush = time.Minute
+
+// flushPresence copies last-seen times out of the live registry and into the
+// accounts table, so a friends list still says "last seen 2h ago" the morning
+// after a deployment. It is a no-op on a coordinator with no database, where
+// players are names rather than logins and there is nowhere to write.
+func flushPresence(ctx context.Context, players *player.Registry, accounts *account.Store, log *slog.Logger) {
+	if accounts == nil {
+		return
+	}
+	t := time.NewTicker(PresenceFlush)
+	defer t.Stop()
+	since := time.Now()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+		seen := map[string]time.Time{}
+		for _, p := range players.SeenSince(since) {
+			seen[p.ID] = p.LastSeen
+		}
+		since = time.Now()
+		if err := accounts.RecordSeen(seen); err != nil {
+			log.Warn("could not record presence", "err", err, "players", len(seen))
+		}
 	}
 }
 

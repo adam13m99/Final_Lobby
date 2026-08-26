@@ -26,6 +26,9 @@ type authRig struct {
 	acc *account.Store
 	soc *social.Store
 	mod *moderation.Store
+	// players is the live registry, so a test can forget somebody the way a
+	// restart would and see what the database alone can still answer.
+	players *player.Registry
 	// friends is swappable so a test can install a graph after signing
 	// people up - their IDs are not known until then.
 	friends *swappableFriends
@@ -56,12 +59,13 @@ func newAuthRig(t *testing.T) *authRig {
 	soc := social.New(db)
 	mod := moderation.New(db)
 	kicks := store.NewKicks(db)
+	players := player.NewRegistry()
 	friends := &swappableFriends{}
 	s := New(Config{
 		Friends:    friends,
 		Rooms:      room.NewStore(),
 		Tickets:    ticket.NewStore(),
-		Players:    player.NewRegistry(),
+		Players:    players,
 		Chat:       chat.NewBoard(),
 		Accounts:   acc,
 		Social:     soc,
@@ -71,7 +75,7 @@ func newAuthRig(t *testing.T) *authRig {
 		RelayPub:   "00",
 		Now:        func() time.Time { return time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC) },
 	})
-	return &authRig{t: t, srv: s.Routes(), acc: acc, soc: soc, mod: mod, friends: friends}
+	return &authRig{t: t, srv: s.Routes(), acc: acc, soc: soc, mod: mod, players: players, friends: friends}
 }
 
 func (g *authRig) do(method, path, session string, body any) (*httptest.ResponseRecorder, map[string]any) {

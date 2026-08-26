@@ -49,6 +49,16 @@ type friendView struct {
 	// RoomID is where they are, so "join my friend" is one click.
 	RoomID string `json:"room_id,omitempty"`
 	Unread int    `json:"unread,omitempty"`
+	// LastSeen is when somebody who is offline was last here, so the rail
+	// can answer the question it is actually asked - is it worth waiting for
+	// them. Absent for anybody online (the answer is "now"), and absent for
+	// anybody this server has never recorded, which a reader must show as
+	// nothing rather than as a date in 1970.
+	//
+	// A pointer, not a time.Time: `omitempty` does not suppress a zero
+	// struct, so a plain field would put 0001-01-01 on the wire for every
+	// person the server has never heard of - and the rail would print it.
+	LastSeen *time.Time `json:"last_seen,omitempty"`
 }
 
 func (s *Server) socialOn() bool { return s.social != nil }
@@ -111,12 +121,15 @@ func (s *Server) friendList(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, "could not read your block list")
 		return
 	}
+	s.withLastSeen(out.Friends, out.Incoming, out.Outgoing)
+
 	out.Blocked = make([]friendView, 0, len(blocked))
 	for _, id := range blocked {
 		v := s.friendView(id)
 		// Somebody you blocked is not somebody whose whereabouts you get to
 		// watch. The name is enough to unblock them by.
-		v.Online, v.InGame, v.RoomID = false, false, ""
+		// When they were last online is whereabouts too.
+		v.Online, v.InGame, v.RoomID, v.LastSeen = false, false, "", nil
 		out.Blocked = append(out.Blocked, v)
 	}
 
@@ -128,6 +141,49 @@ func (s *Server) friendList(w http.ResponseWriter, r *http.Request) {
 }
 
 // friendView fills in everything the rail draws about one person.
+// withLastSeen fills in when each of these people was last here.
+//
+// One query for the whole rail rather than one per name: this is redrawn by
+// every signed-in client every couple of seconds. Anybody online is skipped -
+// their answer is "now", and it is already on the row.
+func (s *Server) withLastSeen(groups ...[]friendView) {
+	if !s.accountsOn() {
+		return
+	}
+	ids := []string{}
+	for _, g := range groups {
+		for _, v := range g {
+			if !v.Online {
+				ids = append(ids, v.PlayerID)
+			}
+		}
+	}
+	if len(ids) == 0 {
+		return
+	}
+	seen, err := s.accounts.LastSeenMany(ids)
+	if err != nil {
+		// Not worth failing the whole rail over. A missing timestamp shows
+		// as "offline" with nothing after it, which is what it was before.
+		return
+	}
+	for _, g := range groups {
+		for i := range g {
+			// The registry's own value wins when it has one: it is
+			// updated on every heartbeat, and the stored copy is written on
+			// a timer, so the database is always the coarser of the two.
+			at, ok := seen[g[i].PlayerID]
+			if !ok || g[i].Online {
+				continue
+			}
+			if g[i].LastSeen == nil || at.After(*g[i].LastSeen) {
+				when := at
+				g[i].LastSeen = &when
+			}
+		}
+	}
+}
+
 func (s *Server) friendView(id string) friendView {
 	v := friendView{PlayerID: id, DisplayName: id}
 	if p, ok := s.players.Get(id); ok {
@@ -137,6 +193,10 @@ func (s *Server) friendView(id string) friendView {
 		// that quit without saying so would leave a friend permanently
 		// "playing".
 		v.InGame = v.Online && p.InGame
+		if !v.Online && !p.LastSeen.IsZero() {
+			at := p.LastSeen
+			v.LastSeen = &at
+		}
 	}
 	if s.accountsOn() {
 		if a, err := s.accounts.Get(id); err == nil {

@@ -190,6 +190,7 @@ func all() []string {
 	out := append([]string{}, migrations...)
 	out = append(out, socialMigrations...)
 	out = append(out, moderationMigrations...)
+	out = append(out, presenceMigrations...)
 	return out
 }
 

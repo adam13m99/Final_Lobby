@@ -1195,3 +1195,89 @@ in `docs/STATE.md` as open questions rather than silently dropped:
 word does not fit and the mock had already made the choice. Nothing behind
 it changed: the screen id, the key namespace and the honest "not yet" are
 all as they were.
+
+---
+
+## D59 — The owner's answers to the mock, and the wiring behind them
+
+**2026-08-26 (T20).** The owner reviewed the adopted design (D58) and settled
+the questions it raised. Their answers, and what each one cost:
+
+**No regions, no Steam link.** Both were the mock's inventions and neither is
+wanted. Nothing to build; open question 7's first half is closed.
+
+**Per-player ping, yes.** A player's own round trip to the relay now travels
+with their seat. Only their machine can measure it — everyone in a room
+reaches everyone else through the relay, and nobody in the lobby has a path
+to anybody they have not joined — so it is reported on the heartbeat and read
+back on `memberView.relay_ms`. It is dropped rather than shown when it is
+older than the presence window: a stale reading displayed as current is the
+number somebody will blame a bad game on. Zero means *no reading*, never
+*instant*, and the two must never render the same.
+
+**Last-seen times, yes.** The player registry has always known when somebody
+was last here, but only for as long as the process lived, so every
+deployment forgot it. `accounts.last_seen_at` is the copy that survives, and
+it is written **on a timer, not on the heartbeat**: a thousand players polling
+every two seconds would be five hundred SQLite writes a second for a number
+nobody reads more finely than to the minute. The live registry value wins when
+it has one, because the stored copy is always the coarser of the two. It is
+suppressed for anybody online (the answer is "now") and for anybody blocked —
+when somebody was last around is whereabouts, and a blocked person's
+whereabouts are not yours to watch.
+
+**Game mode stays in the room, not on the room.** The host switches it in
+Room settings and the app hands it to Dota when they launch; the coordinator
+stores nothing about it and no room advertises one. It is a local game and
+the app automates the rest. Open question 7 is closed: **no**.
+
+**There is no Watch button.** A room is *joinable or full*, and *in game or
+open* — two axes, four states, and no fifth thing to offer. Open question 8
+is closed: **no**, permanently, not "not yet".
+
+**Five watching seats, below the two teams.** Not a spectator build: five
+more seats in the room, drawn and taken exactly like a playing seat. What was
+there before was a strip of text reading "nobody is spectating" with no way
+to become one — the seats existed on the coordinator since T5 and had never
+had a door on the client. This is the same structural bug the project keeps
+finding, and the fix is the same: build the door in the commit that builds
+the room. The admins' three seats are a separate range and are not drawn;
+`Member.Seat` had to be added to the client library, or a moderator would
+have appeared in a watcher's chair — and, because the two ranges are numbered
+separately, in one that was already occupied.
+
+**The search box and the filter chips belong to the lobby alone.** They acted
+on the room list and on nothing else, and leaving them across the top of the
+room, events and settings screens put controls there that could not do
+anything. That is a question every player asks once and gets no answer to.
+
+**Four routes the page never called.** An audit of every `/api/…` the page
+asks for against every route the app serves found the invite dialog calling
+an endpoint that does not exist, and three that existed with nothing behind
+them:
+
+- **Room invitations were never drawn.** The coordinator has stored them
+  since T7 and the app has fetched them since T11; being invited to a room
+  looked exactly like not being invited to one. They are the first thing in
+  the rail now, above the friends themselves, because the room they name is
+  filling up while they are ignored.
+- **Disconnect had no button.** Getting off a room's network without leaving
+  the room is the first thing to try when Dota will not find the host, and
+  the only way to do it was to leave and come back. It is on the network
+  step now, and not offered to the host — their machine *is* the game.
+- **The audit log could only be read one way round.** The record showed what
+  was done *to* somebody; `GET /api/admin/log?actor=` answers what they have
+  *done*, which is the question a head admin reviewing an admin is actually
+  asking. Shown for staff only: a player's answer is always empty, and an
+  empty panel is a question.
+- `POST /api/rooms/invite` stays uncalled on purpose. It is the raw door
+  grant; `/api/friends/invite` is the compound gesture the interface wants —
+  tell them to come *and* let them through — and doing only the first is how
+  somebody is invited and then refused (D41). Withdrawing an invitation has
+  no interface yet and would need the coordinator to list a room's invitees.
+
+**The network banner stopped repeating the stepper.** A green line reading
+"connected" directly under a green tick reading "connected" spent two of the
+room screen's scarcest inches telling somebody what they had just read. It is
+kept for one case the three steps cannot express: the reason a connection was
+refused.

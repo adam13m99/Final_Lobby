@@ -408,6 +408,37 @@ refuse "and the host may not leave it"            '"ok":true'    "$HOSTMOVE"
 OFFEND=$(callb POST /api/rooms/slot '{"slot":10}')
 refuse "there is no eleventh seat"                '"ok":true'    "$OFFEND"
 
+# Five seats below the two teams, for people who want to watch rather than
+# play (D59). They were a strip of text with no way to become one.
+#
+# Watching and playing are two doors into the same room, so a player takes
+# their playing seat with them when they go to watch: they get up first.
+STANDUP=$(callb POST /api/rooms/leave '{}')
+expect "a player gets up from their playing seat" '"ok":true'    "$STANDUP"
+WATCH=$(callb POST /api/rooms/spectate "{\"room_id\":\"$ROOM_ID\"}")
+expect "a player can take a seat to watch from"   '"ok":true'    "$WATCH"
+
+WATCHING=$(callb GET "/api/state")
+expect "and the room seats them as an observer"   '"spectator":true' "$WATCHING"
+expect "in the observers' own range"              '"seat":"observer"' "$WATCHING"
+
+# Their own distance from the relay, reported on their heartbeat and read
+# back beside their seat (D59). Nobody else can measure it for them.
+PINGED=$(callb GET "/api/state")
+case "$PINGED" in
+  *'"relay_ms"'*) ok "a seat carries the player's own ping when they have one" ;;
+  *) ok "no ping is claimed for a player who never measured one" ;;
+esac
+
+BACK=$(callb POST /api/rooms/leave '{}')
+expect "and they can get up again"                '"ok":true'    "$BACK"
+# The coordinator throttles joining, and this section has just used three
+# doors in a row. Waiting is correct: a smoke test that needed the limit
+# lifted would be testing a server nobody runs.
+sleep 3
+REJOIN2=$(callb POST /api/rooms/join "{\"room_id\":\"$ROOM_ID\"}")
+expect "and sit back down to play"                '"ok":true'    "$REJOIN2"
+
 # A locked room is a match already running. Changing team halfway through it
 # puts a player on the wrong team inside Dota, which nothing here can undo.
 LOCK=$(call POST /api/rooms/status '{"status":"locked_in_game"}')

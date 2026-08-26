@@ -12,6 +12,10 @@
 
 const TOKEN = new URLSearchParams(location.search).get("t") || "";
 const POLL_MS = 2000;
+// Five seats for people who want to watch rather than play. The coordinator
+// allocates the same five (ipam.ObserverSlots); the admins' three are a
+// separate range and are not drawn here.
+const WATCH_SLOTS = 5;
 
 let state = {};
 let screen = "lobby";
@@ -571,14 +575,13 @@ function renderRoom(r) {
   box.appendChild(teamColumn("radiant", "room.team.radiant", 0, seated, iAmHost));
   box.appendChild(teamColumn("dire", "room.team.dire", 5, seated, iAmHost));
 
-  const specs = (r.members || []).filter((m) => m.spectator);
-  const sbox = $("spectators");
-  sbox.textContent = "";
-  if (!specs.length) {
-    sbox.appendChild(el("span", "what", t("room.spectators.none")));
-  } else {
-    for (const m of specs) sbox.appendChild(slotCard(m.slot, m, false, true));
-  }
+  // The five seats below the two teams (D59). Observers are numbered in
+  // their own range, so an observer in seat 0 and the host in slot 0 are not
+  // the same seat and must not share a key.
+  const watching = {};
+  for (const m of r.members || []) if (m.spectator && m.seat !== "admin") watching[m.slot] = m;
+  $("watch").textContent = "";
+  $("watch").appendChild(watchColumn(r, watching, iAmHost));
 
   const net = [];
   if (state.virtual_ip) net.push(t("net.you", { ip: state.virtual_ip }));
@@ -612,6 +615,10 @@ function drawStepper(r) {
     state.connected && state.virtual_ip
       ? t("net.you", { ip: state.virtual_ip }) + " · " + t("net.host", { ip: state.host_ip || "?" })
       : t("step.net.not"));
+  // Getting off the room's network without leaving the room. It is the first
+  // thing to try when a game will not connect, and until now the only way to
+  // do it was to leave the room and come back.
+  drawStepOff();
   step("game", !!state.dota_running, !!state.connected && !state.dota_running,
     t("step.game.detail"));
 
@@ -629,6 +636,21 @@ function drawStepper(r) {
     b.disabled = true;
     b.onclick = null;
   }
+}
+
+// The way back off the network, on the step that put you on it. A host is
+// not offered it: their machine is the game, and dropping it off the room's
+// network ends the match for everybody in it - that is what Leave room is
+// for, and it says so.
+function drawStepOff() {
+  const step = $("step-net");
+  const had = step.querySelector(".stepoff");
+  if (had) had.remove();
+  if (!state.connected || state.is_host) return;
+  const b = el("button", "stepoff tiny", t("step.net.off"));
+  b.title = t("step.net.off.note");
+  b.onclick = () => act(() => api("/api/disconnect", {}));
+  step.appendChild(b);
 }
 
 // A step is done, happening now, or still ahead. The detail line under it is
@@ -674,35 +696,26 @@ function segmentValue(id) {
   return "public";
 }
 
-// drawNetBanner says, in words and where it cannot be missed, whether this
-// player is actually on the room's network.
+// drawNetBanner is what the three numbered steps above it cannot say.
 //
-// Joining a room now connects on its own, so most of the time this reassures
-// rather than instructs. It matters when that fails: a player who starts Dota
-// themselves gets no other warning, and the failure would otherwise reach
-// them minutes later as an error inside the game.
+// It used to repeat them - a green line for "connected" directly under a
+// green tick reading "connected", and an amber one under step 2 while step 2
+// already said the same thing. Two of the room screen's scarcest inches
+// spent telling somebody what they had just read.
+//
+// A failure is different. Nothing in the stepper can carry the reason a
+// connection was refused, and that reason is the whole of what a player
+// needs when the thing they pressed did not work.
 function drawNetBanner() {
   const e = $("netbanner");
+  if (!state.connect_error) {
+    e.hidden = true;
+    e.textContent = "";
+    return;
+  }
   e.hidden = false;
-  if (state.connected) {
-    e.className = "netbanner ok";
-    e.textContent = state.virtual_ip
-      ? t("net.on", { ip: state.virtual_ip })
-      : t("net.on.noip");
-    return;
-  }
-  if (state.connect_error) {
-    e.className = "netbanner bad";
-    e.textContent = t("net.failed", { error: state.connect_error });
-    return;
-  }
-  if (state.tunnel === "connecting") {
-    e.className = "netbanner wait";
-    e.textContent = t("net.connecting");
-    return;
-  }
   e.className = "netbanner bad";
-  e.textContent = t("net.off");
+  e.textContent = t("net.failed", { error: state.connect_error });
 }
 
 // teamColumn draws one side: a heading in that side's colour, how many of
@@ -722,6 +735,34 @@ function teamColumn(side, titleKey, first, seated, canKick) {
   return col;
 }
 
+// watchColumn is the five seats below the two teams (D59).
+//
+// They were a strip that said "nobody is spectating" and had no way to
+// become one. They are seats now, drawn and taken exactly like a playing
+// seat, so somebody who wants to watch a friend's game sits down rather than
+// looking for a button that was never there.
+//
+// A locked room refuses them, the same as it refuses a playing seat: an
+// observer joining a running match is a client the host's Dota did not
+// expect. That refusal lives on the coordinator; this only declines to
+// invite the click.
+function watchColumn(r, seated, canKick) {
+  const col = el("div", "team watch");
+  const head = el("div", "team-head");
+  head.appendChild(el("span", "swatch"));
+  head.appendChild(el("span", "", t("room.watch")));
+  head.appendChild(el("span", "n", t("room.team.count", { n: Object.keys(seated).length })));
+  head.appendChild(el("div", "head-gap"));
+  head.appendChild(el("span", "what", t("room.watch.note")));
+  col.appendChild(head);
+  const seats = el("div", "watchseats");
+  for (let i = 0; i < WATCH_SLOTS; i++) {
+    seats.appendChild(slotCard(i, seated[i], canKick, true));
+  }
+  col.appendChild(seats);
+  return col;
+}
+
 // canTakeSeat answers whether clicking this empty seat would do anything.
 //
 // Which slot you sit in is which team you are on, so this is how a player
@@ -730,17 +771,29 @@ function teamColumn(side, titleKey, first, seated, canKick) {
 // not invite it: slot 0 is the host's for the room's whole life, the host
 // does not move out of it, and a locked room is a match already running.
 function canTakeSeat(index, spectator) {
-  if (spectator || index === 0 || state.is_host) return false;
   if (!state.room || state.room.status === "locked_in_game") return false;
-  return (state.room.members || [])
-    .some((m) => m.player_id === state.player_id && !m.spectator);
+  // The host runs the match on their own machine. They cannot go and watch
+  // it from a seat, and slot 0 is theirs for the room's whole life.
+  if (state.is_host) return false;
+  if (spectator) return !inSeat(true);
+  if (index === 0) return false;
+  return inSeat(false);
+}
+
+// inSeat: am I sitting in this room, and on which kind of seat? A player
+// moving between playing slots is a move; a player who is watching has to
+// leave the room and come back in to play, because the coordinator seats the
+// two kinds through different doors.
+function inSeat(spectator) {
+  return ((state.room && state.room.members) || [])
+    .some((m) => m.player_id === state.player_id && !!m.spectator === spectator);
 }
 
 function slotCard(index, member, canKick, spectator) {
   const card = el("div");
   const mine = member && member.player_id === state.player_id;
   card.className = "slot" + (member ? "" : " empty") + (mine ? " you" : "");
-  card.appendChild(el("div", "slot-num", spectator ? "S" + (index + 1) : String(index + 1)));
+  card.appendChild(el("div", "slot-num", spectator ? t("room.watch.seat") : String(index + 1)));
 
   if (member) card.appendChild(avatar(member.nick, member.player_id, "sm"));
 
@@ -749,9 +802,11 @@ function slotCard(index, member, canKick, spectator) {
   if (!member) {
     if (canTakeSeat(index, spectator)) {
       card.classList.add("takeable");
-      card.title = t("room.slot.take.note");
-      body.appendChild(el("div", "slot-name", t("room.slot.take")));
-      card.onclick = () => act(() => api("/api/rooms/slot", { slot: index }));
+      card.title = t(spectator ? "room.watch.take.note" : "room.slot.take.note");
+      body.appendChild(el("div", "slot-name", t(spectator ? "room.watch.take" : "room.slot.take")));
+      card.onclick = () => act(() => (spectator
+        ? api("/api/rooms/spectate", { room_id: state.room_id })
+        : api("/api/rooms/slot", { slot: index })));
     } else {
       body.appendChild(el("div", "slot-name muted", t("room.slot.empty")));
     }
@@ -764,13 +819,33 @@ function slotCard(index, member, canKick, spectator) {
   body.appendChild(el("div", "slot-sub",
     member.is_host ? t("room.slot.host", { sub: mmr }) : mmr));
 
+  // Each player's own distance from the relay, which is the number that
+  // decides how the game will feel for them. It is theirs, not the reader's:
+  // everybody in a room reaches everybody else through the relay, so a poor
+  // one here is a poor one for that person alone.
+  card.appendChild(seatPing(member));
+
   if (canKick && !member.is_host && !mine) {
     const b = el("button", "", t("room.kick"));
     b.title = t("room.kick.note");
-    b.onclick = () => act(() => api("/api/rooms/kick", { target: member.player_id }));
+    b.onclick = (e) => {
+      e.stopPropagation();
+      act(() => api("/api/rooms/kick", { target: member.player_id }));
+    };
     card.appendChild(b);
   }
   return card;
+}
+
+// A player who has not reported a measurement yet gets nothing rather than a
+// zero. Zero milliseconds is not a good connection, it is no reading, and
+// the two must never look the same.
+function seatPing(member) {
+  const ms = member.relay_ms || 0;
+  const grade = !ms ? "" : ms < 60 ? "good" : ms < 140 ? "fair" : "poor";
+  const e = el("span", "seat-ping " + grade, ms ? t("lobby.ping.value", { n: ms }) : "");
+  if (ms) e.title = t("room.ping.explain");
+  return e;
 }
 
 // ---------------------------------------------------------- friends rail
@@ -808,6 +883,8 @@ function renderFriends(list, why) {
   $("friendcount").textContent = friends.length
     ? t("friends.count", { on: online, all: friends.length }) : "";
 
+  invitationRows(box, list);
+
   if (waiting.length) {
     box.appendChild(el("div", "friend-group", t("friends.requests")));
     for (const f of waiting) box.appendChild(requestRow(f));
@@ -830,6 +907,55 @@ function renderFriends(list, why) {
   }
 }
 
+// invitationRows draws the rooms friends have asked this player into.
+//
+// The coordinator has stored these since T7 and the app has fetched them
+// since T11; nothing ever drew them, so being invited to a room looked
+// exactly like not being invited to one. They sit above the friends
+// themselves because an invitation is time-limited in a way a friend is not:
+// the room it names is filling up while it is being ignored.
+function invitationRows(box, list) {
+  const invites = (list && list.invitations) || [];
+  if (!invites.length) return;
+
+  const friends = (list.friends || []).concat(list.incoming || [], list.outgoing || []);
+  box.appendChild(el("div", "friend-group", t("friends.invited")));
+  for (const inv of invites) {
+    const who = friends.find((f) => f.player_id === inv.from_id);
+    const room = (state.rooms || []).find((r) => r.id === inv.room_id);
+
+    const row = el("div", "friend invite");
+    const port = el("div", "who-av");
+    port.appendChild(avatar(who ? who.display_name : inv.from_id, inv.from_id, "sm"));
+    row.appendChild(port);
+
+    const body = el("div", "who");
+    body.appendChild(el("div", "name",
+      t("friends.invited.by", { who: who ? who.display_name : inv.from_id })));
+    // A room this player cannot see is a private one they have just been let
+    // into. Saying "a room" is the truth; inventing a name would not be.
+    body.appendChild(el("div", "where", room ? room.name : t("friends.invited.hidden")));
+    row.appendChild(body);
+
+    const acts = el("div", "acts");
+    acts.style.opacity = "1";
+    if (room && room.joinable && !state.room_id) {
+      const go = el("button", "primary tiny", t("friends.join"));
+      go.onclick = () => act(async () => {
+        await api("/api/friends/invitations/seen", {});
+        await api("/api/rooms/join", { room_id: inv.room_id });
+        show("room");
+      });
+      acts.appendChild(go);
+    }
+    const no = el("button", "tiny", t("friends.invited.dismiss"));
+    no.onclick = () => act(() => api("/api/friends/invitations/seen", {}));
+    acts.appendChild(no);
+    row.appendChild(acts);
+    box.appendChild(row);
+  }
+}
+
 // whereabouts is the line under a friend's name. It answers one question:
 // can I play with this person right now?
 //
@@ -838,13 +964,33 @@ function renderFriends(list, why) {
 // already on screen, and a friend in a room this player cannot see (a private
 // one) is simply "in a room", which is the truth.
 function whereabouts(f) {
-  if (!f.online) return t("friends.offline");
+  if (!f.online) return f.last_seen ? t("friends.lastseen", { when: ago(f.last_seen) }) : t("friends.offline");
   if (f.in_game) return t("friends.ingame");
   if (f.room_id) {
     const room = (state.rooms || []).find((r) => r.id === f.room_id);
     return room ? t("friends.inroom", { room: room.name }) : t("friends.inroomhidden");
   }
   return t("friends.online");
+}
+
+// ago turns a timestamp into how long ago that was, in the coarsest unit
+// that is still true.
+//
+// "Last seen 2h ago" is what somebody wants from a friends list - whether it
+// is worth waiting for that person. A clock time would make them work out the
+// difference, and a date would make them work out whether it was today.
+function ago(stamp) {
+  const then = new Date(stamp).getTime();
+  if (!then || isNaN(then)) return "";
+  const mins = Math.floor((Date.now() - then) / 60000);
+  if (mins < 1) return t("ago.now");
+  if (mins < 60) return t("ago.minutes", { n: mins });
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return t("ago.hours", { n: hours });
+  const days = Math.floor(hours / 24);
+  if (days === 1) return t("ago.yesterday");
+  if (days < 30) return t("ago.days", { n: days });
+  return t("ago.ages");
 }
 
 function friendRow(f) {
@@ -1427,6 +1573,7 @@ function renderRecord() {
   }
 
   drawSanctions(r);
+  drawByThem(r);
   drawActions(r.actions || []);
 }
 
@@ -1477,8 +1624,45 @@ function lifted(sn) {
   return !!sn.lifted_at && !sn.lifted_at.startsWith("0001-01-01");
 }
 
+// What this person has done, as opposed to what was done to them.
+//
+// The record has always shown the second: every sanction, label and kick
+// applied to the account on screen. For staff the first is the one that
+// matters - a head admin reviewing an admin needs their actions, not their
+// punishments - and the endpoint that answers it (GET /api/admin/log?actor=)
+// shipped with T8 and had nothing calling it.
+function drawByThem(r) {
+  const row = $("mod-byrow");
+  const box = $("mod-bythem");
+  // Only worth asking for somebody who could have done anything. A player's
+  // answer is always empty, and an empty panel is a question.
+  const staff = state.role === "head_admin" && (r.role || "") !== "";
+  row.classList.toggle("hidden", !staff);
+  if (!staff) {
+    box.textContent = "";
+    return;
+  }
+  box.textContent = "";
+  box.appendChild(el("p", "muted small", t("mod.bythem.loading")));
+  const who = r.player_id;
+  api("/api/admin/log?actor=" + encodeURIComponent(who)).then((got) => {
+    // The moderator may have looked somebody else up while this was in the
+    // air. Drawing the answer to a question nobody is asking any more would
+    // put one person's actions under another person's name.
+    if (!modRecord || modRecord.player_id !== who) return;
+    box.textContent = "";
+    drawInto(box, got.actions || []);
+  }).catch((e) => {
+    box.textContent = "";
+    box.appendChild(el("p", "muted small", e.message));
+  });
+}
+
 function drawActions(actions) {
-  const box = $("mod-actions");
+  drawInto($("mod-actions"), actions);
+}
+
+function drawInto(box, actions) {
   box.textContent = "";
   if (!actions.length) {
     box.appendChild(el("p", "muted pad", t("mod.actions.none")));
@@ -1510,6 +1694,13 @@ function show(name) {
   for (const nav of document.querySelectorAll(".nav[data-screen]")) {
     nav.classList.toggle("active", nav.dataset.screen === name);
   }
+  // The search box and the filter chips act on the room list and on nothing
+  // else. Leaving them across the top of the room, events and settings
+  // screens put controls there that could not do anything, which is a
+  // question every player asks once and gets no answer to.
+  const lobby = name === "lobby";
+  $("search").parentNode.classList.toggle("hidden", !lobby);
+  $("filters").classList.toggle("hidden", !lobby);
 }
 
 // ---------------------------------------------------------------- events
@@ -1861,7 +2052,7 @@ function drawInvites() {
     row.appendChild(who);
     const go = el("button", "tiny primary", t("room.invite.send"));
     go.onclick = () => act(async () => {
-      await api("/api/invite", { target_id: f.player_id });
+      await api("/api/friends/invite", { target_id: f.player_id });
       go.disabled = true;
       go.textContent = t("room.invite.sent");
     });

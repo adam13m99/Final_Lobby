@@ -71,8 +71,10 @@ type syncRequest struct {
 	InGame bool `json:"in_game,omitempty"`
 
 	// RelayMillis is this client's round trip to the relay, which only its
-	// own machine can measure. It is kept only when the reporter hosts the
-	// room they are in; see room.Store.ReportHostLatency.
+	// own machine can measure. It is kept twice: against the player, which
+	// is what puts a number beside their seat in a room, and against the
+	// room they host, which is the lobby's latency column - see
+	// room.Store.ReportHostLatency for why that one is host-only.
 	RelayMillis int `json:"relay_ms,omitempty"`
 }
 
@@ -119,6 +121,7 @@ func (s *Server) sync(w http.ResponseWriter, r *http.Request) {
 	}
 	s.seen(body.PlayerID, body.Nick)
 	s.players.SetInGame(body.PlayerID, body.InGame, s.now())
+	s.players.SetRelay(body.PlayerID, body.RelayMillis, s.now())
 	if body.RoomID != "" {
 		s.rooms.ReportHostLatency(body.RoomID, body.PlayerID, body.RelayMillis, s.now())
 	}

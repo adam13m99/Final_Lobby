@@ -243,9 +243,12 @@
        which knows which five slots belong to which side. -->
   <div class="teams" id="slots"></div>
 
+  <!-- Five more seats under the two teams, for people who want to watch
+       rather than play (D59). They are seats, not a strip of text: somebody
+       who wants to watch a friend's game sits down in one. -->
+  <div id="watch"></div>
+
   <div class="specrow">
-    <h3 data-t="room.spectators"></h3>
-    <div class="spectators" id="spectators"></div>
     <div class="head-gap"></div>
     <span class="net" id="netinfo"></span>
     <button class="danger" id="btn-leave" data-t="room.leave"></button>
@@ -394,6 +397,14 @@
 
       <h4 data-t="mod.actions"></h4>
       <div id="mod-actions" class="loglist"></div>
+
+      <!-- What this person has *done*, for the head admin reviewing an
+           admin. Everything above is what was done to them, which is a
+           different question and the only one the record used to answer. -->
+      <div class="hidden" id="mod-byrow">
+        <h4 data-t="mod.bythem"></h4>
+        <div id="mod-bythem" class="loglist"></div>
+      </div>
     </div>
   </div>
 
@@ -558,7 +569,7 @@
      every one of these from anybody else, so hiding them is a courtesy that
      keeps the room screen honest rather than a defence. -->
 <div id="roomsetgate" class="gate hidden">
-  <div class="gate-card">
+  <div class="gate-card wide">
     <div class="gate-head">
       <h2 data-t="room.settings"></h2>
       <p data-t="room.settings.blurb"></p>

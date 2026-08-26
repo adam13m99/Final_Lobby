@@ -55,6 +55,13 @@ type Player struct {
 	// and telling somebody their friend is playing when they are waiting for
 	// them is exactly the wrong thing to say.
 	InGame bool `json:"in_game"`
+
+	// RelayMillis is this player's own round trip to the relay, as their own
+	// machine measured it, and RelayAt is when they last said so. It is the
+	// number shown beside their seat in a room; for the host of a room it is
+	// also the lobby's latency column (D54).
+	RelayMillis int       `json:"relay_ms,omitempty"`
+	RelayAt     time.Time `json:"relay_at,omitempty"`
 }
 
 // MMRChangeableAt is when this player may next change their MMR. Zero means
@@ -154,6 +161,59 @@ func (r *Registry) SetInGame(id string, playing bool, now time.Time) {
 	}
 	p.InGame = playing
 	p.LastSeen = now
+}
+
+// SetRelay records a player's own round trip to the relay.
+//
+// Only that player's machine can measure it - the relay is the one host every
+// client shares, and nobody in the lobby has a path to anybody else. It is
+// reported on the heartbeat and read back in two places: beside a player's
+// seat in a room, and (for the host of a room) as the lobby's latency column.
+//
+// A zero or negative reading means "not measured", never "instant", and is
+// discarded rather than stored. RelayAt is kept beside it so a reader can
+// tell a fresh number from one left behind by a client that went away.
+func (r *Registry) SetRelay(id string, millis int, now time.Time) {
+	if millis <= 0 {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	p, ok := r.players[id]
+	if !ok {
+		return
+	}
+	p.RelayMillis = millis
+	p.RelayAt = now
+}
+
+// SeenSince returns every player whose last-seen time is at or after t.
+//
+// It exists so the coordinator can flush presence to the database on a timer
+// rather than on every heartbeat. At a thousand players polling every two
+// seconds, writing a row per poll would be five hundred writes a second at
+// SQLite for a number nobody reads more than once a minute.
+func (r *Registry) SeenSince(t time.Time) []Player {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]Player, 0, len(r.players))
+	for _, p := range r.players {
+		if !p.LastSeen.Before(t) {
+			out = append(out, *p)
+		}
+	}
+	return out
+}
+
+// Forget drops a player from the registry, as a restart would.
+//
+// It exists for tests that need the state a coordinator is in after a
+// deployment: the accounts are still in the database, and nothing in memory
+// remembers that any of them was ever here.
+func (r *Registry) Forget(id string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.players, id)
 }
 
 // Get returns one player.

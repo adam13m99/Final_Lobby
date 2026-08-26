@@ -585,12 +585,12 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
    so. A numbered list cannot be misread that way. */
 .stepper {
   display: flex; align-items: stretch; gap: 10px;
-  padding: 12px 14px; border-radius: var(--r-lg);
+  padding: 10px 12px; border-radius: var(--r-lg);
   background: var(--panel); box-shadow: var(--ring-line);
 }
 .step {
   flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px;
-  padding: 9px 11px; border-radius: var(--r-md);
+  padding: 7px 11px; border-radius: var(--r-md);
   box-shadow: inset 0 0 0 1px #282b38;
 }
 .step.now { background: var(--accent-wash); box-shadow: inset 0 0 0 1px var(--accent-ring); }
@@ -609,6 +609,14 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .stepper > button { flex: none; min-width: 168px; height: auto; font-size: 13.5px; }
+/* The way back off, on the step that put you on. Small, and at the trailing
+   edge, because it is the exception rather than the way forward. */
+.step .stepoff { margin-inline-start: auto; flex: none; }
+
+/* An invitation is time-limited in a way a friend is not: the room it names
+   is filling up while it is being ignored. */
+.friend.invite { background: var(--accent-wash); box-shadow: inset 0 0 0 1px var(--accent-ring); }
+.friend.invite .name { color: var(--accent-text); }
 
 /* ---------------------------------------------------------------- slots */
 
@@ -616,7 +624,7 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
 .team { border-radius: var(--r-lg); background: var(--panel); box-shadow: var(--ring-line); overflow: hidden; }
 .team-head {
   display: flex; align-items: center; gap: 8px;
-  padding: 10px 13px; border-block-end: 1px solid var(--hair);
+  padding: 8px 13px; border-block-end: 1px solid var(--hair);
   font-size: 11px; font-weight: 500; letter-spacing: .1em; text-transform: uppercase;
   color: var(--text2);
 }
@@ -631,7 +639,7 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
 
 .slot {
   display: flex; align-items: center; gap: 9px;
-  height: 38px; padding: 0 9px; margin-block-end: 3px;
+  height: 36px; padding: 0 9px; margin-block-end: 3px;
   border-radius: 8px; box-shadow: inset 0 0 0 1px #282b38;
   background: var(--panel2);
 }
@@ -647,22 +655,46 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
   width: 18px; flex: none; text-align: end;
   font-size: 11px; font-weight: 500; color: var(--dimmer);
 }
+.slot-body { min-width: 0; }
 .slot-name { font-size: 13px; font-weight: 500; white-space: nowrap; }
 .slot-sub { font-size: 11.5px; color: var(--dim); white-space: nowrap; }
 .slot .gap { flex: 1; }
 .slot button { height: 22px; padding: 0 8px; font-size: 11px; border-radius: var(--r-sm); }
 .slot button:hover { color: var(--bad); border-color: var(--bad); background: var(--bad-soft); }
 
-/* Spectators are a line, not a panel. Nobody is ever spectating and the
-   seats are reserved for staff; a whole card for that was a card of nothing. */
+/* Each player's own distance from the relay, at the trailing edge of their
+   seat. Tabular figures so the column of them reads down rather than
+   dancing, and a colour that grades rather than a word, because the number
+   is already the word. */
+.seat-ping {
+  margin-inline-start: auto; flex: none;
+  font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--dim);
+}
+.seat-ping.good { color: var(--good); }
+.seat-ping.fair { color: var(--warn); }
+.seat-ping.poor { color: var(--bad); }
+
+/* The five seats below the two teams (D59). They lie across the width
+   rather than down a third column, because they are not a third team: they
+   are the overflow of a room that only has two sides. */
+.team.watch .swatch { background: var(--accent); }
+.team-head .what { font-size: 11px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--dimmer); }
+.team-head .head-gap { flex: 1; }
+.watchseats {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 3px; padding: 5px 6px;
+}
+.watchseats .slot { height: 32px; margin-block-end: 0; gap: 7px; }
+.watchseats .slot-num { width: 8px; }
+
+/* What is left of the old spectator strip: the network line and the way
+   out. The seats moved up into their own block. */
 .specrow {
   display: flex; align-items: center; gap: 10px;
-  padding: 11px 14px; border-radius: var(--r-lg);
+  padding: 8px 14px; border-radius: var(--r-lg);
   background: var(--panel); box-shadow: var(--ring-line);
 }
 .specrow .what { font-size: 12.5px; color: var(--dim); }
-.spectators { display: flex; gap: 8px; flex-wrap: wrap; }
-.spectators .slot { height: 30px; margin: 0; }
 
 .describerow { display: flex; gap: 8px; flex-wrap: wrap; }
 .describerow input { flex: 1; min-width: 10rem; }
@@ -899,6 +931,9 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
   overflow: hidden;
 }
 .gate-card.narrow { width: 400px; }
+/* The host's controls carry three buttons on one line and a segmented
+   control above them. At 520px the buttons wrapped their own labels. */
+.gate-card.wide { width: 580px; }
 .gate-card.wide-card { width: min(36rem, 100%); height: min(33rem, 90vh); display: flex; flex-direction: column; }
 .gate-head { padding: 15px 18px 12px; border-block-end: 1px solid var(--line); }
 .gate-head h2 { font-size: 16px; margin-block-end: 2px; }

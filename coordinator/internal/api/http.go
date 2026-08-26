@@ -307,6 +307,11 @@ type memberView struct {
 	Slot      int    `json:"slot"`
 	IsHost    bool   `json:"is_host"`
 	Spectator bool   `json:"spectator"`
+	// RelayMillis is this member's own round trip to the relay, as their
+	// machine measured it. Absent when they have not reported one, or when
+	// the one they reported is old enough to describe a connection they no
+	// longer have - which must be shown as unknown rather than as zero.
+	RelayMillis int `json:"relay_ms,omitempty"`
 }
 
 type roomView struct {
@@ -369,6 +374,7 @@ func (s *Server) view(r room.Room) roomView {
 		m := memberView{PlayerID: id, Slot: slot, IsHost: id == r.HostID, Nick: id}
 		if p, ok := known[id]; ok {
 			m.Nick, m.MMR = p.Nick, p.MMR
+			m.RelayMillis = s.freshRelay(p)
 			if p.MMR > 0 {
 				sumMMR += p.MMR
 				rated++
@@ -399,6 +405,7 @@ func (s *Server) view(r room.Room) roomView {
 			}
 			if p, ok := known[id]; ok {
 				m.Nick, m.MMR = p.Nick, p.MMR
+				m.RelayMillis = s.freshRelay(p)
 			}
 			if group.kind == room.SeatObserver {
 				v.Watchers++
@@ -415,6 +422,20 @@ func (s *Server) view(r room.Room) roomView {
 	v.Joinable = v.Free > 0 &&
 		(r.Status == room.StatusOpen || r.Status == room.StatusOpenToNew)
 	return v
+}
+
+// freshRelay returns a player's relay latency only while it still describes
+// the connection they have now. A client that stopped reporting leaves its
+// last number behind, and a stale reading shown as current is worse than no
+// reading at all: it is the number somebody will blame a bad game on.
+func (s *Server) freshRelay(p player.Player) int {
+	if p.RelayMillis <= 0 || p.RelayAt.IsZero() {
+		return 0
+	}
+	if s.now().Sub(p.RelayAt) > OnlineWindow {
+		return 0
+	}
+	return p.RelayMillis
 }
 
 func (s *Server) listRooms(w http.ResponseWriter, r *http.Request) {

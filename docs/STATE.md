@@ -228,6 +228,7 @@ there; this is the summary.
 | T17 visual redesign | **done** — looked at, at 1440 and at 1366 |
 | T18 a live window that updates itself | **done** — `scripts/live.sh`, one address, kept for days |
 | T19 the owner's design, adopted (D58) | **done** — looked at, at 1440 and at 1366 |
+| T20 the owner's answers, and the last unwired routes (D59) | **done** — ping, last seen, watching seats, invitations |
 
 **The interface was redesigned on 2026-08-25** at the owner's request: the
 old one was flat, grey and mostly empty space. What changed, beyond colour
@@ -456,13 +457,31 @@ what is actually wired to it.
   opens a conversation.
 - **Clicking an empty seat moves you into it** (D57). `Room.Move` in the
   coordinator, `POST /v1/rooms/{id}/slot`, `POST /api/rooms/slot` in the app.
+- **Every seat carries that player's own ping** (D59), reported on their
+  heartbeat and dropped rather than shown when it goes stale. It is theirs,
+  not the reader's: everybody in a room reaches everybody else through the
+  relay, so a poor number on one seat is a poor game for that person alone.
+- **Five watching seats sit below the two teams** (D59) and are taken by
+  clicking, exactly like a playing seat. The admins' three seats are a
+  separate range and are not drawn.
+- **The friends rail answers where somebody is**: in a room (named, when the
+  room is one this player can see), online, in game, or offline with when
+  they were last here. The last of those survives a restart —
+  `accounts.last_seen_at`, written on a timer rather than on the heartbeat.
+- **Room invitations are the first thing in the rail** (D59), above the
+  friends themselves.
+- **The search box and the filter chips exist on the lobby and nowhere else**
+  (D59). They act on the room list, and on the other screens they were
+  controls that could not do anything.
 - **The window gives ground from the sides inward.** Breakpoints at 1440px
   (header) and 1180px (room columns). Checked at 1366x768, the commonest
   laptop this will run on.
 
-Nothing in the mock that the server has no notion of was faked: no regions,
-no Steam link, no games-hosted count, no per-player ping, no last-seen times.
-Two of its inventions are the owner's to decide and are open questions below.
+Nothing in the mock that the server has no notion of was faked. The owner has
+since settled which of those inventions they wanted (D59): per-player ping,
+last-seen times and the friends' online / in-a-room / in-game statuses are
+built; regions, Steam links, a games-hosted count, a game mode advertised on
+a room and a Watch button on a running match are not, and will not be.
 
 `bash scripts/preview.sh <name>` photographs all of it; `SHOTS` may be set to
 a JSON array of `[name, script]` pairs to photograph something else, and
@@ -493,19 +512,14 @@ a JSON array of `[name, script]` pairs to photograph something else, and
    shape is undecided and needs its own brainstorm. Not before the account
    system, the room work and the new lobby.
 
-7. **Should a room advertise its game mode?** The mock the owner drew shows
-   one on every room row ("All Pick", "Captains Mode") and asks for it in the
-   create dialog. Today the mode is the host's own and is sent to Dota when
-   they launch (D57); the coordinator stores nothing about it and no room
-   advertises one. Adding it is small — one field on the room, one control in
-   the create dialog, one more thing on the row. **For the owner:** is the
-   mode something a player picks a room by, or is it the host's business?
-8. **Should a running match be watchable from the lobby?** The mock puts a
-   **Watch** button on rooms that are in game. The owner said earlier, in as
-   many words, that there is no Spectate button in the lobby, so the button
-   was not built. The seats exist — five observer slots per room, and an
-   observer may not enter a locked room. **For the owner:** was that a
-   permanent no, or a "not yet"?
+**Answered 2026-08-26** (D59), all by the owner reviewing the adopted design:
+a room does **not** advertise a game mode — the host switches it in Room
+settings and the app hands it to Dota on launch; there is **no** Watch button,
+permanently — a room is joinable or full, and in game or open, and there is no
+fifth thing to offer; regions and Steam links are **not** wanted; per-player
+ping, last-seen times and the online / in-a-room / in-game statuses **are**,
+and are built; and the five watching seats are **seats in the room** below the
+two teams rather than a spectator feature of their own.
 
 **Answered 2026-08-24:** who the admins are (D47 — a role the head admin
 grants), whether Tournaments is real (D48 — yes), and when the dedicated

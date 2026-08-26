@@ -21,6 +21,14 @@ type Friend struct {
 	// RoomID is where they are, so "join my friend" is one click.
 	RoomID string `json:"room_id"`
 	Unread int    `json:"unread"`
+	// LastSeen is when an offline friend was last here. Absent for anybody
+	// online, and absent for anybody this server has never recorded - which
+	// the rail must show as nothing, not as a date in 1970.
+	//
+	// A pointer because the app re-encodes this list for its own page:
+	// `omitempty` does not suppress a zero time.Time, so a plain field would
+	// put 0001-01-01 on the wire for everybody the server said nothing about.
+	LastSeen *time.Time `json:"last_seen,omitempty"`
 }
 
 // RoomInvitation is a friend telling you a room is open for you.

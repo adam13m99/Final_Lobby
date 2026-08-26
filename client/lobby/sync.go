@@ -8,12 +8,21 @@ import "time"
 
 // Member is one seated player.
 type Member struct {
+	// Seat is "player", "observer" or "admin" (D38). The room screen draws
+	// the observers' five seats and not the admins' three, so dropping this
+	// field would put a moderator in a watcher's chair - and, because the
+	// two ranges are numbered separately, in one that is already taken.
+	Seat      string `json:"seat,omitempty"`
 	PlayerID  string `json:"player_id"`
 	Nick      string `json:"nick"`
 	MMR       int    `json:"mmr"`
 	Slot      int    `json:"slot"`
 	IsHost    bool   `json:"is_host"`
 	Spectator bool   `json:"spectator"`
+	// RelayMillis is this member's own round trip to the relay. Zero means
+	// they have not reported one, or the one they reported is stale - never
+	// that they are instantaneously close to it.
+	RelayMillis int `json:"relay_ms,omitempty"`
 }
 
 // Profile is the player as the server knows them.
@@ -49,9 +58,11 @@ type SyncRequest struct {
 	InGame bool `json:"in_game,omitempty"`
 
 	// RelayMillis is this machine's round trip to the relay. The server
-	// keeps the host's copy against their room and shows it in the lobby
-	// (D42), labelled as the host's latency rather than the reader's,
-	// because that is what it is.
+	// keeps it twice: against this player, which puts a number beside their
+	// seat in a room, and - when this player hosts the room they are in -
+	// against the room, which is the lobby's latency column (D42, D54). The
+	// lobby's copy is labelled as the host's latency rather than the
+	// reader's, because that is what it is.
 	RelayMillis int `json:"relay_ms,omitempty"`
 }
 
