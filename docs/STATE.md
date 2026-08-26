@@ -3,13 +3,23 @@
 Updated when a task completes. `bash scripts/check.sh` is the ground truth;
 this file is a convenience index, not an authority.
 
+**New here?** `docs/backend.md` explains the server — relay, coordinator,
+addressing, the netservice. `docs/frontend.md` explains the interface — the
+screens, the rules its tests enforce, and how to look at it while you change
+it. This file says *what is done*; those two say *how it works*.
+
 ## Current phase
 
-Sub-project 1: network core. **The app is downloadable and installs
-itself.** Relay and coordinator are deployed; the Windows service, desktop
-app and installer all work on the development PC; Dota 2 launches and its
-listen server comes up. What remains is Task 16 itself - the real two-PC
-match - which needs a second machine and a person at each.
+Sub-project 1: network core. **The product is live and installable.** Relay
+and coordinator are deployed with **accounts switched on** (D60); the Windows
+service, desktop app and installer all work; Dota 2 launches and its listen
+server comes up. Build `2026.08.26-0846` is published and served from
+`/d/<key>/` on the server.
+
+What remains is Task 16 itself — the real two-PC match — which needs a second
+machine and a person at each. Also outstanding: **no head admin has been
+appointed**, because `-head-admin` takes an account id and none existed at
+deploy time. One restart once somebody has signed up.
 
 **To watch the product while it is being changed:** run `bash scripts/live.sh`,
 open the address it prints once, and leave that window open. It serves the

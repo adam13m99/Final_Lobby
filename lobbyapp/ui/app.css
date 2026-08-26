@@ -647,8 +647,14 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
 .slot.you { background: var(--accent-wash); box-shadow: inset 0 0 0 1px var(--accent-ring); }
 .slot.you .slot-name { color: var(--accent-text); }
 /* An empty seat you may take says so and lights up under the pointer. A card
-   that invites a click has to look like one. */
+   that invites a click has to look like one.
+
+   It is grey at rest, though: an empty seat is an offer, not a fact, and at
+   full strength five of them down a column read as five people whose names
+   happen to be "Sit here". The people in the room are what the eye should
+   find first. */
 .slot.takeable { cursor: pointer; }
+.slot.takeable .slot-name { color: var(--dim); font-weight: 400; }
 .slot.takeable:hover { background: var(--panel3); }
 .slot.takeable:hover .slot-name { color: var(--accent-text); }
 .slot-num {

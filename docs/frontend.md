@@ -1,0 +1,391 @@
+# LobbyBaz — the front end
+
+> **For an agent picking this up.** Read `CLAUDE.md` first (the hard rules),
+> then `docs/STATE.md` (what is actually built), then this.
+> `docs/decisions.md` carries the reasoning — when this file says "because
+> D42", the argument is there. `docs/backend.md` is the other half.
+>
+> **You cannot judge this by reading it.** Run `bash scripts/live.sh`, open
+> the address once, and leave the window open — it reloads itself as you
+> edit. Every design mistake in this project's history was found by looking
+> at the running page and none by reading the markup.
+
+## What it is
+
+One HTML page, one stylesheet, one script, served from loopback by the
+desktop app. No framework, no build step, no bundler, no npm. Editing
+`app.css` and reloading is the whole development loop.
+
+```
+lobbyapp/
+  main.go            binds 127.0.0.1 on a random port, mints a token, opens a browser
+  server.go          the /api/* routes the page talks to; embeds ui/ into the binary
+  ui/
+    index.html       every screen, all of it inert markup with data-t keys
+    app.css          the whole appearance (~1000 lines, tokens at the top)
+    app.js           the whole behaviour (~2000 lines)
+    i18n.js          key lookup and writing direction
+    strings/en.json  every word a player reads
+  ui_test.go         sixteen Go tests that enforce the rules below
+```
+
+**Why a local web page rather than a native window.** It is the fastest thing
+to change, it renders the same on every Windows version, and — this is the
+part that matters — it is *not* the mistake the predecessor made. That was a
+**privileged** agent listening on localhost, so any web page a player visited
+could drive it as Administrator. This process has exactly the rights the
+player already has, binds to `127.0.0.1` on a random port, and requires a
+random token that only the page it opened knows. `server.go`'s guard also
+refuses any request with a cross-origin `Origin` header. A hostile page gains
+nothing it could not get by running a program as the user.
+
+## The one architectural rule
+
+**The page is a renderer.** It polls one endpoint every two seconds, draws
+what came back, and posts actions. It holds no state of its own beyond:
+
+- which screen is showing
+- which filter and sort are set
+- what the player is halfway through typing
+- which chat tab is open
+
+Everything else lives in `state`, which is whatever `GET /api/state` last
+said. A refresh loses nothing, and there is no second copy of the truth to
+drift out of step with the server.
+
+The practical consequence: **when a value is wrong on screen, the bug is
+almost never in the renderer.** Check what `/api/state` actually returned
+first.
+
+## The screens
+
+```
+┌────┬──────────────────────────────────────────┬──────────┐
+│    │  header: search + filters + you          │          │
+│ t  ├──────────────────────────────────────────┤  rail    │
+│ o  │  banners (staff announcements, updates)  │          │
+│ o  ├──────────────────────────────────────────┤ friends  │
+│ l  │                                          │ grouped  │
+│ b  │  stage: one of five screens              │ by where │
+│ a  │    lobby / room / events                 │ they are │
+│ r  │    settings / moderation                 │          │
+│    │                                          │          │
+│    ├──────────────────────────────────────────┤          │
+│    │  chat dock (tabs + log + box)            │          │
+└────┴──────────────────────────────────────────┴──────────┘
+```
+
+The shell is one CSS grid in `app.css` — `grid-template-areas` naming `bar`,
+`head`, `strip`, `stage`, `chat`, `rail`. The toolbar and the rail are
+permanent; only `stage` changes.
+
+| Screen | Element | Drawn by |
+|---|---|---|
+| Lobby | `#screen-lobby` | `renderRooms` → `roomCard` |
+| Room | `#screen-room` | `renderRoom` → `teamColumn` / `watchColumn` / `slotCard` |
+| Events | `#screen-tournaments` | static — an honest "not yet" (D48) |
+| Settings | `#screen-settings` | `renderSettings` + `renderDiag` |
+| Moderation | `#screen-mod` | `renderMod` — hidden unless the session holds a role |
+
+Dialogs are separate: create a room, room settings, invite, profile,
+password, terms. All of them plain `.gate` overlays toggled by a class.
+
+## The rules the tests enforce
+
+`lobbyapp/ui_test.go` holds sixteen tests. They are not style checks — each
+one is a failure this kind of interface actually has, turned into a build
+error. They run inside `scripts/check.sh`.
+
+### No user-facing text outside the catalogue (D44)
+
+Every word a player reads has a key in `strings/en.json`.
+
+- In markup: `data-t="room.leave"` fills the element's text.
+  `data-t-placeholder`, `data-t-title`, `data-t-aria-label` fill those.
+- In script: `t("room.leave")`, never a literal.
+
+Enforced from four directions: every key used must exist; every key defined
+must be used; no sentence may be typed into the markup; and nothing a player
+reads may be assigned a literal in JS. That last one catches
+`e.textContent = "Loading"` — the most direct way to bypass the catalogue and
+the easiest to do by accident.
+
+**Why so strict, for a product with one language.** The owner chose English
+first and Persian later. Persian is right-to-left, and retrofitting direction
+into a finished layout is the expensive path because it touches every screen.
+Doing it from the start costs nothing today. Adding Persian is then one file
+plus one line in `LANGUAGES` — a week instead of a month.
+
+### No hard-coded left or right (D44)
+
+**Logical properties only**, in CSS and in JS:
+
+| Never | Always |
+|---|---|
+| `margin-left` | `margin-inline-start` |
+| `padding-right` | `padding-inline-end` |
+| `text-align: left` | `text-align: start` |
+| `border-bottom` | `border-block-end` |
+| `top` / `left` | `inset-block-start` / `inset-inline-start` |
+
+The layout then flips on its own when `dir` changes, with no second
+stylesheet. `TestTheLayoutHasNoHardCodedDirection` fails the build otherwise.
+
+### The renderer may only reach for things that exist
+
+Three tests parse `app.js` for `$("some-id")`, `querySelector(".some-class")`
+and `dataset.someAttr`, and check each against `index.html`. This is the
+failure this kind of interface actually has — a renamed element that nothing
+notices until a player opens the screen — and it is why they exist.
+
+The practical effect: **if you rename an id in the markup, the Go test suite
+tells you.** If you add `$("newthing")` to the script, add the element first.
+
+## The stylesheet
+
+`app.css`, a thousand-odd lines, and the shape matters more than the length:
+
+**Every colour is a token on `:root`, defined once.** Nothing below that
+block names a colour. The palette is the "Nocturne" one the owner drew
+(D58) — dark slate grounds, a muted violet accent, green for Radiant and red
+for Dire. The next reskin is one block, not nine hundred lines.
+
+**No web font.** The mock named one; `fonts.googleapis.com` is not reachable
+from inside Iran, and a stylesheet waiting on it is a blank screen for as
+long as the DPI takes to give up. A system stack renders instantly.
+
+**The window gives ground from the sides inward.** Three breakpoints, in the
+order the space is given up: at **1440px** the header tightens so the last
+filter chip is not sliced in half; at **1180px** the room list drops its
+number columns (`.rcol-hide`); at **1100px** the friends rail goes entirely
+and the shell becomes two columns. **The room's name is the last thing
+allowed to wrap**, because it is the one thing the row exists to show. Check
+any layout change at **1366×768** — the commonest laptop this will run on.
+
+## The script
+
+`app.js`, read top to bottom, is in this order:
+
+| Section | Functions |
+|---|---|
+| plumbing | `api`, `act`, `banner`, `needName`, `el`, `esc` |
+| portraits | `avatar`, `initials`, `hueOf` |
+| render | `render` — the one function the poll calls |
+| room list | `visible`, `sortRooms`, `toggleSort`, `renderRooms`, `roomCard`, the cells |
+| room | `renderRoom`, `drawStepper`, `drawDoor`, `teamColumn`, `watchColumn`, `slotCard` |
+| friends rail | `renderFriends`, `invitationRows`, `whereabouts`, `ago`, `friendRow` |
+| chat dock | `renderChatDock`, `drawTabs`, `drawLog`, `openDock`, `notice`, `ping` |
+| settings | `renderSettings`, `renderDiag` |
+| moderation | `renderMod`, `lookUp`, `renderRecord`, `drawSanctions`, `drawByThem` |
+| screens | `show` |
+| events | every handler, wired once at load |
+| poll | `refresh`, the two-second interval |
+
+`render(s)` is the only entry point from the poll. It calls each section's
+renderer in turn. Adding a screen means: markup in `index.html`, a
+`renderX(s)` function, a call from `render`, and strings in `en.json`.
+
+**`act(fn)`** wraps every action: it disables the interface, awaits, refreshes,
+re-enables, and shows a banner on failure. Use it for anything that changes
+server state — never call `api()` bare from a click handler.
+
+## Pieces worth understanding before changing them
+
+### The chat dock (D56, D58)
+
+Modelled on Dota 2's own, which means a specific list of behaviours, not a
+vague resemblance: docked along the bottom, always present, **open when the
+app starts**, minimising to its tab strip when asked, opening itself and
+playing a tone when a message arrives, and **every conversation a tab** —
+private ones included, so starting one does not cover the lobby with a
+dialog.
+
+Each line is a time gutter, a name, and the words. The clock is the reader's
+own zone and to the minute: a chat log is read for order and recency, and the
+second something was said has never been the question.
+
+Two traps, both already fallen into:
+
+- **The unread ring must only fire when a count grows.** `notice()` compares
+  signatures for logs; `noticeDM()` is separate and only flags on growth.
+  Reading a conversation takes its count to zero, which is a change — the
+  first version rang on the way down.
+- **Behaviour that only exists over time cannot be tested one-shot.** The
+  dock opens on a *change between two polls*. `scripts/chatcheck.sh` drives
+  the live page over the Chrome DevTools Protocol to prove it. The tone
+  itself stays unasserted — headless has no audio device — and the guard is
+  `smoke.sh`'s rule that the console must say nothing.
+
+### The room screen
+
+Three numbered steps with one button under them: take a seat → join the
+room's network → start Dota. It replaced a row of buttons that were sometimes
+disabled, and the commonest failure in the two-PC test was two players in a
+room, neither on its network, with nothing on screen saying which of the
+three things had not happened. **The button always says the next thing to do**,
+never everything that could be done.
+
+- **Clicking an empty seat moves you into it** (D57). Which slot you sit in
+  *is* which team you are on — 1–5 Radiant, 6–10 Dire — so the old team
+  dropdown was a second place for the same fact to live, free to disagree
+  with the seat.
+- **`canTakeSeat` mirrors the coordinator's refusals exactly.** A card that
+  invites a click and then shows an error is worse than one that does not
+  invite it.
+- **Five watching seats sit below the two teams** (D59) and are taken the
+  same way. The admins' three seats are a separate range and are not drawn —
+  `Member.Seat` distinguishes them, and dropping that field would put a
+  moderator in an occupied watcher's chair.
+- **Room settings is a dialog**, `.hostonly`, opened from the top right. The
+  door, the MMR floor, the description, admission and the game mode. The
+  coordinator refuses every one of them from anybody else, so hiding them is
+  a courtesy that keeps the screen honest, not a defence.
+
+### The room list
+
+Every heading sorts, both directions. A room list is read for one thing at a
+time — who has space, who is closest, who is at my level — and which one it
+is changes between one glance and the next.
+
+Search and the six filter chips run **locally**, against the list already on
+screen, so typing is instant instead of waiting for the next poll. They exist
+on the lobby and nowhere else: `show()` hides them elsewhere, because on the
+other screens they were controls that could not do anything.
+
+### The friends rail
+
+Grouped by where people are — in a room, online, offline — because that is
+the only question it answers: who can I play with right now. A flat list
+sorted by presence made the reader work it out every time.
+
+**Room invitations are the first thing in it**, above the friends themselves:
+an invitation is time-limited in a way a friend is not, and the room it names
+is filling up while it is ignored.
+
+**The row itself is the button** that opens a conversation. A "Message"
+button beside every name cost the rail most of its width.
+
+### Portraits
+
+Nobody uploads a picture — asking would be one more thing between installing
+and finding a game. A person is drawn from their initials on a colour derived
+from their **account id**, so the same person is the same colour on every
+machine, two players called Pudge still differ, and renaming yourself does not
+change your face.
+
+### Safety in the renderer
+
+Everything a player or a staff member typed is put on screen with
+`textContent`, never `innerHTML`. `renderAds` is the one that matters most —
+staff type an announcement and every other client displays it, which is the
+exact shape of a stored scripting hole — and links are followed only when the
+server said the scheme was http or https.
+
+## The window it runs in
+
+`desktop/` is a **Tauri (Rust) shell** and deliberately a thin one (D45, D55).
+It starts the Go binary, reads the loopback address and token from its first
+line of output, and points a webview at it. Everything the product does lives
+in Go.
+
+That split was a real decision. The obvious alternative was rewriting the
+client in Rust, which would have put the one proven part of the system — the
+Go client that has actually carried a Dota match between two PCs — back to
+zero, and split one set of bugs into two. What a browser page genuinely cannot
+do is exactly what the shell provides: a window that is not a browser tab, a
+tray icon, and notifications that arrive while the window is hidden.
+
+Consequences worth knowing:
+
+- **`-url-only` prints the address on the first line and nothing before it.**
+  The shell parses that line. Anything logged ahead of it breaks the window —
+  which has happened, when a dev-mode notice was printed too early. Log to
+  stderr, after the URL.
+- **`scripts/check.sh` runs `cargo check`, not a full build.** A full build
+  links a webview and takes minutes; what breaks in practice is the Rust. If
+  `cargo` is absent it says so and carries on — the Rust toolchain is not
+  required to work on this project, and most tasks never touch it.
+- `desktop/dist/index.html` is a placeholder. The real interface is served
+  over loopback by the Go binary; nothing in `dist/` is what a player sees.
+
+## The API the page talks to
+
+`lobbyapp/server.go` serves `/api/*` on loopback. It is not a proxy to the
+coordinator — it is a narrower interface over it, holding the session, the
+config file and the named pipe to the service, so the page never handles a
+credential or knows a server address.
+
+`GET /api/state` is the poll and returns everything: profile, room list, the
+room you are in, both chat channels, friends, banners, the service's view of
+the tunnel and the adapter, update status, diagnostics.
+
+The rest are actions, grouped: `rooms/*` (create, join, leave, slot,
+spectate, status, kick, privacy, describe, invite), `auth/*`, `friends/*`,
+`admin/*`, and `connect` / `disconnect` / `play` / `diagnose` / `update`.
+
+**Keep the page's calls and the app's routes in step.** An audit found four
+routes with nothing calling them and one call to a route that did not exist
+(D59). It is worth re-running after any batch of interface work:
+
+```bash
+python - <<'PY'
+import io,re
+js=io.open("lobbyapp/ui/app.js",encoding="utf-8").read()
+go=io.open("lobbyapp/server.go",encoding="utf-8").read()
+calls=set(re.findall(r'api\("(/api/[^"?]+)', js))
+routes=set(re.findall(r'mux\.HandleFunc\("(?:GET|POST) (/api/[^"]+)"', go))
+print("no route:", sorted(calls-routes))
+print("never called:", sorted(routes-calls))
+PY
+```
+
+`/api/rooms/invite` is uncalled on purpose — it is the raw door grant, and
+`/api/friends/invite` is the compound gesture the interface wants: tell them
+to come *and* let them through. Doing only the first is how somebody is
+invited and then refused (D41).
+
+## Looking at it
+
+| Command | What it gives you |
+|---|---|
+| `bash scripts/live.sh` | **The one to use.** A whole LobbyBaz on a fixed address, in its own window, that reloads itself within two seconds of any edit to the page, the stylesheet, the scripts or the strings. Go changes rebuild and restart at the same address. Leave it open for days. |
+| `bash scripts/try.sh` | The same sandbox, opened once, deleted on Ctrl-C. |
+| `bash scripts/preview.sh <name>` | The same sandbox photographed. One PNG per screen into `scripts/shots/<name>/`. |
+| `bash scripts/chatcheck.sh` | Drives the live page over CDP to prove the dock opens on an incoming message. |
+
+All of them are loopback-only, on a throwaway database, with `APPDATA`
+redirected so your own signed-in session is untouched. None contacts the live
+server.
+
+`preview.sh` takes `SHOTS` (a JSON array of `[name, script]` pairs, the
+script run in the page before the shutter) and `WIDE`/`TALL`:
+
+```bash
+SHOTS='[["room","show(\"room\")"],["create","$(\"btn-create\").click()"]]' \
+  bash scripts/preview.sh mine
+WIDE=1366 TALL=768 bash scripts/preview.sh small
+```
+
+## Changing something — the loop
+
+1. `bash scripts/live.sh`, open the address, leave it open.
+2. Edit. The window reloads itself.
+3. **Look at it.** At 1440 and at 1366.
+4. `bash scripts/check.sh` — the sixteen interface tests run here.
+5. `bash scripts/smoke.sh` if you touched `server.go` or anything it calls.
+6. `bash scripts/chatcheck.sh` if you touched the dock.
+7. `scripts/preview.sh` and look at the pictures.
+8. `STATE.md`, a decision entry if the reasoning is worth keeping, one commit
+   naming the task, `./scripts/git-sync.sh push`.
+
+## Where to be careful
+
+1. **Never type a word a player reads into the markup or the script.** Key it.
+2. **Never write `left`, `right`, `top` or `bottom`.** Logical properties.
+3. **Never use `innerHTML`** for anything a person typed.
+4. **Never name a colour below the token block.**
+5. **Never link an external font, script or stylesheet.** Nothing outside the
+   binary is reachable from Iran.
+6. **Never keep a second copy of server state in the page.**
+7. **Never call `api()` bare from a handler** — wrap it in `act()`.
+8. **Never judge a change by reading it.** Photograph it, or open it.

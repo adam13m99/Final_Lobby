@@ -19,6 +19,12 @@ hosts the match; our domestic relay carries traffic between players.
 - **Plan:** `docs/superpowers/plans/2026-08-18-network-core.md`
 - **Progress:** `docs/STATE.md`
 - **Decisions and their reasons:** `docs/decisions.md`
+- **How the server works:** `docs/backend.md`
+- **How the interface works:** `docs/frontend.md`
+
+The last two are the orientation documents. Read whichever half you are about
+to touch — they explain the structure, name the traps, and say which rules
+exist because something already went wrong.
 
 ## Resume ritual — mandatory
 
@@ -35,6 +41,9 @@ Before writing code, every session:
    and signing back in. Both bind loopback only and never touch the live
    server.
 3. `git log --oneline -15` to see what actually landed.
+4. Read `docs/backend.md` or `docs/frontend.md`, whichever half the task is
+   in. Both end with a short "where to be careful" list; that list is the
+   cheapest thing to read in the whole repository.
 
 Finishing a task means: tests pass, `STATE.md` updated, one commit naming the
 task number, pushed via `./scripts/git-sync.sh push`.
@@ -82,9 +91,13 @@ the predecessor platform. Reasons are in `docs/decisions.md`.
 
 ## Product rules (owner decisions — ask, never assume)
 
-- Host leaves or crashes: match ends, room closes after a 2-minute grace that
-  doubles as the host's chance to reconnect.
-- Kicked player: barred from that room for 5 minutes, enforced server-side.
+- Host leaves or crashes: the room closes after a **1-minute** grace that
+  doubles as the host's chance to reconnect (D40, revised from two minutes).
+  **The match ending does nothing to the room** — the players stay together,
+  which is the normal case: ten people finish and want to play again.
+- Kicked player: barred from that room for **1 minute, then 3, 5, 7** —
+  escalating per kick from that room (D39, revised from a flat five).
+  Enforced server-side, and never lifted by a password or an invitation.
 - Player who left voluntarily: may rejoin freely.
 - While a room is `Locked - In Game`, **no new player may join** until the host
   explicitly reopens it to new players.
