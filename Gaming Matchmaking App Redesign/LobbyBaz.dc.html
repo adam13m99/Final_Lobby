@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="_ds/nocturne-4feff644-6a3b-4972-a4c4-4425567ede46/styles.css">
+  <script src="_ds/nocturne-4feff644-6a3b-4972-a4c4-4425567ede46/_ds_bundle.js"></script>
+  <style>
+    html, body { height: 100%; overflow: auto; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-thumb { background: #3f424d; border-radius: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .35 } }
+    input, select, button { font-family: Inter, system-ui, sans-serif; }
+    .rrow { display: grid; grid-template-columns: minmax(0,1fr) 128px 92px 92px 104px; gap: 12px; }
+    @media (max-width: 1180px) {
+      .rrow { grid-template-columns: minmax(0,1fr) 118px 104px; }
+      .rcol-hide { display: none !important; }
+      .chip-sub { display: none; }
+    }
+  </style>
+</helmet>
+
+<div style="display: flex; height: 100vh; min-height: 560px; background: #161826; color: #e9e9ed; font: 400 14px/1.5 Inter, system-ui, sans-serif; overflow: hidden;">
+
+  <!-- rail -->
+  <nav style="width: 72px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 14px 0 12px; border-right: 1px solid #292b31; background: #14161f;">
+    <div style="width: 34px; height: 34px; flex: none; margin-bottom: 14px; border-radius: 9px; background: linear-gradient(150deg, #5d5294, #2b2741); box-shadow: 0 0 0 1px #423a6a; display: grid; place-items: center; font: 600 15px Inter, sans-serif; color: #d2cefd; letter-spacing: -.02em;">LB</div>
+
+    <button onClick="{{ goLobby }}" style="{{ navLobby }}">
+      <span style="font-size: 18px; line-height: 1;">▤</span>
+      <span style="font-size: 10.5px; letter-spacing: .04em;">Lobby</span>
+    </button>
+    <button onClick="{{ goRoom }}" style="{{ navRoom }}">
+      <span style="font-size: 18px; line-height: 1;">⬢</span>
+      <span style="font-size: 10.5px; letter-spacing: .04em;">Room</span>
+    </button>
+    <button onClick="{{ goTourneys }}" style="{{ navTourneys }}">
+      <span style="font-size: 18px; line-height: 1;">♛</span>
+      <span style="font-size: 10.5px; letter-spacing: .04em;">Events</span>
+    </button>
+    <div style="flex: 1;"></div>
+    <button onClick="{{ goSettings }}" style="{{ navSettings }}">
+      <span style="font-size: 18px; line-height: 1;">⚙</span>
+      <span style="font-size: 10.5px; letter-spacing: .04em;">Settings</span>
+    </button>
+    <div style="margin-top: 10px; display: flex; flex-direction: column; align-items: center; gap: 5px; color: #75798c; font-size: 10px;">
+      <span style="width: 7px; height: 7px; border-radius: 50%; background: #7ea88c; box-shadow: 0 0 8px #7ea88c;"></span>
+      <span>online</span>
+    </div>
+  </nav>
+
+  <!-- centre column -->
+  <div style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+
+    <!-- top bar -->
+    <header style="height: 54px; flex: none; display: flex; align-items: center; gap: 14px; padding: 0 18px; border-bottom: 1px solid #292b31; background: #191b28;">
+      <div style="position: relative; flex: 1 1 220px; min-width: 170px; max-width: 300px;">
+        <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #75798c; font-size: 13px;">⌕</span>
+        <input placeholder="Search rooms, hosts or players" style="width: 100%; height: 34px; padding: 0 10px 0 28px; border-radius: 8px; border: 1px solid #3f424d; background: #14161f; color: #e9e9ed; font-size: 13px;" />
+      </div>
+
+      <div style="display: flex; flex: 0 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); align-items: center; gap: 2px; padding: 3px; border-radius: 9px; background: #14161f; box-shadow: inset 0 0 0 1px #292b31;">
+        <sc-for list="{{ filters }}" as="f" hint-placeholder-count="4">
+          <button onClick="{{ f.onClick }}" style="{{ f.style }}">
+            <sc-if value="{{ f.hasDot }}">
+              <span style="width: 7px; height: 7px; flex: none; border-radius: 50%; background: {{ f.dot }}; box-shadow: 0 0 6px {{ f.dotGlow }};"></span>
+            </sc-if>
+            {{ f.label }}
+          </button>
+        </sc-for>
+      </div>
+
+      <div style="flex: 1;"></div>
+
+      <div style="display: flex; flex: none; align-items: center; gap: 8px; font-size: 12px; color: #9397ab;">
+        <span style="display: inline-flex; align-items: center; gap: 6px; height: 26px; flex: none; white-space: nowrap; padding: 0 9px; border-radius: 7px; background: #1c2a24; color: #a9cbb5; box-shadow: inset 0 0 0 1px #2c4034;">
+          <span style="width: 6px; height: 6px; border-radius: 50%; background: #7ea88c; animation: pulse 2.4s infinite;"></span>
+          service running
+        </span>
+        <span class="chip-sub" style="height: 26px; flex: none; white-space: nowrap; padding: 0 9px; border-radius: 7px; background: #14161f; box-shadow: inset 0 0 0 1px #292b31; display: inline-flex; align-items: center;">312 online</span>
+      </div>
+
+      <div style="display: flex; flex: none; align-items: center; gap: 9px; padding-left: 14px; margin-left: 4px; border-left: 1px solid #292b31;">
+        <div style="width: 30px; height: 30px; border-radius: 8px; background: #423a6a; color: #d2cefd; display: grid; place-items: center; font: 600 11px Inter, sans-serif;">YO</div>
+        <div style="line-height: 1.25; white-space: nowrap;">
+          <div style="font-size: 13px; font-weight: 500;">You</div>
+          <div class="chip-sub" style="font-size: 11px; color: #75798c;">3800 MMR · EU West</div>
+        </div>
+      </div>
+    </header>
+
+    <!-- body: content + friends -->
+    <div style="flex: 1; min-height: 0; display: flex;">
+
+      <main style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+
+        <!-- ══ LOBBY ══ -->
+        <sc-if value="{{ isLobby }}" hint-placeholder-val="{{ true }}">
+        <div style="flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 16px 18px 0;">
+
+          <sc-if value="{{ showError }}">
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px; padding: 10px 12px; border-radius: 8px; background: #2b1f22; box-shadow: inset 0 0 0 1px #5a3a3d;">
+              <span style="width: 20px; height: 20px; flex: none; border-radius: 50%; background: #cf8b86; color: #241417; display: grid; place-items: center; font: 700 12px Inter, sans-serif;">!</span>
+              <div style="flex: 1; min-width: 0;">
+                <div style="font-size: 13px; font-weight: 500;">Lost connection to the lobby service</div>
+                <div style="font-size: 12px; color: #9397ab;">Rooms below may be out of date. Last update 41s ago.</div>
+              </div>
+              <button style="height: 30px; padding: 0 12px; border-radius: 7px; border: 1px solid #9184d9; background: transparent; color: #d2cefd; font: 500 12.5px Inter, sans-serif; cursor: pointer;" style-hover="background: #2b2741;">Reconnect</button>
+            </div>
+          </sc-if>
+
+          <div style="flex: 1; min-height: 0; display: flex; flex-direction: column; border-radius: 12px; background: #1b1d29; box-shadow: 0 0 0 1px #292b31; overflow: hidden;">
+
+            <div style="flex: none; display: flex; align-items: center; gap: 12px; padding: 12px 14px;">
+              <h5 style="margin: 0; font-size: 15px; font-weight: 500;">Rooms</h5>
+              <span style="font-size: 12px; color: #75798c;">{{ roomCountLabel }}</span>
+              <div style="flex: 1;"></div>
+              <span style="font-size: 11.5px; color: #6d7183;">{{ sortHint }}</span>
+              <button onClick="{{ openCreate }}" style="height: 32px; padding: 0 14px; border-radius: 8px; border: 1px solid #9184d9; background: transparent; color: #d2cefd; font: 500 13px Inter, sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;" style-hover="background: #2b2741; border-color: #b5abfc;" style-active="background: #423a6a;">
+                <span style="font-size: 15px; line-height: 1;">+</span> Create room
+              </button>
+            </div>
+
+            <div class="rrow" style="flex: none; padding: 0 14px 7px; font: 500 10.5px Inter, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: #6d7183; border-bottom: 1px solid #292b31;">
+              <sc-for list="{{ heads }}" as="h" hint-placeholder-count="5">
+                <button class="{{ h.cls }}" onClick="{{ h.onClick }}" style="{{ h.style }}" style-hover="color: #cfd3e5;">{{ h.label }}<span style="color: #b5abfc;">{{ h.arrow }}</span></button>
+              </sc-for>
+            </div>
+
+            <sc-if value="{{ hasRooms }}" hint-placeholder-val="{{ true }}">
+            <div style="flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto;">
+              <sc-for list="{{ rooms }}" as="r" hint-placeholder-count="6">
+                <div onClick="{{ r.onOpen }}" class="rrow" style="align-items: center; padding: 9px 14px; border-bottom: 1px solid #21232f; cursor: pointer;" style-hover="background: #1f2130;">
+
+                  <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+                    <div style="width: 30px; height: 30px; flex: none; border-radius: 8px; display: grid; place-items: center; font: 600 11px Inter, sans-serif; background: {{ r.avatarBg }}; color: {{ r.avatarFg }};">{{ r.initials }}</div>
+                    <div style="min-width: 0;">
+                      <div style="font-size: 13.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ r.name }}</div>
+                      <div style="display: flex; align-items: center; gap: 6px; min-width: 0;">
+                        <span style="flex: none; height: 15px; padding: 0 5px; border-radius: 4px; font: 500 9.5px Inter, sans-serif; letter-spacing: .06em; text-transform: uppercase; display: inline-flex; align-items: center; background: {{ r.stateBg }}; color: {{ r.stateFg }};">{{ r.state }}</span>
+                        <span style="font-size: 11.5px; color: #75798c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ r.meta }}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font: 500 12.5px Inter, sans-serif; color: #cfd3e5; width: 34px;">{{ r.slots }}</span>
+                    <div style="display: flex; gap: 2px;">
+                      <sc-for list="{{ r.ticks }}" as="t" hint-placeholder-count="10">
+                        <span style="width: 4px; height: 13px; border-radius: 1px; background: {{ t.bg }};"></span>
+                      </sc-for>
+                    </div>
+                  </div>
+
+                  <div class="rcol-hide" style="font-size: 12.5px; color: #cfd3e5;">{{ r.mmr }} <span style="font-size: 10.5px; color: #6d7183;">{{ r.mmrKind }}</span></div>
+
+                  <div class="rcol-hide" style="display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: {{ r.pingFg }};">
+                    <span style="display: flex; align-items: flex-end; gap: 1.5px; height: 11px;">
+                      <span style="width: 3px; height: 4px; border-radius: 1px; background: currentColor;"></span>
+                      <span style="width: 3px; height: 7px; border-radius: 1px; background: currentColor; opacity: {{ r.bar2 }};"></span>
+                      <span style="width: 3px; height: 11px; border-radius: 1px; background: currentColor; opacity: {{ r.bar3 }};"></span>
+                    </span>
+                    {{ r.ping }}
+                  </div>
+
+                  <div style="display: flex; align-items: center; gap: 7px;">
+                    <button onClick="{{ r.onJoin }}" style="{{ r.joinStyle }}">{{ r.joinLabel }}</button>
+                    <span title="{{ r.liveTitle }}" style="width: 8px; height: 8px; flex: none; border-radius: 50%; background: {{ r.liveDot }}; box-shadow: 0 0 7px {{ r.liveGlow }};"></span>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+            </sc-if>
+
+            <sc-if value="{{ noRooms }}">
+              <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 40px;">
+                <div style="width: 46px; height: 46px; border-radius: 12px; background: #21232f; box-shadow: inset 0 0 0 1px #32353f; display: grid; place-items: center; color: #75798c; font-size: 19px;">⬡</div>
+                <div style="font-size: 15px; font-weight: 500;">No rooms match those filters</div>
+                <div style="font-size: 12.5px; color: #75798c; text-align: center; max-width: 320px;">Clear the filters to see all 24 open rooms, or host your own and let people come to you.</div>
+                <div style="display: flex; gap: 8px; margin-top: 6px;">
+                  <button onClick="{{ clearFilters }}" style="height: 32px; padding: 0 13px; border-radius: 8px; border: 1px solid #3f424d; background: transparent; color: #cfd3e5; font: 500 12.5px Inter, sans-serif; cursor: pointer;" style-hover="background: #21232f;">Clear filters</button>
+                  <button onClick="{{ openCreate }}" style="height: 32px; padding: 0 13px; border-radius: 8px; border: 1px solid #9184d9; background: transparent; color: #d2cefd; font: 500 12.5px Inter, sans-serif; cursor: pointer;" style-hover="background: #2b2741;">Create room</button>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+        </sc-if>
+
+        <!-- ══ ROOM ══ -->
+        <sc-if value="{{ isRoom }}">
+        <div style="flex: 1; min-height: 0; overflow-y: auto; padding: 16px 18px 0;">
+
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+            <button onClick="{{ goLobby }}" style="height: 30px; padding: 0 11px; border-radius: 7px; border: 1px solid #3f424d; background: transparent; color: #cfd3e5; font: 500 12.5px Inter, sans-serif; cursor: pointer;" style-hover="background: #21232f;">← Lobby</button>
+            <div style="width: 32px; height: 32px; border-radius: 8px; background: #1f3a2b; color: #a9cbb5; display: grid; place-items: center; font: 600 11px Inter, sans-serif;">JU</div>
+            <div style="min-width: 0;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h5 style="margin: 0; font-size: 15.5px; font-weight: 500;">Casual all pick, everyone welcome</h5>
+                <span style="height: 17px; padding: 0 6px; border-radius: 5px; background: #1c2a24; color: #a9cbb5; font: 500 10px Inter, sans-serif; letter-spacing: .06em; text-transform: uppercase; display: inline-flex; align-items: center;">Open</span>
+              </div>
+              <div style="font-size: 11.5px; color: #75798c;">Host Juggernaut · All Pick · 3200 avg MMR · EU West · 2/10 players</div>
+            </div>
+            <div style="flex: 1;"></div>
+            <button style="height: 30px; padding: 0 11px; border-radius: 7px; border: 1px solid #3f424d; background: transparent; color: #9397ab; font: 500 12.5px Inter, sans-serif; cursor: pointer;" style-hover="background: #21232f; color: #cfd3e5;">Invite</button>
+            <button style="height: 30px; padding: 0 11px; border-radius: 7px; border: 1px solid #3f424d; background: transparent; color: #9397ab; font: 500 12.5px Inter, sans-serif; cursor: pointer;" style-hover="background: #21232f; color: #cfd3e5;">Room settings</button>
+          </div>
+
+          <!-- connect stepper: the one thing that must be unambiguous -->
+          <div style="display: flex; align-items: stretch; gap: 10px; margin-bottom: 12px; padding: 12px 14px; border-radius: 12px; background: #1b1d29; box-shadow: 0 0 0 1px #292b31;">
+            <sc-for list="{{ steps }}" as="s" hint-placeholder-count="3">
+              <div style="flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 9px 11px; border-radius: 9px; background: {{ s.bg }}; box-shadow: inset 0 0 0 1px {{ s.border }};">
+                <span style="width: 22px; height: 22px; flex: none; border-radius: 50%; display: grid; place-items: center; font: 600 11px Inter, sans-serif; background: {{ s.dotBg }}; color: {{ s.dotFg }};">{{ s.mark }}</span>
+                <div style="min-width: 0;">
+                  <div style="font-size: 12.5px; font-weight: 500; color: {{ s.titleFg }};">{{ s.title }}</div>
+                  <div style="font-size: 11px; color: #75798c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ s.detail }}</div>
+                </div>
+              </div>
+            </sc-for>
+            <button onClick="{{ primaryAction }}" style="{{ primaryStyle }}">{{ primaryLabel }}</button>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px;">
+            <sc-for list="{{ teams }}" as="team" hint-placeholder-count="2">
+              <div style="border-radius: 12px; background: #1b1d29; box-shadow: 0 0 0 1px #292b31; overflow: hidden;">
+                <div style="display: flex; align-items: center; gap: 8px; padding: 10px 13px; border-bottom: 1px solid #24262f;">
+                  <span style="width: 8px; height: 8px; border-radius: 2px; background: {{ team.color }};"></span>
+                  <span style="font: 500 11px Inter, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: #cfd3e5;">{{ team.name }}</span>
+                  <div style="flex: 1;"></div>
+                  <span style="font-size: 11.5px; color: #75798c;">{{ team.count }}</span>
+                </div>
+                <div style="padding: 6px;">
+                  <sc-for list="{{ team.slots }}" as="slot" hint-placeholder-count="5">
+                    <div onClick="{{ slot.onClick }}" style="{{ slot.style }}" style-hover="background: #21232f;">
+                      <span style="width: 18px; flex: none; font: 500 11px Inter, sans-serif; color: #6d7183; text-align: right;">{{ slot.index }}</span>
+                      <sc-if value="{{ slot.filled }}" hint-placeholder-val="{{ true }}">
+                        <div style="width: 24px; height: 24px; flex: none; border-radius: 7px; display: grid; place-items: center; font: 600 10px Inter, sans-serif; background: {{ slot.avatarBg }}; color: {{ slot.avatarFg }};">{{ slot.initials }}</div>
+                        <span style="font-size: 13px; font-weight: 500; color: {{ slot.nameFg }};">{{ slot.name }}</span>
+                        <span style="font-size: 11.5px; color: #75798c;">{{ slot.sub }}</span>
+                        <div style="flex: 1;"></div>
+                        <span style="font-size: 11px; color: {{ slot.pingFg }};">{{ slot.ping }}</span>
+                      </sc-if>
+                      <sc-if value="{{ slot.empty }}">
+                        <span style="font-size: 12.5px; color: #6d7183;">Sit here</span>
+                      </sc-if>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 10px; margin: 12px 0 16px; padding: 11px 14px; border-radius: 12px; background: #1b1d29; box-shadow: 0 0 0 1px #292b31;">
+            <span style="font: 500 10.5px Inter, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: #6d7183;">Spectators</span>
+            <span style="font-size: 12.5px; color: #75798c;">Nobody spectating · 2 slots, admins only</span>
+            <div style="flex: 1;"></div>
+            <button onClick="{{ goLobby }}" style="height: 30px; padding: 0 11px; border-radius: 7px; border: 1px solid #4a3335; background: transparent; color: #cf8b86; font: 500 12.5px Inter, sans-serif; cursor: pointer;" style-hover="background: #2b1f22;">Leave room</button>
+          </div>
+        </div>
+        </sc-if>
+
+        <!-- ══ SETTINGS ══ -->
+        <sc-if value="{{ isSettings }}">
+        <div style="flex: 1; min-height: 0; overflow-y: auto; padding: 18px 18px 24px;">
+          <div style="max-width: 880px; display: flex; flex-direction: column; gap: 12px;">
+
+            <div>
+              <h4 style="margin: 0 0 2px; font-size: 19px; font-weight: 500;">Settings</h4>
+              <div style="font-size: 12.5px; color: #75798c;">Profile, network and launch behaviour.</div>
+            </div>
+
+            <div style="border-radius: 12px; background: #1b1d29; box-shadow: 0 0 0 1px #292b31; padding: 14px;">
+              <div style="font: 500 10.5px Inter, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: #6d7183; margin-bottom: 12px;">Profile</div>
+              <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 14px;">
+                <div style="width: 52px; height: 52px; border-radius: 13px; background: #423a6a; color: #d2cefd; display: grid; place-items: center; font: 600 17px Inter, sans-serif;">YO</div>
+                <div>
+                  <div style="font-size: 14.5px; font-weight: 500;">You</div>
+                  <div style="font-size: 12px; color: #75798c;">Steam linked · 3800 MMR · 412 games hosted</div>
+                </div>
+                <div style="flex: 1;"></div>
+                <button style="height: 30px; padding: 0 11px; border-radius: 7px; border: 1px solid #3f424d; background: transparent; color: #cfd3e5; font: 500 12.5px Inter, sans-serif; cursor: pointer;" style-hover="background: #21232f;">Change avatar</button>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">
+                <label style="display: block;">
+                  <span style="display: block; font-size: 11.5px; color: #9397ab; margin-bottom: 5px;">Display name</span>
+                  <input value="You" style="width: 100%; height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid #3f424d; background: #14161f; color: #e9e9ed; font-size: 13px;" />
+                </label>
+                <label style="display: block;">
+                  <span style="display: block; font-size: 11.5px; color: #9397ab; margin-bottom: 5px;">Preferred region</span>
+                  <select style="width: 100%; height: 34px; padding: 0 9px; border-radius: 8px; border: 1px solid #3f424d; background: #14161f; color: #e9e9ed; font-size: 13px;">
+                    <option>EU West</option>
+                    <option>EU East</option>
+                    <option>Middle East</option>
+                    <option>SEA</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <div style="border-radius: 12px; background: #1b1d29; box-shadow: 0 0 0 1px #292b31; padding: 14px;">
+              <div style="font: 500 10.5px Inter, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: #6d7183; margin-bottom: 12px;">Network</div>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px 20px;">
+                <div>
+                  <div style="font-size: 11.5px; color: #9397ab;">Virtual adapter</div>
+                  <div style="font-size: 13px; margin-top: 3px;">lbz0 · 10.87.0.39</div>
+                </div>
+                <div>
+                  <div style="font-size: 11.5px; color: #9397ab;">Relay</div>
+                  <div style="font-size: 13px; margin-top: 3px; color: #a9cbb5;">fra-02 · 18 ms</div>
+                </div>
+                <div>
+                  <div style="font-size: 11.5px; color: #9397ab;">Dota 2 path</div>
+                  <div style="font-size: 13px; margin-top: 3px; color: #cfd3e5;">Detected automatically</div>
+                </div>
+              </div>
+              <div style="display: flex; gap: 8px; margin-top: 14px;">
+                <button style="height: 32px; padding: 0 13px; border-radius: 8px; border: 1px solid #9184d9; background: transparent; color: #d2cefd; font: 500 12.5px Inter, sans-serif; cursor: pointer;" style-hover="background: #2b2741;">Run diagnostics</button>
+                <button style="height: 32px; padding: 0 13px; border-radius: 8px; border: 1px solid #3f424d; background: transparent; color: #cfd3e5; font: 500 12.5px Inter, sans-serif; cursor: pointer;" style-hover="background: #21232f;">Reinstall adapter</button>
+              </div>
+            </div>
+
+            <div style="border-radius: 12px; background: #1b1d29; box-shadow: 0 0 0 1px #292b31; padding: 14px;">
+              <div style="font: 500 10.5px Inter, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: #6d7183; margin-bottom: 6px;">Preferences</div>
+              <sc-for list="{{ prefs }}" as="p" hint-placeholder-count="4">
+                <div style="display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid #21232f;">
+                  <div style="min-width: 0;">
+                    <div style="font-size: 13px;">{{ p.label }}</div>
+                    <div style="font-size: 11.5px; color: #75798c;">{{ p.hint }}</div>
+                  </div>
+                  <div style="flex: 1;"></div>
+                  <button onClick="{{ p.onToggle }}" style="{{ p.trackStyle }}">
+                    <span style="{{ p.knobStyle }}"></span>
+                  </button>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+        </sc-if>
+
+        <!-- ══ EVENTS placeholder ══ -->
+        <sc-if value="{{ isTourneys }}">
+          <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;">
+            <div style="width: 46px; height: 46px; border-radius: 12px; background: #21232f; box-shadow: inset 0 0 0 1px #32353f; display: grid; place-items: center; color: #75798c; font-size: 19px;">♛</div>
+            <div style="font-size: 15px; font-weight: 500;">No events running</div>
+            <div style="font-size: 12.5px; color: #75798c;">Community tournaments show up here when a host schedules one.</div>
+          </div>
+        </sc-if>
+
+        <!-- ══ chat dock ══ -->
+        <div style="{{ dockStyle }}">
+          <div style="flex: none; display: flex; align-items: center; gap: 4px; height: 38px; padding: 0 10px 0 12px; border-bottom: 1px solid #24262f;">
+            <sc-for list="{{ chatTabs }}" as="t" hint-placeholder-count="3">
+              <button onClick="{{ t.onClick }}" style="{{ t.style }}">
+                {{ t.label }}
+                <sc-if value="{{ t.unread }}">
+                  <span style="width: 5px; height: 5px; border-radius: 50%; background: #b5abfc;"></span>
+                </sc-if>
+              </button>
+            </sc-for>
+            <div style="flex: 1;"></div>
+            <span style="font-size: 11.5px; color: #6d7183;">{{ chatPresence }}</span>
+            <button onClick="{{ toggleChat }}" style="width: 26px; height: 26px; margin-left: 8px; border-radius: 6px; border: 1px solid #32353f; background: transparent; color: #9397ab; font-size: 11px; cursor: pointer;" style-hover="background: #21232f; color: #e9e9ed;">{{ chatChevron }}</button>
+          </div>
+
+          <sc-if value="{{ chatOpen }}" hint-placeholder-val="{{ true }}">
+            <div style="flex: 1; min-height: 0; overflow-y: auto; padding: 8px 12px; display: flex; flex-direction: column; gap: 4px;">
+              <sc-for list="{{ messages }}" as="m" hint-placeholder-count="6">
+                <div style="display: flex; gap: 8px; font-size: 12.5px; line-height: 1.5; align-items: baseline;">
+                  <span style="flex: none; width: 34px; white-space: nowrap; color: #4f5361; font-size: 11px; font-variant-numeric: tabular-nums;">{{ m.time }}</span>
+                  <span style="flex: none; white-space: nowrap; font-weight: 500; color: {{ m.nameFg }};">{{ m.name }}</span>
+                  <span style="min-width: 0; color: {{ m.textFg }};">{{ m.text }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="flex: none; display: flex; gap: 8px; padding: 8px 12px 10px;">
+              <input placeholder="Message #lobby" style="flex: 1; height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid #3f424d; background: #14161f; color: #e9e9ed; font-size: 12.5px;" />
+              <button style="height: 32px; padding: 0 14px; border-radius: 8px; border: 1px solid #9184d9; background: transparent; color: #d2cefd; font: 500 12.5px Inter, sans-serif; cursor: pointer;" style-hover="background: #2b2741;">Send</button>
+            </div>
+          </sc-if>
+        </div>
+      </main>
+
+      <!-- friends -->
+      <aside style="width: 244px; flex: none; display: flex; flex-direction: column; border-left: 1px solid #292b31; background: #191b28;">
+        <div style="flex: none; display: flex; align-items: center; gap: 8px; height: 54px; padding: 0 12px; border-bottom: 1px solid #24262f;">
+          <span style="font-size: 13.5px; font-weight: 500;">Friends</span>
+          <span style="font-size: 11.5px; color: #6d7183;">{{ friendsPresence }}</span>
+          <div style="flex: 1;"></div>
+          <button style="width: 26px; height: 26px; border-radius: 6px; border: 1px solid #32353f; background: transparent; color: #9397ab; font-size: 14px; cursor: pointer;" style-hover="background: #21232f; color: #e9e9ed;" title="Add friend">+</button>
+        </div>
+        <div style="flex: 1; min-height: 0; overflow-y: auto; padding: 8px;">
+          <sc-for list="{{ friendGroups }}" as="g" hint-placeholder-count="2">
+            <div style="margin-bottom: 10px;">
+              <div style="font: 500 10px Inter, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: #6d7183; padding: 4px 6px;">{{ g.label }}</div>
+              <sc-for list="{{ g.people }}" as="p" hint-placeholder-count="3">
+                <div style="display: flex; align-items: center; gap: 9px; padding: 6px; border-radius: 8px; cursor: pointer;" style-hover="background: #21232f;">
+                  <div style="position: relative; flex: none;">
+                    <div style="width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; font: 600 10px Inter, sans-serif; background: {{ p.avatarBg }}; color: {{ p.avatarFg }}; opacity: {{ p.opacity }};">{{ p.initials }}</div>
+                    <span style="position: absolute; right: -2px; bottom: -2px; width: 8px; height: 8px; border-radius: 50%; border: 2px solid #191b28; background: {{ p.dot }};"></span>
+                  </div>
+                  <div style="min-width: 0; flex: 1;">
+                    <div style="font-size: 12.5px; color: {{ p.nameFg }}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ p.name }}</div>
+                    <div style="font-size: 11px; color: #6d7183; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ p.status }}</div>
+                  </div>
+                  <sc-if value="{{ p.joinable }}">
+                    <button style="height: 22px; padding: 0 7px; border-radius: 6px; border: 1px solid #5d5294; background: transparent; color: #d2cefd; font: 500 10.5px Inter, sans-serif; cursor: pointer;" style-hover="background: #2b2741;">Join</button>
+                  </sc-if>
+                </div>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- ══ CREATE ROOM ══ -->
+  <sc-if value="{{ createOpen }}">
+    <div onClick="{{ closeCreate }}" style="position: fixed; inset: 0; background: rgba(8,9,14,.66); display: grid; place-items: center; padding: 24px;">
+      <div onClick="{{ stop }}" style="width: 520px; max-width: 100%; border-radius: 14px; background: #1e2030; box-shadow: 0 0 0 1px #595d6c, 0 16px 40px rgba(0,0,0,.65); overflow: hidden;">
+        <div style="padding: 15px 18px 12px; border-bottom: 1px solid #292b31;">
+          <h5 style="margin: 0 0 2px; font-size: 16px; font-weight: 500;">Create a room</h5>
+          <div style="font-size: 12px; color: #75798c;">You host. Players who join connect through your machine.</div>
+        </div>
+        <div style="padding: 16px 18px; display: flex; flex-direction: column; gap: 14px;">
+          <label style="display: block;">
+            <span style="display: block; font-size: 11.5px; color: #9397ab; margin-bottom: 5px;">Room name</span>
+            <input placeholder="Turbo, no feeders" style="width: 100%; height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid #3f424d; background: #14161f; color: #e9e9ed; font-size: 13px;" />
+          </label>
+
+          <div>
+            <span style="display: block; font-size: 11.5px; color: #9397ab; margin-bottom: 5px;">Who can join</span>
+            <div style="display: flex; gap: 3px; padding: 3px; border-radius: 9px; background: #14161f; box-shadow: inset 0 0 0 1px #292b31;">
+              <sc-for list="{{ visibility }}" as="v" hint-placeholder-count="3">
+                <button onClick="{{ v.onClick }}" style="{{ v.style }}">{{ v.label }}</button>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <label style="display: block;">
+              <span style="display: block; font-size: 11.5px; color: #9397ab; margin-bottom: 5px;">Game mode</span>
+              <select style="width: 100%; height: 36px; padding: 0 9px; border-radius: 8px; border: 1px solid #3f424d; background: #14161f; color: #e9e9ed; font-size: 13px;">
+                <option>All Pick</option>
+                <option>Turbo</option>
+                <option>Captains Mode</option>
+                <option>Random Draft</option>
+              </select>
+            </label>
+            <label style="display: block;">
+              <span style="display: block; font-size: 11.5px; color: #9397ab; margin-bottom: 5px;">Minimum MMR</span>
+              <input placeholder="Any" style="width: 100%; height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid #3f424d; background: #14161f; color: #e9e9ed; font-size: 13px;" />
+            </label>
+          </div>
+
+          <label style="display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: #cfd3e5;">
+            <input type="checkbox" style="width: 15px; height: 15px; accent-color: #9184d9;" />
+            Require a password
+          </label>
+
+          <div style="display: flex; align-items: center; gap: 9px; padding: 10px 12px; border-radius: 9px; background: #202233; box-shadow: inset 0 0 0 1px #2f3346;">
+            <span style="width: 18px; height: 18px; flex: none; border-radius: 50%; background: #423a6a; color: #d2cefd; display: grid; place-items: center; font: 600 11px Inter, sans-serif;">i</span>
+            <span style="font-size: 11.5px; color: #9397ab;">Hosting uses ~2 Mbps up per player. Your relay is fra-02 (18 ms).</span>
+          </div>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 8px; padding: 12px 18px 15px; border-top: 1px solid #292b31;">
+          <button onClick="{{ closeCreate }}" style="height: 34px; padding: 0 14px; border-radius: 8px; border: 1px solid #3f424d; background: transparent; color: #cfd3e5; font: 500 13px Inter, sans-serif; cursor: pointer;" style-hover="background: #21232f;">Cancel</button>
+          <button onClick="{{ createAndOpen }}" style="height: 34px; padding: 0 16px; border-radius: 8px; border: 1px solid #9184d9; background: transparent; color: #d2cefd; font: 500 13px Inter, sans-serif; cursor: pointer;" style-hover="background: #2b2741; border-color: #b5abfc;" style-active="background: #423a6a;">Create &amp; open</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;emptyRooms&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;showError&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  state = {
+    screen: 'lobby', filter: 'All', chatOpen: true, chatTab: 'Lobby',
+    create: false, connect: 1, vis: 'Anyone', prefs: [true, true, false, true],
+    sortKey: 'players', sortDir: 'desc'
+  };
+
+  toggleSort(key) {
+    this.setState((s) => s.sortKey === key
+      ? { sortDir: s.sortDir === 'asc' ? 'desc' : 'asc' }
+      : { sortKey: key, sortDir: key === 'name' ? 'asc' : 'desc' });
+  }
+
+  navStyle(active) {
+    return 'width: 56px; height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; border: 0; border-radius: 10px; cursor: pointer; font-family: Inter, sans-serif; background: ' +
+      (active ? '#232539' : 'transparent') + '; color: ' + (active ? '#d2cefd' : '#75798c') +
+      '; box-shadow: ' + (active ? 'inset 0 0 0 1px #3a3560' : 'none') + ';';
+  }
+
+  pillStyle(active) {
+    return 'height: 28px; flex: none; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; padding: 0 11px; border: 0; border-radius: 7px; cursor: pointer; font: 500 12.5px Inter, sans-serif; background: ' +
+      (active ? '#2b2741' : 'transparent') + '; color: ' + (active ? '#d2cefd' : '#9397ab') + ';';
+  }
+
+  room(o) {
+    const full = o.taken >= 10;
+    const ticks = Array.from({ length: 10 }, (_, i) => ({ bg: i < o.taken ? (full ? '#cf8b86' : '#9184d9') : '#2c2f3d' }));
+    const pingFg = o.ping <= 40 ? '#a9cbb5' : o.ping <= 90 ? '#cfc48b' : '#cf8b86';
+    const joinable = !full && !o.started;
+    return {
+      ...o, ticks, pingFg,
+      pingNum: parseInt(o.ping, 10) || 999,
+      mmrNum: parseInt(o.mmr, 10) || 0,
+      joinRank: joinable ? 2 : o.started ? 1 : 0,
+      liveDot: o.started ? '#cf8b86' : '#7ea88c',
+      liveGlow: o.started ? 'rgba(207,139,134,.55)' : 'rgba(126,168,140,.55)',
+      liveTitle: o.started ? 'Match in progress' : 'Not in a game yet',
+      bar2: o.ping <= 90 ? 1 : 0.3, bar3: o.ping <= 40 ? 1 : 0.3,
+      slots: o.taken + '/10',
+      stateBg: o.started ? '#2a2733' : '#1c2a24',
+      stateFg: o.started ? '#9397ab' : '#a9cbb5',
+      state: o.started ? 'In game' : 'Open',
+      joinLabel: full ? 'Full' : o.started ? 'Watch' : 'Join',
+      joinStyle: 'height: 28px; width: 62px; flex: none; border-radius: 7px; cursor: ' + (joinable || o.started ? 'pointer' : 'not-allowed') +
+        '; font: 500 12.5px Inter, sans-serif; border: 1px solid ' +
+        (joinable ? '#9184d9' : '#32353f') + '; background: ' + (joinable ? 'rgba(145,132,217,.10)' : 'transparent') +
+        '; color: ' + (joinable ? '#d2cefd' : '#6d7183') + ';',
+      onJoin: joinable ? () => this.setState({ screen: 'room', connect: 1 }) : () => {},
+      onOpen: () => this.setState({ screen: 'room', connect: 1 })
+    };
+  }
+
+  slot(i, o) {
+    const filled = !!o;
+    return {
+      index: i, filled, empty: !filled,
+      initials: o ? o.initials : '', name: o ? o.name : '', sub: o ? o.sub : '',
+      ping: o ? o.ping : '', pingFg: o && o.ping === '—' ? '#6d7183' : '#a9cbb5',
+      nameFg: o && o.you ? '#d2cefd' : '#e9e9ed',
+      avatarBg: o && o.you ? '#423a6a' : '#2a3d31', avatarFg: o && o.you ? '#d2cefd' : '#a9cbb5',
+      onClick: () => {},
+      style: 'display: flex; align-items: center; gap: 9px; height: 38px; padding: 0 9px; margin-bottom: 3px; border-radius: 8px; cursor: pointer; background: ' +
+        (filled ? (o.you ? 'rgba(145,132,217,.10)' : '#1f2130') : 'transparent') +
+        '; box-shadow: inset 0 0 0 1px ' + (filled ? (o.you ? '#4b4278' : '#282b38') : '#232634') + ';'
+    };
+  }
+
+  renderVals() {
+    const s = this.state;
+    const set = (o) => this.setState(o);
+    const empty = this.props.emptyRooms ?? false;
+
+    const rooms = empty ? [] : [
+      { name: 'Ranked 5v5 — no feeders', meta: 'Shadow Fiend · Captains Mode · 3000+ MMR · 24 ms', initials: 'SF', avatarBg: '#2a3d31', avatarFg: '#a9cbb5', taken: 8, mmr: '3000+', mmrKind: 'min', ping: '24 ms', locked: false, started: false },
+      { name: 'Turbo — quick games', meta: 'Pudge · Turbo · 3100 avg · 31 ms · password', initials: 'PU', avatarBg: '#33304a', avatarFg: '#cfd3e5', taken: 4, mmr: '3100', mmrKind: 'avg', ping: '31 ms', locked: true, started: false },
+      { name: 'Casual all pick, everyone welcome', meta: 'Juggernaut · All Pick · 3200 avg · 18 ms · you are in here', initials: 'JU', avatarBg: '#2a3d31', avatarFg: '#a9cbb5', taken: 2, mmr: '3200', mmrKind: 'avg', ping: '18 ms', locked: false, started: false },
+      { name: 'Chill inhouse, mics on', meta: 'Lina · All Pick · 4000+ MMR · 68 ms', initials: 'LI', avatarBg: '#3d3230', avatarFg: '#e3c3b8', taken: 10, mmr: '4000+', mmrKind: 'min', ping: '68 ms', locked: false, started: false },
+      { name: 'Bot practice, last hitting', meta: 'Tinker · All Pick · any MMR · 142 ms', initials: 'TI', avatarBg: '#2f3346', avatarFg: '#cfd3e5', taken: 3, mmr: 'Any', mmrKind: '', ping: '142 ms', locked: false, started: false },
+      { name: 'Stack of 5 looking for enemies', meta: 'Invoker · Captains Mode · 4500+ MMR · 22 ms', initials: 'IN', avatarBg: '#33304a', avatarFg: '#cfd3e5', taken: 9, mmr: '4500+', mmrKind: 'min', ping: '22 ms', locked: true, started: true }
+    ].map((r) => this.room(r)).filter((r) => {
+      if (s.filter === 'Has space') return r.taken < 10;
+      if (s.filter === 'Not started') return !r.started;
+      if (s.filter === 'In game') return r.started;
+      if (s.filter === 'My MMR') return r.mmrNum === 0 || Math.abs(r.mmrNum - 3800) <= 1000;
+      if (s.filter === 'Friends') return ['SF', 'LI', 'PU'].indexOf(r.initials) > -1;
+      return true;
+    });
+
+    const sortFields = { name: 'name', players: 'taken', mmr: 'mmrNum', ping: 'pingNum', join: 'joinRank' };
+    const field = sortFields[s.sortKey] || 'taken';
+    const dir = s.sortDir === 'asc' ? 1 : -1;
+    rooms.sort((a, b) => {
+      const x = a[field], y = b[field];
+      if (typeof x === 'string') return x.localeCompare(y) * dir;
+      return (x - y) * dir;
+    });
+
+    const headDefs = [
+      ['name', 'Room', ''], ['players', 'Players', ''],
+      ['mmr', 'MMR', 'rcol-hide'], ['ping', 'Ping', 'rcol-hide'], ['join', 'Status', '']
+    ];
+    const heads = headDefs.map(([key, label, cls]) => {
+      const on = s.sortKey === key;
+      return {
+        label, cls,
+        arrow: on ? (s.sortDir === 'asc' ? ' ↑' : ' ↓') : '',
+        onClick: () => this.toggleSort(key),
+        style: 'display: inline-flex; align-items: center; gap: 2px; justify-self: start; padding: 0; border: 0; background: transparent; cursor: pointer; font: 500 10.5px Inter, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: ' +
+          (on ? '#cfd3e5' : '#6d7183') + ';'
+      };
+    });
+    const sortLabels = { name: 'name', players: 'players', mmr: 'MMR', ping: 'ping', join: 'joinability' };
+    const sortHint = 'sorted by ' + sortLabels[s.sortKey] + (s.sortDir === 'asc' ? ' ascending' : ' descending');
+
+    const steps = [1, 2, 3].map((n) => {
+      const done = s.connect > n, active = s.connect === n;
+      const meta = [
+        { title: 'Seat taken', detail: 'Dire · slot 6' },
+        { title: 'Network ready', detail: 'you 10.87.0.39 · host 10.87.0.34' },
+        { title: 'Launch Dota 2', detail: 'joins the host\u2019s lobby automatically' }
+      ][n - 1];
+      return {
+        ...meta,
+        mark: done ? '✓' : String(n),
+        bg: active ? 'rgba(145,132,217,.10)' : 'transparent',
+        border: active ? '#4b4278' : '#282b38',
+        dotBg: done ? '#2a3d31' : active ? '#423a6a' : '#24262f',
+        dotFg: done ? '#a9cbb5' : active ? '#d2cefd' : '#6d7183',
+        titleFg: done || active ? '#e9e9ed' : '#75798c'
+      };
+    });
+
+    const primary = [
+      { label: 'Connect to host', next: 3 },
+      { label: 'Launch Dota 2', next: 4 },
+      { label: 'Launched — waiting for host', next: 4 }
+    ][Math.min(s.connect, 3) - 1];
+    const armed = s.connect <= 3;
+
+    const teams = [
+      {
+        name: 'Radiant', color: '#7ea88c', count: '1 / 5',
+        slots: [
+          this.slot(1, { initials: 'JU', name: 'Juggernaut', sub: 'host · 2600 MMR', ping: '18 ms' }),
+          this.slot(2), this.slot(3), this.slot(4), this.slot(5)
+        ]
+      },
+      {
+        name: 'Dire', color: '#cf8b86', count: '1 / 5',
+        slots: [
+          this.slot(6, { initials: 'YO', name: 'You', sub: '3800 MMR', ping: '22 ms', you: true }),
+          this.slot(7), this.slot(8), this.slot(9), this.slot(10)
+        ]
+      }
+    ];
+
+    const prefLabels = [
+      ['Auto-connect on join', 'Set up the virtual network as soon as you take a seat'],
+      ['Launch Dota 2 automatically', 'Starts the game once the host locks the lobby'],
+      ['Notify me when a friend hosts', 'Desktop notification, no sound'],
+      ['Hide rooms far outside my MMR', 'Filters anything more than 1500 MMR away']
+    ].map(([label, hint], i) => {
+      const on = s.prefs[i];
+      return {
+        label, hint,
+        onToggle: () => this.setState((st) => { const p = st.prefs.slice(); p[i] = !p[i]; return { prefs: p }; }),
+        trackStyle: 'width: 38px; height: 21px; flex: none; padding: 2px; border: 0; border-radius: 999px; cursor: pointer; display: flex; justify-content: ' +
+          (on ? 'flex-end' : 'flex-start') + '; background: ' + (on ? '#5d5294' : '#2c2f3d') + ';',
+        knobStyle: 'width: 17px; height: 17px; border-radius: 50%; background: ' + (on ? '#e7e5fe' : '#75798c') + ';'
+      };
+    });
+
+    const msgs = [
+      { time: '20:41', name: 'Shadow Fiend', text: 'anyone up for a ranked game?' },
+      { time: '20:41', name: 'Lina', text: 'joining now' },
+      { time: '20:42', name: 'Juggernaut', text: 'my room is open, all pick' },
+      { time: '20:43', name: 'system', text: 'Pudge opened "Turbo — quick games"', sys: true },
+      { time: '20:44', name: 'Pudge', text: 'need one more for turbo' },
+      { time: '20:45', name: 'You', text: 'in the casual room, 2 slots left on dire', me: true }
+    ].map((m) => ({
+      ...m,
+      nameFg: m.sys ? '#4f5361' : m.me ? '#b5abfc' : '#cfd3e5',
+      textFg: m.sys ? '#6d7183' : '#e9e9ed'
+    }));
+
+    return {
+      isLobby: s.screen === 'lobby', isRoom: s.screen === 'room',
+      isSettings: s.screen === 'settings', isTourneys: s.screen === 'tourneys',
+      navLobby: this.navStyle(s.screen === 'lobby'), navRoom: this.navStyle(s.screen === 'room'),
+      navTourneys: this.navStyle(s.screen === 'tourneys'), navSettings: this.navStyle(s.screen === 'settings'),
+      goLobby: () => set({ screen: 'lobby' }), goRoom: () => set({ screen: 'room' }),
+      goTourneys: () => set({ screen: 'tourneys' }), goSettings: () => set({ screen: 'settings' }),
+
+      filters: [
+        { label: 'All' }, { label: 'Has space' },
+        { label: 'Not started', hasDot: true, dot: '#7ea88c', dotGlow: 'rgba(126,168,140,.55)' },
+        { label: 'In game', hasDot: true, dot: '#cf8b86', dotGlow: 'rgba(207,139,134,.55)' },
+        { label: 'My MMR' }, { label: 'Friends' }
+      ].map((f) => ({
+        ...f, style: this.pillStyle(s.filter === f.label), onClick: () => set({ filter: f.label })
+      })),
+      heads, sortHint,
+      rooms, hasRooms: rooms.length > 0, noRooms: rooms.length === 0,
+      roomCountLabel: rooms.length ? rooms.length + ' of 24 shown' : '0 of 24 shown',
+      showError: this.props.showError ?? false,
+      clearFilters: () => set({ filter: 'All' }),
+
+      createOpen: s.create, openCreate: () => set({ create: true }),
+      closeCreate: () => set({ create: false }),
+      createAndOpen: () => set({ create: false, screen: 'room', connect: 1 }),
+      stop: (e) => e.stopPropagation(),
+      visibility: ['Anyone', 'Friends only', 'Invite link'].map((label) => ({
+        label,
+        style: 'flex: 1; height: 30px; border: 0; border-radius: 7px; cursor: pointer; font: 500 12.5px Inter, sans-serif; background: ' +
+          (s.vis === label ? '#2b2741' : 'transparent') + '; color: ' + (s.vis === label ? '#d2cefd' : '#9397ab') + ';',
+        onClick: () => set({ vis: label })
+      })),
+
+      steps, teams,
+      primaryLabel: primary.label,
+      primaryAction: () => set({ connect: Math.min(s.connect + 1, 4) }),
+      primaryStyle: 'flex: none; height: auto; min-width: 168px; padding: 0 18px; border-radius: 9px; cursor: ' +
+        (armed ? 'pointer' : 'default') + '; font: 500 13.5px Inter, sans-serif; border: 1px solid ' +
+        (armed ? '#9184d9' : '#32353f') + '; background: ' + (armed ? 'rgba(145,132,217,.14)' : 'transparent') +
+        '; color: ' + (armed ? '#e7e5fe' : '#6d7183') + ';',
+
+      prefs: prefLabels,
+
+      chatOpen: s.chatOpen, toggleChat: () => set({ chatOpen: !s.chatOpen }),
+      chatChevron: s.chatOpen ? '▾' : '▴',
+      chatPresence: s.chatTab === 'Lobby' ? '312 in lobby' : '4 here',
+      dockStyle: 'flex: none; display: flex; flex-direction: column; margin: 12px 18px 14px; border-radius: 12px; background: #1b1d29; box-shadow: 0 0 0 1px #292b31; overflow: hidden; height: ' +
+        (s.chatOpen ? '212px' : '38px') + ';',
+      chatTabs: ['Lobby', 'Room', 'Party', 'Shadow Fiend'].map((label, i) => ({
+        label, unread: i === 3,
+        onClick: () => set({ chatTab: label, chatOpen: true }),
+        style: 'display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border: 0; border-radius: 7px; cursor: pointer; font: 500 12.5px Inter, sans-serif; background: ' +
+          (s.chatTab === label ? '#232539' : 'transparent') + '; color: ' + (s.chatTab === label ? '#d2cefd' : '#75798c') + ';'
+      })),
+      messages: msgs,
+
+      friendsPresence: '3 / 12 online',
+      friendGroups: [
+        {
+          label: 'In a room', people: [
+            { initials: 'SF', name: 'Shadow Fiend', status: 'Ranked 5v5 — 8/10', dot: '#7ea88c', avatarBg: '#2a3d31', avatarFg: '#a9cbb5', nameFg: '#e9e9ed', opacity: 1, joinable: true },
+            { initials: 'LI', name: 'Lina', status: 'Chill inhouse — full', dot: '#7ea88c', avatarBg: '#3d3230', avatarFg: '#e3c3b8', nameFg: '#e9e9ed', opacity: 1, joinable: false }
+          ]
+        },
+        {
+          label: 'Online', people: [
+            { initials: 'PU', name: 'Pudge', status: 'In lobby', dot: '#9184d9', avatarBg: '#33304a', avatarFg: '#cfd3e5', nameFg: '#e9e9ed', opacity: 1, joinable: false }
+          ]
+        },
+        {
+          label: 'Offline', people: [
+            { initials: 'JU', name: 'Juggernaut', status: 'Last seen 2h ago', dot: '#3f424d', avatarBg: '#24262f', avatarFg: '#75798c', nameFg: '#75798c', opacity: 0.6, joinable: false },
+            { initials: 'TI', name: 'Tinker', status: 'Last seen yesterday', dot: '#3f424d', avatarBg: '#24262f', avatarFg: '#75798c', nameFg: '#75798c', opacity: 0.6, joinable: false }
+          ]
+        }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

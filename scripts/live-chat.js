@@ -43,9 +43,14 @@ const bad = (what, saw) => { failed = 1; console.log("  FAIL  " + what + "\n    
   await call("Page.navigate", { url: URL_ });
   await sleep(3500);
 
+  // The dock is open when the app starts, the way Dota's own is. Minimise
+  // it by hand first: what is being proved here is that a message arriving
+  // brings it back, and that cannot be seen on a dock already open.
+  await read('document.getElementById("chatmin").click()');
+  await sleep(300);
   const before = await read('document.getElementById("chatdock").className');
-  if (/collapsed/.test(before)) ok("the dock is minimised while nothing is happening");
-  else bad("the dock is minimised while nothing is happening", before);
+  if (/collapsed/.test(before)) ok("the dock minimises when asked");
+  else bad("the dock minimises when asked", before);
 
   // Somebody writes to this player. The window is not looking at them, has no
   // tab open for them, and has never seen them say anything.

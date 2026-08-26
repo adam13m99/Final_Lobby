@@ -226,6 +226,8 @@ there; this is the summary.
 | T15 the door, host side | **done** — a host can finally make a private room |
 | T16 password change, terms re-acceptance | **done** |
 | T17 visual redesign | **done** — looked at, at 1440 and at 1366 |
+| T18 a live window that updates itself | **done** — `scripts/live.sh`, one address, kept for days |
+| T19 the owner's design, adopted (D58) | **done** — looked at, at 1440 and at 1366 |
 
 **The interface was redesigned on 2026-08-25** at the owner's request: the
 old one was flat, grey and mostly empty space. What changed, beyond colour
@@ -411,35 +413,56 @@ ranges, and different rules: an observer may not enter a locked room, an admin
 may. `POST /v1/rooms/{id}/spectate` seats an **observer**; the admin seat is
 reached separately and arrives with T8.
 
-## The interface, as of 2026-08-25
+## The interface, as of 2026-08-26
 
-The redesign asked for on 2026-08-24 is finished. What changed, and where to
-look when it needs changing again:
+The owner supplied a working HTML mock on 2026-08-26 — `Gaming Matchmaking
+App Redesign/LobbyBaz.dc.html` — and the front end now follows it (D58).
+That file is the reference for the look; this section is the reference for
+what is actually wired to it.
 
-- **The chat is a dock along the bottom** (D56), minimised to its tab strip
-  until somebody types in it or a message arrives — at which point it opens
-  itself and plays a tone. Every private conversation is a tab with a × on
-  it. `renderChatDock` in `lobbyapp/ui/app.js` is the whole engine; the
-  `.chatdock` block in `app.css` is the whole appearance.
-- **The friends list owns the entire right rail**, which is what the chat
-  leaving it made room for.
-- **Clicking an empty seat moves you into it** (D57), which is how a player
-  picks a side. `Room.Move` in the coordinator, `POST /v1/rooms/{id}/slot`,
-  `POST /api/rooms/slot` in the app. The team dropdown is gone.
-- **The room's action bar is pinned to the bottom** of the screen and split:
-  Connect / Disconnect / Launch for everybody, the host's game mode and lock
-  controls in their own row.
-- **Room rows are a grid of fixed columns**, so players, MMR and ping line up
-  down the list whatever their values.
-- The toolbar down the inline edge is a third larger than it was.
-- **A friend row is itself the button** that opens a conversation. The
-  "Message" button beside every name cost the rail most of its width, and a
-  conversation is a tab in the dock now rather than a dialog.
-- **The window gives ground from the sides inward.** Below 1560px the room
-  list's number columns narrow; below 1320px the toolbar and the rail narrow
-  too. The room name is the last thing allowed to wrap, because it is the one
-  thing the row exists to show. `--statw`, `--actw`, `--bar` and `--rail` in
-  `app.css` are the whole mechanism.
+- **One palette, defined once.** Every colour is a token on `:root` at the
+  top of `lobbyapp/ui/app.css`. Nothing below that block names a colour, so
+  the next reskin is one edit. No web font: fonts.googleapis.com is not
+  reachable from Iran, and a stylesheet waiting on it is a blank screen.
+- **The room list is a sortable table.** Every heading sorts, ascending and
+  descending; `sortKeyOf` / `sortRooms` / `toggleSort` / `drawSortHeads` in
+  `app.js`. The number columns hide themselves as the window narrows so the
+  room's name never has to wrap.
+- **Six filter chips and a search box**, both applied locally against the
+  list already on screen, so typing is instant instead of waiting for the
+  next poll. `visible()` in `app.js`, `setFilter()` for the chips.
+- **Getting from a seat into a game is three numbered steps with one button
+  under them** — take a seat, join the room's network, start Dota.
+  `drawStepper` / `step` in `app.js`, `.stepper` in `app.css`. The button
+  always says the next thing to do rather than everything that could be done.
+- **The host's controls are a dialog** (`#roomsetgate`), opened by "Room
+  settings" on the room screen: the door, the MMR floor, the description,
+  admission and the game mode. Everyone else's room screen is seats.
+- **Inviting is its own dialog** (`#invitegate`) and does both halves of the
+  word: tells the friend, and lets them through the door.
+- **Creating a room is a dialog** (`#creategate`) where the door is chosen
+  before the room exists (D41). A password is a tick-box on an otherwise
+  open door rather than a fourth kind of door.
+- **Diagnostics is not a toolbar entry.** It is one button on the settings
+  screen, under the three network facts it explains. `renderSettings` and
+  `renderDiag` in `app.js`, `#screen-settings` in `index.html`.
+- **The chat is a dock along the bottom** (D56), now **open when the app
+  starts** (D58) and minimising to its tab strip when asked. It reopens
+  itself and plays a tone when a message arrives. Every conversation is a
+  tab, private ones included. Each line carries a time in the reader's own
+  zone. `renderChatDock` is the engine, `.chatdock` the appearance.
+- **The friends list owns the entire right rail**, grouped by where people
+  are: in a room, online, offline. A friend row is itself the button that
+  opens a conversation.
+- **Clicking an empty seat moves you into it** (D57). `Room.Move` in the
+  coordinator, `POST /v1/rooms/{id}/slot`, `POST /api/rooms/slot` in the app.
+- **The window gives ground from the sides inward.** Breakpoints at 1440px
+  (header) and 1180px (room columns). Checked at 1366x768, the commonest
+  laptop this will run on.
+
+Nothing in the mock that the server has no notion of was faked: no regions,
+no Steam link, no games-hosted count, no per-player ping, no last-seen times.
+Two of its inventions are the owner's to decide and are open questions below.
 
 `bash scripts/preview.sh <name>` photographs all of it; `SHOTS` may be set to
 a JSON array of `[name, script]` pairs to photograph something else, and
@@ -469,6 +492,20 @@ a JSON array of `[name, script]` pairs to photograph something else, and
    registration, who runs one. D48 settles that it is a real feature; its
    shape is undecided and needs its own brainstorm. Not before the account
    system, the room work and the new lobby.
+
+7. **Should a room advertise its game mode?** The mock the owner drew shows
+   one on every room row ("All Pick", "Captains Mode") and asks for it in the
+   create dialog. Today the mode is the host's own and is sent to Dota when
+   they launch (D57); the coordinator stores nothing about it and no room
+   advertises one. Adding it is small — one field on the room, one control in
+   the create dialog, one more thing on the row. **For the owner:** is the
+   mode something a player picks a room by, or is it the host's business?
+8. **Should a running match be watchable from the lobby?** The mock puts a
+   **Watch** button on rooms that are in game. The owner said earlier, in as
+   many words, that there is no Spectate button in the lobby, so the button
+   was not built. The seats exist — five observer slots per room, and an
+   observer may not enter a locked room. **For the owner:** was that a
+   permanent no, or a "not yet"?
 
 **Answered 2026-08-24:** who the admins are (D47 — a role the head admin
 grants), whether Tournaments is real (D48 — yes), and when the dedicated

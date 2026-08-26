@@ -265,15 +265,19 @@ if [ -n "$CHROME" ]; then
     *)        bad "an ordinary player is offered the moderation tools" ;;
   esac
 
-  # The chat is docked along the bottom and always present, minimised to its
-  # tab strip until somebody uses it or a message arrives (D56). It was a
-  # panel in the rail before, which is why the rail had no room for friends.
+  # The chat is docked along the bottom and always present, open when the app
+  # starts and minimising to its tab strip when the player says so (D56, D58).
+  # It was a panel in the rail before, which is why the rail had no room for
+  # friends. That it reopens itself on an incoming message is proved by
+  # scripts/chatcheck.sh, which needs two polls and a live page to see it.
   DOM=$(cat "$WORK/player.html" 2>/dev/null)
   DOCK=$(grep -o '<section[^>]*id="chatdock"[^>]*>' "$WORK/player.html" 2>/dev/null | head -1)
   case "$DOCK" in
-    *collapsed*) ok "the chat is docked, and starts minimised" ;;
-    *)           bad "the chat dock is missing or starts open: $DOCK" ;;
+    "") bad "the chat dock is missing" ;;
+    *collapsed*) bad "the chat dock starts minimised: $DOCK" ;;
+    *)  ok "the chat is docked along the bottom, and open" ;;
   esac
+  expect "with a way to minimise it" 'id="chatmin"' "$DOM"
   expect "with a tab for the lobby"   'data-chat="lobby"' "$DOM"
   expect "and one for the room"       'data-chat="room"'  "$DOM"
   expect "and a way to start another" 'id="chatadd"'      "$DOM"

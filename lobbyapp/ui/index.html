@@ -78,28 +78,34 @@
      entry is not navigation: it is whether this PC is on a room's network,
      which is the state players most often get wrong. -->
 <nav id="toolbar">
+  <!-- The mark, not the word: at 72px the name does not fit, and a lobby
+       that spells its own name at the player twice a second is not telling
+       them anything they did not know when they opened it. -->
   <div class="brand" data-t="app.short"></div>
 
   <button class="nav active" data-screen="lobby">
-    <span class="ico" aria-hidden="true">▤</span><span data-t="nav.lobby"></span>
+    <span class="ico" aria-hidden="true">&#9636;</span><span data-t="nav.lobby"></span>
   </button>
   <button class="nav" data-screen="room" id="roomtab" disabled>
-    <span class="ico" aria-hidden="true">⬢</span><span data-t="nav.room"></span>
+    <span class="ico" aria-hidden="true">&#11042;</span><span data-t="nav.room"></span>
   </button>
   <button class="nav" data-screen="tournaments">
-    <span class="ico" aria-hidden="true">♛</span><span data-t="nav.tournaments"></span>
-  </button>
-  <button class="nav" data-screen="checks">
-    <span class="ico" aria-hidden="true">✚</span><span data-t="nav.checks"></span>
+    <span class="ico" aria-hidden="true">&#9819;</span><span data-t="nav.tournaments"></span>
   </button>
   <!-- Staff only, and hidden rather than disabled: an entry a player can see
        but never use is a question they will ask instead of playing. The
        coordinator refuses every call behind it regardless (D47). -->
   <button class="nav hidden" data-screen="mod" id="modtab">
-    <span class="ico" aria-hidden="true">⚖</span><span data-t="nav.mod"></span>
+    <span class="ico" aria-hidden="true">&#9878;</span><span data-t="nav.mod"></span>
   </button>
 
   <div class="nav-gap"></div>
+
+  <!-- Diagnostics used to be its own entry in the toolbar. It is one button
+       on the settings screen now, beside the network facts it explains. -->
+  <button class="nav" data-screen="settings">
+    <span class="ico" aria-hidden="true">&#9881;</span><span data-t="nav.settings"></span>
+  </button>
 
   <button class="nav conn" id="connstate">
     <span class="dot" id="conndot" aria-hidden="true"></span>
@@ -112,22 +118,31 @@
   <div class="searchbox">
     <input id="search" maxlength="40" data-t-placeholder="lobby.search.placeholder" autocomplete="off">
   </div>
+  <!-- One segmented control rather than six loose pills: the filters are a
+       single choice, and six outlines look like six switches. -->
   <div class="filters" id="filters">
     <button class="chip active" data-filter="all" data-t="lobby.filter.all"></button>
     <button class="chip" data-filter="joinable" data-t="lobby.filter.joinable"></button>
-    <button class="chip" data-filter="waiting" data-t="lobby.filter.waiting"></button>
+    <button class="chip" data-filter="waiting">
+      <span class="cdot open" aria-hidden="true"></span><span data-t="lobby.filter.waiting"></span>
+    </button>
+    <button class="chip" data-filter="playing">
+      <span class="cdot game" aria-hidden="true"></span><span data-t="lobby.filter.playing"></span>
+    </button>
     <button class="chip" data-filter="mine" data-t="lobby.filter.eligible"></button>
+    <button class="chip" data-filter="friends" data-t="lobby.filter.friends"></button>
   </div>
 
-  <!-- The filters used to stretch across the bar, which put the player's own
-       card wherever the widest chip happened to leave it. -->
   <div class="head-gap"></div>
 
   <div class="status">
     <span class="pill" id="p-service"></span>
     <span class="pill quiet" id="p-online"></span>
     <button class="me" id="mebtn">
-      <span id="menick"></span><small id="memmr"></small>
+      <span id="meface" data-who=""></span>
+      <span class="who">
+        <span class="name" id="menick"></span><small id="memmr"></small>
+      </span>
     </button>
   </div>
 </header>
@@ -153,28 +168,21 @@
   <div class="panel roomspanel">
     <div class="panel-head">
       <h2 data-t="lobby.rooms"></h2>
-      <form id="createform" class="inline">
-        <input id="roomname" maxlength="40" data-t-placeholder="lobby.roomname.placeholder" autocomplete="off">
-        <!-- The door is chosen before the room exists, not after (D41). A
-             room opened public and locked a second later is a second in
-             which anybody can walk in. -->
-        <select id="newdoor">
-          <option value="public" data-t="door.public"></option>
-          <option value="password" data-t="door.password"></option>
-          <option value="friends" data-t="door.friends"></option>
-          <option value="invite" data-t="door.invite"></option>
-        </select>
-        <input id="newpass" type="password" maxlength="40" class="hidden" data-t-placeholder="door.password.placeholder" autocomplete="off">
-        <input id="newmmr" type="number" min="0" max="15000" step="500" class="narrow" data-t-placeholder="door.mmr.placeholder">
-        <button class="primary" type="submit" data-t="lobby.create"></button>
-      </form>
+      <span class="count" id="roomcount"></span>
+      <div class="head-gap"></div>
+      <span class="hint" id="sorthint"></span>
+      <button class="primary" id="btn-create" data-t="lobby.create"></button>
     </div>
-    <div class="roomhead">
-      <span data-t="lobby.col.room"></span>
-      <span data-t="lobby.col.players"></span>
-      <span data-t="lobby.col.mmr"></span>
-      <span class="pingcol" data-t-title="lobby.col.ping.explain" data-t="lobby.col.ping"></span>
-      <span></span>
+
+    <!-- Every heading sorts. A room list is read for one thing at a time -
+         who has space, who is closest, who is at my level - and which one it
+         is changes between one glance and the next. -->
+    <div class="roomhead" id="roomhead">
+      <button data-sort="name"><span data-t="lobby.col.room"></span><span class="arrow"></span></button>
+      <button data-sort="players"><span data-t="lobby.col.players"></span><span class="arrow"></span></button>
+      <button class="rcol-hide" data-sort="mmr"><span data-t="lobby.col.mmr"></span><span class="arrow"></span></button>
+      <button class="rcol-hide" data-sort="ping" data-t-title="lobby.col.ping.explain"><span data-t="lobby.col.ping"></span><span class="arrow"></span></button>
+      <button data-sort="status"><span data-t="lobby.col.status"></span><span class="arrow"></span></button>
     </div>
     <div id="roomlist" class="roomlist"></div>
   </div>
@@ -182,89 +190,65 @@
 
 <!-- ------------------------------------------------------------- ROOM -->
 <section id="screen-room" class="screen hidden">
-  <div class="panel">
-    <div class="panel-head">
-      <div class="room-head-who">
-        <div id="room-face"></div>
-        <div>
-          <h2 id="room-name" data-t="room.title"></h2>
-          <p class="muted small" id="room-sub"></p>
-        </div>
+
+  <!-- One line saying which room this is and how to get out of it. The old
+       screen spent a whole panel head on the same three facts. -->
+  <div class="roomtop">
+    <button id="btn-tolobby" data-t="room.tolobby"></button>
+    <span id="room-face"></span>
+    <div class="who">
+      <div class="title">
+        <h2 id="room-name" data-t="room.title"></h2>
+        <span class="badge" id="room-status"></span>
       </div>
-      <span class="badge" id="room-status"></span>
+      <div class="sub" id="room-sub"></div>
     </div>
-
-    <form class="describerow hostonly" id="describeform">
-      <input id="describe" maxlength="120" data-t-placeholder="room.describe.placeholder" autocomplete="off">
-      <button type="submit" data-t="room.describe.save"></button>
-    </form>
-
-    <!-- The door, changeable while the room is open. Host only; the
-         coordinator refuses it from anybody else. -->
-    <form class="describerow hostonly" id="doorform">
-      <select id="door">
-        <option value="public" data-t="door.public"></option>
-        <option value="password" data-t="door.password"></option>
-        <option value="friends" data-t="door.friends"></option>
-        <option value="invite" data-t="door.invite"></option>
-      </select>
-      <input id="doorpass" type="password" maxlength="40" class="hidden" data-t-placeholder="door.password.placeholder" autocomplete="off">
-      <input id="doormmr" type="number" min="0" max="15000" step="500" class="narrow" data-t-placeholder="door.mmr.placeholder">
-      <button type="submit" data-t="door.save"></button>
-      <span class="muted small" id="doornow"></span>
-    </form>
-
-    <!-- Two columns because a Dota match is two teams. Filled by app.js,
-         which knows which five slots belong to which side. -->
-    <div class="teams" id="slots"></div>
-
-    <div class="specrow">
-      <h3><span data-t="room.spectators"></span> <em data-t="room.spectators.note"></em></h3>
-      <div class="spectators" id="spectators"></div>
-    </div>
+    <div class="head-gap"></div>
+    <button id="btn-invite" data-t="room.invite"></button>
+    <button class="hostonly" id="btn-roomsettings" data-t="room.settings"></button>
   </div>
 
-  <div class="panel actions">
-    <!-- The network state has to be impossible to miss. The first two-PC
-         test failed because both players were in a room, neither was on
-         its network, and the only sign was a small pill in the header. -->
-    <div class="netbanner" id="netbanner" hidden></div>
-
-    <div class="actionrow">
-      <button class="primary big" id="btn-connect" data-t="room.connect"></button>
-      <button class="ghost" id="btn-disconnect" data-t="room.disconnect"></button>
-      <button class="launch big" id="btn-play" data-t="room.play"></button>
-      <span class="net" id="netinfo"></span>
+  <!-- The three steps between sitting down and being in the game, as three
+       steps. The first version was a row of buttons that were sometimes
+       disabled, and the commonest failure in the two-PC test was two players
+       in a room, neither on the network, with nothing on screen saying so. -->
+  <div class="stepper">
+    <div class="step" id="step-seat">
+      <span class="mark" id="step-seat-mark" aria-hidden="true">1</span>
+      <div class="body">
+        <div class="t" data-t="step.seat"></div>
+        <div class="d" id="step-seat-detail"></div>
+      </div>
     </div>
-
-    <!-- The host's controls, and only the host's. The game mode is a
-         property of the match the host's own copy of Dota creates, and the
-         door and the lock decide who may walk in; the coordinator refuses
-         all of them from anybody else, so hiding them is a courtesy that
-         keeps the panel honest rather than a defence. Which team a player
-         is on is not here at all any more - it is which seat they sit in. -->
-    <div class="actionrow hostonly" id="hostcontrols">
-      <label class="field inline-field">
-        <span data-t="room.mode"></span>
-        <select id="mode">
-          <option value="1" data-t="room.mode.ap"></option>
-          <option value="2" data-t="room.mode.cm"></option>
-          <option value="3" data-t="room.mode.rd"></option>
-          <option value="4" data-t="room.mode.sd"></option>
-          <option value="5" data-t="room.mode.ar"></option>
-          <option value="22" data-t="room.mode.rap"></option>
-        </select>
-      </label>
-      <div class="head-gap"></div>
-      <button id="btn-lock" data-t="room.lock"></button>
-      <button id="btn-reopen" data-t="room.reopen"></button>
-      <button id="btn-open" data-t="room.openall"></button>
+    <div class="step" id="step-net">
+      <span class="mark" id="step-net-mark" aria-hidden="true">2</span>
+      <div class="body">
+        <div class="t" data-t="step.net"></div>
+        <div class="d" id="step-net-detail"></div>
+      </div>
     </div>
-
-    <div class="actionrow">
-      <button class="danger ghost" id="btn-leave" data-t="room.leave"></button>
-      <button class="ghost" id="btn-tolobby" data-t="room.tolobby"></button>
+    <div class="step" id="step-game">
+      <span class="mark" id="step-game-mark" aria-hidden="true">3</span>
+      <div class="body">
+        <div class="t" data-t="step.game"></div>
+        <div class="d" data-t="step.game.detail"></div>
+      </div>
     </div>
+    <button class="primary" id="btn-step"></button>
+  </div>
+
+  <div class="netbanner" id="netbanner" hidden></div>
+
+  <!-- Two columns because a Dota match is two teams. Filled by app.js,
+       which knows which five slots belong to which side. -->
+  <div class="teams" id="slots"></div>
+
+  <div class="specrow">
+    <h3 data-t="room.spectators"></h3>
+    <div class="spectators" id="spectators"></div>
+    <div class="head-gap"></div>
+    <span class="net" id="netinfo"></span>
+    <button class="danger" id="btn-leave" data-t="room.leave"></button>
   </div>
 </section>
 
@@ -279,20 +263,69 @@
   </div>
 </section>
 
-<!-- ------------------------------------------------------ DIAGNOSTICS -->
-<section id="screen-checks" class="screen hidden">
-  <div class="panel wide">
-    <div class="panel-head">
-      <div>
-        <h2 data-t="checks.title"></h2>
-        <p class="muted small" data-t="checks.blurb"></p>
+<!-- --------------------------------------------------------- SETTINGS -->
+<!-- Everything about this installation rather than about a room: who the
+     server thinks you are, what the network is doing, and the checks that
+     explain it when it is doing nothing. Diagnostics used to be its own
+     toolbar entry; it belongs beside the facts it diagnoses. -->
+<section id="screen-settings" class="screen hidden">
+  <div class="settings">
+    <div>
+      <h1 data-t="settings.title"></h1>
+      <p class="muted small" data-t="settings.blurb"></p>
+    </div>
+
+    <div class="card">
+      <h3 data-t="settings.profile"></h3>
+      <div class="profilerow">
+        <span id="set-face"></span>
+        <div>
+          <div id="set-name" style="font-size: 14.5px; font-weight: 500;"></div>
+          <div class="muted small" id="set-sub"></div>
+        </div>
+        <div class="head-gap"></div>
+        <button id="btn-editprofile" data-t="settings.edit"></button>
+        <button class="hidden" id="btn-password" data-t="auth.changepw"></button>
+        <button class="hidden" id="btn-signout" data-t="auth.signout"></button>
       </div>
-      <button class="primary" id="btn-diag" data-t="checks.run"></button>
     </div>
-    <div id="diaglist" class="diaglist">
-      <p class="muted pad" data-t="checks.none"></p>
+
+    <div class="card">
+      <h3 data-t="settings.network"></h3>
+      <div class="facts">
+        <div class="fact">
+          <div class="k" data-t="settings.adapter"></div>
+          <div class="v" id="fact-adapter"></div>
+        </div>
+        <div class="fact">
+          <div class="k" data-t="settings.relay"></div>
+          <div class="v" id="fact-relay"></div>
+        </div>
+        <div class="fact">
+          <div class="k" data-t="settings.service"></div>
+          <div class="v" id="fact-service"></div>
+        </div>
+      </div>
+      <div class="inline" style="margin-block-start: 14px;">
+        <button class="primary" id="btn-diag" data-t="checks.run"></button>
+        <span class="muted small" id="diagwhen"></span>
+      </div>
+      <div id="diaglist" class="diaglist" style="margin-block-start: 10px;"></div>
     </div>
-    <p class="muted small pad" id="diagwhen"></p>
+
+    <div class="card">
+      <h3 data-t="settings.about"></h3>
+      <div class="facts">
+        <div class="fact">
+          <div class="k" data-t="settings.version"></div>
+          <div class="v" id="fact-version"></div>
+        </div>
+        <div class="fact">
+          <div class="k" data-t="settings.terms"></div>
+          <div class="v"><button class="linkish" id="btn-showterms" data-t="auth.readterms"></button></div>
+        </div>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -403,19 +436,22 @@
 <!-- Friends above, chat below, both down the same side (D42.2, D42.3). The
      chat collapses the way Dota's own does, and stays collapsed. -->
 <aside id="rail">
-  <div class="panel railtop">
-    <div class="panel-head">
-      <h2 data-t="friends.title"></h2>
-      <button class="tiny" id="btn-findfriend" data-t="friends.add"></button>
-    </div>
+  <div class="rail-head">
+    <span class="t" data-t="friends.title"></span>
+    <span class="n" id="friendcount"></span>
+    <div class="head-gap"></div>
+    <button class="iconbtn" id="btn-findfriend" data-t-title="friends.add">
+      <span aria-hidden="true">+</span>
+    </button>
+  </div>
+  <div class="railtop">
     <form class="findrow hidden" id="findform">
       <input id="findinput" maxlength="24" data-t-placeholder="friends.find.placeholder" autocomplete="off">
-      <button class="primary tiny" type="submit" data-t="friends.find"></button>
+      <button class="primary" type="submit" data-t="friends.find"></button>
     </form>
     <p class="findresult muted small" id="findresult"></p>
     <div class="friendlist" id="friendlist"></div>
   </div>
-
 </aside>
 
 <!-- ------------------------------------------------------------ CHAT -->
@@ -423,7 +459,7 @@
      strip when it is minimised, opening upward when somebody uses it or when
      a message arrives. Every conversation is a tab, private ones included, so
      starting one does not cover the lobby with a dialog. -->
-<section id="chatdock" class="chatdock collapsed">
+<section id="chatdock" class="chatdock">
   <div class="chattabs" id="chattabs">
     <div class="tabstrip" id="tabstrip">
       <button class="chattab active" data-chat="lobby" data-t="chat.tab.lobby"></button>
@@ -434,6 +470,7 @@
       <span aria-hidden="true">+</span>
     </button>
     <div class="tabgap"></div>
+    <span class="presence" id="presence"></span>
     <button class="tabmin" id="chatmin" data-t-title="chat.minimise">
       <span aria-hidden="true">&#9662;</span>
     </button>
@@ -456,6 +493,150 @@
 </section>
 
 </div><!-- /shell -->
+
+
+<!-- --------------------------------------------------------- CREATE ROOM -->
+<!-- The door is chosen before the room exists, not after (D41): a room opened
+     public and locked a second later is a second in which anybody can walk
+     in. It is a dialog rather than a row in the header because five controls
+     across the top of the lobby made the lobby look like a form. -->
+<div id="creategate" class="gate hidden">
+  <form class="gate-card" id="createform">
+    <div class="gate-head">
+      <h2 data-t="create.title"></h2>
+      <p data-t="create.blurb"></p>
+    </div>
+    <div class="gate-body">
+      <label class="field">
+        <span data-t="create.name"></span>
+        <input id="roomname" maxlength="40" data-t-placeholder="lobby.roomname.placeholder" autocomplete="off">
+      </label>
+
+      <div class="field">
+        <span data-t="create.who"></span>
+        <div class="segment" id="newdoor">
+          <button type="button" class="active" data-door="public" data-t="door.public"></button>
+          <button type="button" data-door="friends" data-t="door.friends"></button>
+          <button type="button" data-door="invite" data-t="door.invite"></button>
+        </div>
+      </div>
+
+      <div class="twoup">
+        <label class="field">
+          <span data-t="door.mmr"></span>
+          <input id="newmmr" type="number" min="0" max="15000" step="500" data-t-placeholder="door.mmr.any">
+        </label>
+        <label class="field" id="newpassfield">
+          <span data-t="door.password.placeholder"></span>
+          <input id="newpass" type="password" maxlength="40" autocomplete="off">
+        </label>
+      </div>
+
+      <!-- A password is a second lock on the same door rather than a fourth
+           kind of door. The coordinator stores it as its own privacy, so
+           only an otherwise-open room can carry one. -->
+      <label class="checkrow" id="newpasscheck">
+        <input id="newpasson" type="checkbox">
+        <span data-t="create.password"></span>
+      </label>
+
+      <div class="note">
+        <span class="icon" aria-hidden="true">i</span>
+        <span data-t="create.note"></span>
+      </div>
+      <p class="gate-err" id="createerr"></p>
+    </div>
+    <div class="gate-foot">
+      <button type="button" id="createcancel" data-t="profile.cancel"></button>
+      <button class="primary" type="submit" data-t="create.go"></button>
+    </div>
+  </form>
+</div>
+
+<!-- ------------------------------------------------------- ROOM SETTINGS -->
+<!-- The host's controls, all of them, in one place. The coordinator refuses
+     every one of these from anybody else, so hiding them is a courtesy that
+     keeps the room screen honest rather than a defence. -->
+<div id="roomsetgate" class="gate hidden">
+  <div class="gate-card">
+    <div class="gate-head">
+      <h2 data-t="room.settings"></h2>
+      <p data-t="room.settings.blurb"></p>
+    </div>
+    <div class="gate-body">
+      <form class="field" id="describeform">
+        <span data-t="room.describe"></span>
+        <div class="inline">
+          <input id="describe" class="grow" maxlength="120" data-t-placeholder="room.describe.placeholder" autocomplete="off">
+          <button type="submit" data-t="room.describe.save"></button>
+        </div>
+      </form>
+
+      <form class="field" id="doorform">
+        <span data-t="create.who"></span>
+        <div class="segment" id="door">
+          <button type="button" class="active" data-door="public" data-t="door.public"></button>
+          <button type="button" data-door="friends" data-t="door.friends"></button>
+          <button type="button" data-door="invite" data-t="door.invite"></button>
+        </div>
+        <div class="twoup">
+          <label class="field">
+            <span data-t="door.mmr"></span>
+            <input id="doormmr" type="number" min="0" max="15000" step="500" data-t-placeholder="door.mmr.any">
+          </label>
+          <label class="field">
+            <span data-t="door.password.placeholder"></span>
+            <input id="doorpass" type="password" maxlength="40" autocomplete="off">
+          </label>
+        </div>
+        <div class="inline">
+          <button type="submit" data-t="door.save"></button>
+          <span class="muted small" id="doornow"></span>
+        </div>
+      </form>
+
+      <div class="field">
+        <span data-t="room.admission"></span>
+        <div class="inline">
+          <button id="btn-lock" data-t="room.lock"></button>
+          <button id="btn-reopen" data-t="room.reopen"></button>
+          <button id="btn-open" data-t="room.openall"></button>
+        </div>
+      </div>
+
+      <label class="field">
+        <span data-t="room.mode"></span>
+        <select id="mode">
+          <option value="1" data-t="room.mode.ap"></option>
+          <option value="2" data-t="room.mode.cm"></option>
+          <option value="3" data-t="room.mode.rd"></option>
+          <option value="4" data-t="room.mode.sd"></option>
+          <option value="5" data-t="room.mode.ar"></option>
+          <option value="22" data-t="room.mode.rap"></option>
+        </select>
+      </label>
+    </div>
+    <div class="gate-foot">
+      <button id="roomsetclose" data-t="profile.done"></button>
+    </div>
+  </div>
+</div>
+
+<!-- ------------------------------------------------------------- INVITE -->
+<!-- One word, two things: tell them to come, and let them through the door.
+     Doing only the first is how somebody is invited and then refused (D41). -->
+<div id="invitegate" class="gate hidden">
+  <div class="gate-card narrow">
+    <div class="gate-head">
+      <h2 data-t="room.invite"></h2>
+      <p data-t="room.invite.blurb"></p>
+    </div>
+    <div class="gate-body" id="invitelist"></div>
+    <div class="gate-foot">
+      <button id="inviteclose" data-t="profile.done"></button>
+    </div>
+  </div>
+</div>
 
 <!-- Profile editor -->
 <div id="profilegate" class="gate hidden">

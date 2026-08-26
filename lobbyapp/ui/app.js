@@ -17,6 +17,8 @@ let state = {};
 let screen = "lobby";
 let chatTab = "lobby";
 let filter = "all";
+let sortKey = "players";
+let sortDir = "desc";
 let query = "";
 let busy = false;
 let authMode = "signin";
@@ -171,6 +173,12 @@ function render() {
 
   pill("p-service", s.service, t(s.service ? "status.service.up" : "status.service.down"));
   $("p-online").textContent = t("status.online", { n: s.online ?? 0 });
+  const mf = $("meface");
+  if (mf.dataset.who !== (s.player_id || "") + "/" + (s.nick || "")) {
+    mf.dataset.who = (s.player_id || "") + "/" + (s.nick || "");
+    mf.textContent = "";
+    mf.appendChild(avatar(s.nick || s.username, s.player_id, "sm"));
+  }
   $("menick").textContent = s.nick || t("status.dash");
   $("memmr").textContent = s.mmr ? t("status.mmr", { n: s.mmr }) : t("status.nomm");
 
@@ -206,6 +214,7 @@ function render() {
   if (inRoom) renderRoom(s.room);
   renderChatDock(s);
   renderDiag();
+  renderSettings(s);
   renderMod(s);
 }
 
@@ -280,6 +289,7 @@ function renderAds(ads) {
 // next sync.
 function visible(rooms) {
   const q = query.trim().toLowerCase();
+  const friendIDs = ((state.friends && state.friends.friends) || []).map((f) => f.player_id);
   return rooms.filter((r) => {
     if (q) {
       const hay = [r.name, r.host_nick, r.description].join(" ").toLowerCase();
@@ -287,34 +297,170 @@ function visible(rooms) {
     }
     switch (filter) {
       case "joinable":
-        return r.joinable && r.seats < 10;
+        return r.joinable && (r.seats || 0) < 10;
       case "waiting":
-        return r.status === "open_to_new_players" || r.status === "open";
+        return !inGame(r);
+      case "playing":
+        return inGame(r);
       case "mine":
         // Rooms this player would actually be let into: the MMR floor is the
         // one door that silently excludes somebody who has not tried it.
         return !r.min_mmr || (state.mmr || 0) >= r.min_mmr;
+      case "friends":
+        return (r.members || []).some((m) => friendIDs.indexOf(m.player_id) >= 0);
       default:
         return true;
     }
   });
 }
 
+function inGame(r) { return r.status === "locked_in_game"; }
+
+// How a room ranks on the column being sorted. Joinability is a rank rather
+// than a flag so that "status" sorts into three bands - open to me, running,
+// shut - rather than into two.
+function sortKeyOf(r, key) {
+  switch (key) {
+    case "name": return (r.name || "").toLowerCase();
+    case "mmr": return r.min_mmr || r.avg_mmr || 0;
+    // A host who has not reported a ping sorts last whichever way round the
+    // column is, because "unknown" is not "excellent" (D54).
+    case "ping": return r.host_relay_ms || 9999;
+    case "status": return r.joinable && !inGame(r) ? 2 : inGame(r) ? 1 : 0;
+    default: return r.seats || 0;
+  }
+}
+
+function sortRooms(rooms) {
+  const dir = sortDir === "asc" ? 1 : -1;
+  return rooms.slice().sort((a, b) => {
+    const x = sortKeyOf(a, sortKey), y = sortKeyOf(b, sortKey);
+    if (typeof x === "string") return x.localeCompare(y) * dir;
+    return (x - y) * dir;
+  });
+}
+
+function toggleSort(key) {
+  if (sortKey === key) {
+    sortDir = sortDir === "asc" ? "desc" : "asc";
+  } else {
+    sortKey = key;
+    // A name reads naturally from A downwards; every number reads best with
+    // the biggest first, because that is the room somebody is looking for.
+    sortDir = key === "name" ? "asc" : "desc";
+  }
+  drawSortHeads();
+  renderRooms(state.rooms || []);
+}
+
+function drawSortHeads() {
+  for (const b of $("roomhead").querySelectorAll("button")) {
+    const on = b.dataset.sort === sortKey;
+    b.classList.toggle("on", on);
+    const up = sortDir === "asc";
+    b.querySelector(".arrow").textContent = on ? (up ? " ↑" : " ↓") : "";
+  }
+  $("sorthint").textContent = t("lobby.sortedby", {
+    what: t("lobby.col." + (sortKey === "status" ? "status" : sortKey)),
+    dir: t(sortDir === "asc" ? "lobby.ascending" : "lobby.descending"),
+  });
+}
+
 function renderRooms(rooms) {
   const box = $("roomlist");
+  const shown = sortRooms(visible(rooms));
+  $("roomcount").textContent = t("lobby.shown", { shown: shown.length, all: rooms.length });
+
   box.textContent = "";
-  const shown = visible(rooms);
   if (!shown.length) {
-    // An empty list says so in the middle of its own space. A single grey
-    // line against the top edge reads as a page that failed rather than as a
-    // lobby with nothing in it yet.
+    // An empty list says so in the middle of its own space, and offers the
+    // two ways out. A single grey line against the top edge reads as a page
+    // that failed rather than as a lobby with nothing in it yet.
     const none = el("div", "nothing");
-    none.appendChild(el("div", "big", "▦"));
-    none.appendChild(el("p", "", t(rooms.length ? "lobby.nomatch" : "lobby.empty")));
+    none.appendChild(el("div", "mark", "⬡"));
+    none.appendChild(el("h2", "", t(rooms.length ? "lobby.nomatch" : "lobby.empty")));
+    none.appendChild(el("p", "", t(rooms.length ? "lobby.nomatch.why" : "lobby.empty.why")));
+    const acts = el("div", "inline");
+    if (rooms.length) {
+      const clear = el("button", "", t("lobby.clearfilters"));
+      clear.onclick = () => setFilter("all");
+      acts.appendChild(clear);
+    }
+    const make = el("button", "primary", t("lobby.create"));
+    make.onclick = openCreate;
+    acts.appendChild(make);
+    none.appendChild(acts);
     box.appendChild(none);
     return;
   }
   for (const r of shown) box.appendChild(roomCard(r));
+}
+
+// One row per room: who is hosting it, one line of everything else, and the
+// three numbers a player chooses on. The whole row opens the room; only the
+// button in the last column joins it.
+function roomCard(r) {
+  const card = el("div", "room");
+  card.onclick = () => (r.id === state.room_id ? show("room") : joinRoom(r));
+
+  const who = el("div", "room-who");
+  who.appendChild(avatar(r.host_nick, r.host_id));
+  const about = el("div", "grow");
+  about.appendChild(el("div", "room-name", r.name));
+
+  // Everything else about the room on one line, in the order a player asks
+  // for it. It is allowed to run out of room and be cut; the name is not.
+  const meta = el("div", "room-meta");
+  meta.appendChild(statusBadge(r.status));
+  const bits = [r.host_nick];
+  if (r.description) bits.push(r.description);
+  if (r.needs_password) bits.push(t("lobby.door.password"));
+  if (r.privacy === "friends") bits.push(t("lobby.door.friends"));
+  if (r.privacy === "invite") bits.push(t("lobby.door.invite"));
+  if (r.id === state.room_id) bits.push(t("lobby.youarehere"));
+  meta.appendChild(el("span", "rest", bits.join(" · ")));
+  about.appendChild(meta);
+  who.appendChild(about);
+  card.appendChild(who);
+
+  card.appendChild(seatCell(r));
+  card.appendChild(mmrCell(r));
+  card.appendChild(pingCell(r));
+  card.appendChild(roomActions(r));
+  return card;
+}
+
+// seatCell draws the ten playing slots as ten marks beside the count.
+//
+// Somebody scanning the lobby is asking one question - is there room for me -
+// and a bar answers it in the time the eye takes to pass over it. The number
+// stays beside it for the times they want to be exact.
+function seatCell(r) {
+  const cell = el("div", "room-seats");
+  const taken = r.seats || 0;
+  cell.appendChild(el("span", "n", t("lobby.of10", { n: taken })));
+  const ticks = el("div", "ticks" + (taken >= 10 ? " full" : ""));
+  for (let i = 0; i < 10; i++) ticks.appendChild(el("i", i < taken ? "on" : ""));
+  cell.appendChild(ticks);
+  return cell;
+}
+
+// mmrCell separates the number from what it means, because the two are read
+// at different moments: the figure tells a player whether they belong here,
+// the label tells them whether it is a floor they must clear or an average
+// they are being compared against.
+function mmrCell(r) {
+  const cell = el("div", "room-mmr rcol-hide");
+  if (r.min_mmr) {
+    cell.appendChild(document.createTextNode(t("lobby.mmr.plus", { n: r.min_mmr }) + " "));
+    cell.appendChild(el("span", "kind", t("lobby.mmr.min")));
+  } else if (r.avg_mmr) {
+    cell.appendChild(document.createTextNode(String(r.avg_mmr) + " "));
+    cell.appendChild(el("span", "kind", t("lobby.mmr.avg")));
+  } else {
+    cell.appendChild(document.createTextNode(t("lobby.mmr.any")));
+  }
+  return cell;
 }
 
 // pingCell is the lobby's latency column (D54).
@@ -327,128 +473,34 @@ function renderRooms(rooms) {
 // rather than as an excellent connection.
 function pingCell(r) {
   const ms = r.host_relay_ms || 0;
-  const grade = !ms ? "unknown" : ms < 60 ? "good" : ms < 140 ? "fair" : "poor";
-  const outer = el("div", "stat");
-  const cell = el("div", "room-ping " + grade);
-  outer.appendChild(cell);
-  outer.title = ms ? t("lobby.ping.explain") : t("lobby.ping.none");
-
-  // Three rising bars, the shape every network indicator uses, with the
-  // number beside them. The bars are read at a glance and the number is read
-  // when it matters; neither replaces the other.
-  const lit = grade === "good" ? 3 : grade === "fair" ? 2 : grade === "poor" ? 1 : 0;
-  const bars = el("div", "bars");
-  for (let i = 0; i < 3; i++) bars.appendChild(el("i", i < lit ? "lit" : ""));
+  const grade = !ms ? "" : ms < 60 ? "good" : ms < 140 ? "fair" : "poor";
+  const cell = el("div", "room-ping rcol-hide " + grade);
+  cell.title = ms ? t("lobby.ping.explain") : t("lobby.ping.none");
+  const bars = el("span", "bars");
+  for (let i = 0; i < 3; i++) bars.appendChild(el("i"));
   cell.appendChild(bars);
-  cell.appendChild(el("span", "n",
+  cell.appendChild(document.createTextNode(
     ms ? t("lobby.ping.value", { n: ms }) : t("lobby.ping.unknown")));
-  return outer;
-}
-
-// seatCell draws the ten playing slots as ten marks.
-//
-// Somebody scanning the lobby is asking one question - is there room for me -
-// and a bar answers it in the time the eye takes to pass over it. "7/10"
-// makes them read and subtract. The number stays underneath for the times
-// they want to be exact.
-function seatCell(r) {
-  const cell = el("div", "stat");
-  const taken = r.seats || 0;
-  const mine = r.id === state.room_id;
-  const pips = el("div", "pips");
-  for (let i = 0; i < 10; i++) {
-    pips.appendChild(el("i", "pip" + (i < taken ? (mine ? " you" : " on") : "")));
-  }
-  cell.appendChild(pips);
-  const count = el("div", "room-count");
-  count.appendChild(el("b", "", String(taken)));
-  count.appendChild(el("span", "", t("lobby.of10")));
-  cell.appendChild(count);
   return cell;
 }
 
-function roomCard(r) {
-  const card = el("div", "room");
-  // A stripe on the inline edge, coloured by whether this player can actually
-  // get in. It is the only part of the row that can be read without looking
-  // directly at it, so it carries the one fact that decides everything else.
-  card.classList.add(r.joinable && r.id !== state.room_id ? "can-join" : "shut");
-
-  const main = el("div", "room-main");
-  main.appendChild(avatar(r.host_nick, r.host_id));
-  card.appendChild(main);
-
-  // Column 1: name, door, status, the host's sentence, and who is in it.
-  const about = el("div", "grow");
-  const title = el("div", "room-title");
-  title.appendChild(el("strong", "", r.name));
-  title.appendChild(statusBadge(r.status));
-  if (r.needs_password) title.appendChild(el("span", "tag lock", t("lobby.door.password")));
-  if (r.privacy === "friends") title.appendChild(el("span", "tag lock", t("lobby.door.friends")));
-  if (r.privacy === "invite") title.appendChild(el("span", "tag lock", t("lobby.door.invite")));
-  about.appendChild(title);
-
-  about.appendChild(el("div", "room-desc",
-    r.description || t("lobby.hostedby", { host: r.host_nick })));
-
-  const who = el("div", "room-players");
-  for (const m of r.members || []) {
-    if (m.spectator) continue;
-    const chip = el("span", "tag" + (m.is_host ? " host" : ""));
-    chip.appendChild(el("b", "", m.nick));
-    if (m.mmr) chip.appendChild(el("span", "", t("lobby.player.mmr", { mmr: m.mmr })));
-    who.appendChild(chip);
-  }
-  about.appendChild(who);
-  main.appendChild(about);
-
-  // Columns 2-4: the numbers a player chooses a room on.
-  card.appendChild(seatCell(r));
-  card.appendChild(mmrCell(r));
-  card.appendChild(pingCell(r));
-  card.appendChild(roomActions(r));
-  return card;
-}
-
-// mmrCell separates the number from what it means, because the two are read
-// at different moments: the figure tells a player whether they belong here,
-// the label tells them whether it is a floor they must clear or an average
-// they are being compared against.
-function mmrCell(r) {
-  const cell = el("div", "stat");
-  const box = el("div", "mmr" + (r.min_mmr ? " floor" : ""));
-  if (r.min_mmr) {
-    box.appendChild(el("span", "v", String(r.min_mmr)));
-    box.appendChild(el("span", "k", t("lobby.mmr.min")));
-  } else if (r.avg_mmr) {
-    box.appendChild(el("span", "v", String(r.avg_mmr)));
-    box.appendChild(el("span", "k", t("lobby.mmr.avg")));
-  } else {
-    box.appendChild(el("span", "k", t("lobby.mmr.any")));
-  }
-  cell.appendChild(box);
-  return cell;
-}
-
+// The last column: one button, and a dot saying whether a match is running
+// in there. The dot is the only thing on the row that can be read without
+// looking directly at it.
 function roomActions(r) {
   const acts = el("div", "room-actions");
-  if (r.id === state.room_id) {
-    const open = el("button", "primary tiny", t("room.open"));
-    open.onclick = () => show("room");
-    acts.appendChild(open);
-    return acts;
-  }
+  const mine = r.id === state.room_id;
+  const b = el("button", mine || (r.joinable && !state.room_id) ? "primary" : "",
+    mine ? t("room.open") : (r.seats || 0) >= 10 ? t("room.full")
+      : inGame(r) ? t("room.ingame") : t("room.join"));
+  b.disabled = !mine && (!r.joinable || !!state.room_id);
+  b.title = mine ? "" : state.room_id ? t("room.join.busy") : r.joinable ? "" : t("room.join.closed");
+  b.onclick = (e) => { e.stopPropagation(); mine ? show("room") : joinRoom(r); };
+  acts.appendChild(b);
 
-  const join = el("button", "primary tiny", t("room.join"));
-  join.disabled = !r.joinable || !!state.room_id;
-  join.title = state.room_id ? t("room.join.busy")
-    : r.joinable ? "" : t("room.join.closed");
-  join.onclick = () => joinRoom(r);
-  acts.appendChild(join);
-
-  // No spectate button here. Watching is an admin's seat and an observer's
-  // deliberate choice, not something to offer beside Join on every row - it
-  // was one more thing to read on a line that has to be read at a glance.
+  const dot = el("span", "livedot " + (inGame(r) ? "game" : "open"));
+  dot.title = t(inGame(r) ? "lobby.live.game" : "lobby.live.open");
+  acts.appendChild(dot);
   return acts;
 }
 
@@ -485,22 +537,27 @@ function statusBadge(status) {
 
 function renderRoom(r) {
   $("room-face").textContent = "";
-  $("room-face").appendChild(avatar(r.host_nick, r.host_id, "lg"));
+  $("room-face").appendChild(avatar(r.host_nick, r.host_id));
   $("room-name").textContent = r.name;
-  $("room-sub").textContent = r.avg_mmr
-    ? t("room.meta.mmr", { seats: r.seats, host: r.host_nick, mmr: r.avg_mmr })
-    : t("room.meta", { seats: r.seats, host: r.host_nick });
+
+  // One line of everything else about the room, in the order somebody asks
+  // for it: who is running it, how good the people in it are, how full it is.
+  const bits = [t("room.meta.host", { host: r.host_nick })];
+  if (r.avg_mmr) bits.push(t("room.meta.mmr", { mmr: r.avg_mmr }));
+  if (r.min_mmr) bits.push(t("lobby.mmr.plus", { n: r.min_mmr }));
+  bits.push(t("room.meta.seats", { seats: r.seats }));
+  if (r.description) bits.push(r.description);
+  $("room-sub").textContent = bits.join(" · ");
+
   const badge = $("room-status");
   badge.className = statusClass(r.status);
   badge.textContent = statusLabel(r.status);
 
   const iAmHost = !!state.is_host;
-  $("hostcontrols").classList.toggle("hidden", !iAmHost);
-  $("describeform").classList.toggle("hidden", !iAmHost);
+  for (const e of document.querySelectorAll(".hostonly")) e.classList.toggle("hidden", !iAmHost);
   // Only fill the box when it is not being typed in, or every poll would
   // overwrite what the host is halfway through writing.
   if (document.activeElement !== $("describe")) $("describe").value = r.description || "";
-  $("doorform").classList.toggle("hidden", !iAmHost);
   if (iAmHost) drawDoor(r);
 
   const seated = {};
@@ -517,22 +574,72 @@ function renderRoom(r) {
   const specs = (r.members || []).filter((m) => m.spectator);
   const sbox = $("spectators");
   sbox.textContent = "";
-  if (!specs.length) sbox.appendChild(el("p", "muted small", t("room.spectators.none")));
-  for (const m of specs) sbox.appendChild(slotCard(m.slot, m, false, true));
+  if (!specs.length) {
+    sbox.appendChild(el("span", "what", t("room.spectators.none")));
+  } else {
+    for (const m of specs) sbox.appendChild(slotCard(m.slot, m, false, true));
+  }
 
-  const bits = [];
-  if (state.virtual_ip) bits.push(t("net.you", { ip: state.virtual_ip }));
-  if (state.host_ip) bits.push(t("net.host", { ip: state.host_ip }));
-  if (state.relay_ms) bits.push(t("net.relay", { n: state.relay_ms }));
-  if (state.adapter) bits.push(state.adapter);
-  $("netinfo").textContent = bits.join("  ·  ");
+  const net = [];
+  if (state.virtual_ip) net.push(t("net.you", { ip: state.virtual_ip }));
+  if (state.host_ip) net.push(t("net.host", { ip: state.host_ip }));
+  if (state.relay_ms) net.push(t("net.relay", { n: state.relay_ms }));
+  $("netinfo").textContent = net.join(" · ");
 
-  $("btn-connect").disabled = !!state.connected;
-  $("btn-disconnect").disabled = !state.connected;
-  $("btn-play").disabled = !state.connected;
-  $("btn-play").title = state.connected ? "" : t("room.play.note");
-
+  drawStepper(r);
   drawNetBanner();
+}
+
+// drawStepper is the whole of getting from a seat to a game, as three steps
+// with one button under them.
+//
+// It replaced a row of buttons that were sometimes disabled. The commonest
+// failure in the two-PC test was two players sitting in a room, neither of
+// them on its network, with nothing on the screen saying which of the three
+// things had not happened. A numbered list cannot be misread that way, and
+// the button always says the next thing to do rather than everything that
+// could be done.
+function drawStepper(r) {
+  const mine = (r.members || []).find((m) => m.player_id === state.player_id);
+  const seated = !!mine;
+  const side = mine && !mine.spectator
+    ? t(mine.slot < 5 ? "room.team.radiant" : "room.team.dire") : "";
+
+  step("seat", seated, false, seated && !mine.spectator
+    ? t("step.seat.at", { side: side, slot: mine.slot + 1 })
+    : t("step.seat.watching"));
+  step("net", !!state.connected, seated && !state.connected,
+    state.connected && state.virtual_ip
+      ? t("net.you", { ip: state.virtual_ip }) + " · " + t("net.host", { ip: state.host_ip || "?" })
+      : t("step.net.not"));
+  step("game", !!state.dota_running, !!state.connected && !state.dota_running,
+    t("step.game.detail"));
+
+  const b = $("btn-step");
+  if (!state.connected) {
+    b.textContent = t(state.is_host ? "step.go.host" : "step.go.connect");
+    b.disabled = false;
+    b.onclick = () => act(() => api("/api/connect", {}));
+  } else if (!state.dota_running) {
+    b.textContent = t("step.go.launch");
+    b.disabled = false;
+    b.onclick = () => act(() => api("/api/play", { mode: Number($("mode").value), team: myTeam() }));
+  } else {
+    b.textContent = t("step.go.running");
+    b.disabled = true;
+    b.onclick = null;
+  }
+}
+
+// A step is done, happening now, or still ahead. The detail line under it is
+// the evidence for whichever of those it is.
+function step(name, done, now, detail) {
+  const e = $("step-" + name);
+  e.className = "step" + (done ? " done" : now ? " now" : "");
+  const nth = name === "seat" ? "1" : name === "net" ? "2" : "3";
+  $("step-" + name + "-mark").textContent = done ? "✓" : nth;
+  const d = $("step-" + name + "-detail");
+  if (d) d.textContent = detail;
 }
 
 // drawDoor fills the host's door controls from the room.
@@ -542,14 +649,29 @@ function renderRoom(r) {
 // An empty box means "leave it as it is"; typing in one changes it.
 function drawDoor(r) {
   const door = r.privacy || "public";
-  if (document.activeElement !== $("door")) $("door").value = door;
+  // A password is a second lock on an otherwise open door, so the segment
+  // shows "anyone" for a password room and the box below carries the secret.
+  segment("door", door === "password" ? "public" : door);
   if (document.activeElement !== $("doormmr")) {
     $("doormmr").value = r.min_mmr ? String(r.min_mmr) : "";
   }
-  $("doorpass").classList.toggle("hidden", $("door").value !== "password");
   $("doorpass").placeholder = r.needs_password
     ? t("door.password.keep") : t("door.password.placeholder");
   $("doornow").textContent = t("door.now", { door: t("door." + door) });
+}
+
+// A segmented control remembers its answer in the markup: which button
+// carries .active is the value, so nothing has to be kept beside it.
+function segment(id, value) {
+  for (const b of $(id).querySelectorAll("button")) {
+    b.classList.toggle("active", b.dataset.door === value);
+  }
+}
+function segmentValue(id) {
+  for (const b of $(id).querySelectorAll("button")) {
+    if (b.classList.contains("active")) return b.dataset.door;
+  }
+  return "public";
 }
 
 // drawNetBanner says, in words and where it cannot be missed, whether this
@@ -659,6 +781,9 @@ function slotCard(index, member, canKick, spectator) {
 // friends list. That is the state the live server is in, and it has to read
 // as "not on this server" rather than as an error the player caused - so the
 // rail explains itself and the rest of the lobby carries on.
+// The rail groups people by where they are, because that is the only
+// question it answers: who can I play with right now. A flat list sorted by
+// presence made the reader work that out for themselves every time.
 function renderFriends(list, why) {
   const box = $("friendlist");
   box.textContent = "";
@@ -673,14 +798,18 @@ function renderFriends(list, why) {
     else if (state.accounts === false) key = "friends.unavailable";
     else if (why) key = "friends.unavailable";
     box.appendChild(el("p", "muted small friend-empty", t(key)));
+    $("friendcount").textContent = "";
     return;
   }
 
   const waiting = list.incoming || [];
   const friends = list.friends || [];
+  const online = friends.filter((f) => f.online).length;
+  $("friendcount").textContent = friends.length
+    ? t("friends.count", { on: online, all: friends.length }) : "";
 
   if (waiting.length) {
-    box.appendChild(el("h3", "friend-group", t("friends.requests")));
+    box.appendChild(el("div", "friend-group", t("friends.requests")));
     for (const f of waiting) box.appendChild(requestRow(f));
   }
 
@@ -688,11 +817,17 @@ function renderFriends(list, why) {
     box.appendChild(el("p", "muted small friend-empty", t("friends.none")));
     return;
   }
-  box.appendChild(el("h3", "friend-group", t("friends.yours")));
-  // Online first: a friend who is not there is not someone you can play with
-  // now, and the rail is for deciding who to play with now.
-  const sorted = friends.slice().sort((a, b) => (b.online ? 1 : 0) - (a.online ? 1 : 0));
-  for (const f of sorted) box.appendChild(friendRow(f));
+
+  const groups = [
+    ["friends.group.inroom", friends.filter((f) => f.online && f.room_id)],
+    ["friends.group.online", friends.filter((f) => f.online && !f.room_id)],
+    ["friends.group.offline", friends.filter((f) => !f.online)],
+  ];
+  for (const [key, people] of groups) {
+    if (!people.length) continue;
+    box.appendChild(el("div", "friend-group", t(key)));
+    for (const f of people) box.appendChild(friendRow(f));
+  }
 }
 
 // whereabouts is the line under a friend's name. It answers one question:
@@ -737,16 +872,26 @@ function friendRow(f) {
   row.title = t("friends.message");
   row.onclick = () => openConversation(f);
 
+  const acts = el("div", "acts");
   if (state.room_id) {
-    const acts = el("div", "acts");
-    const inv = el("button", "tiny", t("friends.invite"));
+    const inv = el("button", "", t("friends.invite"));
     inv.onclick = (e) => {
       e.stopPropagation();
       act(() => api("/api/friends/invite", { target_id: f.player_id }));
     };
     acts.appendChild(inv);
-    row.appendChild(acts);
+  } else if (f.room_id) {
+    // Going where a friend already is, in one click. The room may be behind
+    // a door, and the coordinator says so rather than this guessing.
+    const room = (state.rooms || []).find((r) => r.id === f.room_id);
+    if (room && room.joinable) {
+      const go = el("button", "primary", t("friends.join"));
+      go.onclick = (e) => { e.stopPropagation(); joinRoom(room); };
+      acts.appendChild(go);
+    }
   }
+  if (acts.children.length) row.appendChild(acts);
+  row.classList.toggle("off", !f.online);
   return row;
 }
 
@@ -962,10 +1107,13 @@ function drawLog() {
       : chatTab === "party" ? null
         : dmLogs[dmOpen()] || [];
 
+  const counted = chatTab === "lobby" && state.online;
+  $("presence").textContent = counted ? t("chat.inlobby", { n: state.online }) : "";
+
   if (msgs === null) {
     log.dataset.sig = "party";
     log.textContent = "";
-    log.appendChild(el("p", "muted small pad", t("chat.party.soon")));
+    log.appendChild(el("p", "muted small", t("chat.party.soon")));
     return;
   }
 
@@ -981,8 +1129,13 @@ function drawLog() {
   const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
   log.textContent = "";
   for (const m of msgs) {
+    const line = el("div", "msg" + (m.system ? " system" : ""));
+    line.appendChild(el("span", "at", clock(m.at)));
+
     if (m.system) {
-      log.appendChild(el("div", "msg system", m.text));
+      line.appendChild(el("span", "who", t("chat.system")));
+      line.appendChild(el("span", "said", m.text));
+      log.appendChild(line);
       continue;
     }
     // A private message carries who sent it but not their name - the server
@@ -992,12 +1145,21 @@ function drawLog() {
     const name = dm
       ? (mine ? (state.nick || t("chat.me")) : tabName(chatTab))
       : m.nick;
-    const line = el("div", "msg");
-    line.appendChild(el("span", "who" + (mine ? " self" : ""), t("chat.said", { name: name })));
-    line.appendChild(document.createTextNode(" " + (dm ? m.body : m.text)));
+    line.appendChild(el("span", "who" + (mine ? " self" : ""), name));
+    line.appendChild(el("span", "said", dm ? m.body : m.text));
     log.appendChild(line);
   }
   if (atBottom) log.scrollTop = log.scrollHeight;
+}
+
+// The clock beside a line, in the reader's own zone and to the minute. A
+// chat log is read for order and recency; the second something was said has
+// never been the question.
+function clock(at) {
+  if (!at) return "";
+  const d = new Date(at);
+  if (isNaN(d.getTime())) return "";
+  return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
 }
 
 // --- open and shut -------------------------------------------------------
@@ -1027,6 +1189,33 @@ function drawChatMenu() {
     row.onclick = () => { menu.classList.add("hidden"); openConversation(f); };
     menu.appendChild(row);
   }
+}
+
+// ------------------------------------------------------------- settings
+
+// Everything about this installation rather than about a room. It is the
+// screen somebody opens when the network is not working, so the three facts
+// that explain that sit above the button that tests them.
+function renderSettings(s) {
+  const face = $("set-face");
+  face.textContent = "";
+  face.appendChild(avatar(s.nick || s.username, s.player_id, "lg"));
+  $("set-name").textContent = s.nick || t("status.dash");
+  const bits = [];
+  if (s.username) bits.push(t("profile.signedin", { username: s.username }));
+  else bits.push(t("profile.local"));
+  bits.push(s.mmr ? t("status.mmr", { n: s.mmr }) : t("status.nomm"));
+  $("set-sub").textContent = bits.join(" · ");
+
+  $("btn-password").classList.toggle("hidden", !s.signed_in);
+  $("btn-signout").classList.toggle("hidden", !s.signed_in);
+
+  $("fact-adapter").textContent = s.adapter || t("settings.adapter.none");
+  $("fact-relay").textContent = s.relay_ms
+    ? t("net.relay", { n: s.relay_ms })
+    : t(s.connected ? "settings.relay.unknown" : "settings.relay.off");
+  $("fact-service").textContent = t(s.service ? "status.service.up" : "status.service.down");
+  $("fact-version").textContent = s.version || t("status.dash");
 }
 
 // ----------------------------------------------------------- diagnostics
@@ -1410,17 +1599,26 @@ $("modbannerform").onsubmit = (e) => {
   });
 };
 
-// Search and filter run against the list already on screen, so they are
-// instant rather than waiting for the next two-second poll.
+// Search, filter and sort all run against the list already on screen, so
+// they are instant rather than waiting for the next two-second poll.
 $("search").oninput = (e) => { query = e.target.value; renderRooms(state.rooms || []); };
-document.querySelectorAll(".chip").forEach((chip) => {
-  chip.onclick = () => {
-    filter = chip.dataset.filter;
-    for (const c of document.querySelectorAll(".chip")) {
-      c.classList.toggle("active", c === chip);
-    }
-    renderRooms(state.rooms || []);
-  };
+
+function setFilter(name) {
+  filter = name;
+  for (const c of document.querySelectorAll("#filters .chip")) {
+    c.classList.toggle("active", c.dataset.filter === name);
+  }
+  renderRooms(state.rooms || []);
+}
+document.querySelectorAll("#filters .chip").forEach((chip) => {
+  chip.onclick = () => setFilter(chip.dataset.filter);
+});
+
+// Every heading sorts. A room list is read for one thing at a time - who has
+// space, who is closest, who is at my level - and which one it is changes
+// between one glance and the next.
+$("roomhead").querySelectorAll("button").forEach((b) => {
+  b.onclick = () => toggleSort(b.dataset.sort);
 });
 
 document.querySelectorAll(".modetabs .chattab").forEach((tab) => {
@@ -1546,38 +1744,83 @@ $("profileform").onsubmit = async (e) => {
   }
 };
 
+// --- the create dialog ----------------------------------------------------
+
+// The door is chosen before the room exists (D41). A room opened public and
+// locked a second later is a second in which anybody can walk in.
+function openCreate() {
+  if (needName("namegate.why.create")) return;
+  $("createerr").textContent = "";
+  $("roomname").value = "";
+  $("newpass").value = "";
+  $("newmmr").value = "";
+  $("newpasson").checked = false;
+  segment("newdoor", "public");
+  drawCreateDoor();
+  $("creategate").classList.remove("hidden");
+  $("roomname").focus();
+}
+
+// A password is a second lock on an otherwise open door rather than a fourth
+// kind of door, so the box only exists while that door is chosen, and only
+// while the box beside it is ticked.
+function drawCreateDoor() {
+  const open = segmentValue("newdoor") === "public";
+  $("newpasscheck").classList.toggle("hidden", !open);
+  $("newpassfield").classList.toggle("hidden", !(open && $("newpasson").checked));
+}
+
+$("btn-create").onclick = openCreate;
+$("createcancel").onclick = () => $("creategate").classList.add("hidden");
+$("newpasson").onchange = drawCreateDoor;
+for (const b of $("newdoor").querySelectorAll("button")) {
+  b.onclick = () => { segment("newdoor", b.dataset.door); drawCreateDoor(); };
+}
+
 $("createform").onsubmit = (e) => {
   e.preventDefault();
   if (needName("namegate.why.create")) return;
-  const name = $("roomname").value;
-  const door = $("newdoor").value;
-  const pass = $("newpass").value;
-  if (door === "password" && !pass) { banner(t("door.password.needed")); return; }
+  const door = segmentValue("newdoor");
+  const pass = $("newpasson").checked ? $("newpass").value : "";
+  if (door === "public" && $("newpasson").checked && !pass) {
+    $("createerr").textContent = t("door.password.needed");
+    return;
+  }
   act(async () => {
-    await api("/api/rooms/create", {
-      name: name,
-      privacy: door,
-      password: pass,
-      min_mmr: Number($("newmmr").value) || 0,
-    });
-    $("roomname").value = "";
-    $("newpass").value = "";
+    try {
+      await api("/api/rooms/create", {
+        name: $("roomname").value,
+        privacy: pass ? "password" : door,
+        password: pass,
+        min_mmr: Number($("newmmr").value) || 0,
+      });
+    } catch (err) {
+      $("createerr").textContent = err.message;
+      throw err;
+    }
+    $("creategate").classList.add("hidden");
     show("room");
   });
 };
 
-// A password box is only shown for the door that uses one. Showing it always
-// invites somebody to type a password into a room that will ignore it.
-$("newdoor").onchange = () =>
-  $("newpass").classList.toggle("hidden", $("newdoor").value !== "password");
-$("door").onchange = () =>
-  $("doorpass").classList.toggle("hidden", $("door").value !== "password");
+// --- the host's own controls ---------------------------------------------
+
+$("btn-roomsettings").onclick = () => {
+  if (state.room) drawDoor(state.room);
+  $("roomsetgate").classList.remove("hidden");
+};
+$("roomsetclose").onclick = () => $("roomsetgate").classList.add("hidden");
+
+for (const b of $("door").querySelectorAll("button")) {
+  b.onclick = () => segment("door", b.dataset.door);
+}
 
 $("doorform").onsubmit = (e) => {
   e.preventDefault();
+  const pass = $("doorpass").value;
   act(() => api("/api/rooms/privacy", {
-    privacy: $("door").value,
-    password: $("doorpass").value,
+    privacy: pass ? "password" : segmentValue("door"),
+    password: pass,
     min_mmr: Number($("doormmr").value) || 0,
   }));
 };
@@ -1586,6 +1829,48 @@ $("describeform").onsubmit = (e) => {
   e.preventDefault();
   act(() => api("/api/rooms/describe", { description: $("describe").value }));
 };
+
+// --- inviting -------------------------------------------------------------
+
+// One word, two things: tell them to come, and let them through the door.
+// Doing only the first is how somebody is invited and then refused (D41).
+$("btn-invite").onclick = () => {
+  drawInvites();
+  $("invitegate").classList.remove("hidden");
+};
+$("inviteclose").onclick = () => $("invitegate").classList.add("hidden");
+
+function drawInvites() {
+  const box = $("invitelist");
+  box.textContent = "";
+  const friends = ((state.friends && state.friends.friends) || [])
+    .filter((f) => !state.room_id || f.room_id !== state.room_id);
+  if (!friends.length) {
+    box.appendChild(el("p", "muted small", t("room.invite.nobody")));
+    return;
+  }
+  for (const f of friends) {
+    const row = el("div", "friend");
+    const port = el("div", "who-av");
+    port.appendChild(avatar(f.display_name || f.player_id, f.player_id, "sm"));
+    port.appendChild(el("span", "presence-dot " + (f.online ? "on" : "off")));
+    row.appendChild(port);
+    const who = el("div", "grow");
+    who.appendChild(el("div", "name", f.display_name || f.player_id));
+    who.appendChild(el("div", "where", whereabouts(f)));
+    row.appendChild(who);
+    const go = el("button", "tiny primary", t("room.invite.send"));
+    go.onclick = () => act(async () => {
+      await api("/api/invite", { target_id: f.player_id });
+      go.disabled = true;
+      go.textContent = t("room.invite.sent");
+    });
+    row.appendChild(go);
+    box.appendChild(row);
+  }
+}
+
+// --- chat and friends -----------------------------------------------------
 
 // One box, whichever tab is open. A private message goes down a different
 // road from a room line, but a person typing should not have to know that.
@@ -1625,9 +1910,11 @@ $("findform").onsubmit = async (e) => {
   }
 };
 
-// The terms are shown as text, in a <pre>, exactly as the server sent them.
-// They are an agreement somebody is about to accept; rendering them as markup
-// would mean the words on screen could differ from the words on file.
+// --- the terms ------------------------------------------------------------
+
+// Shown as text, in a <pre>, exactly as the server sent them. They are an
+// agreement somebody is about to accept; rendering them as markup would mean
+// the words on screen could differ from the words on file.
 $("readterms").onclick = async () => {
   $("termsgate").classList.remove("hidden");
   $("termstext").textContent = t("auth.termsloading");
@@ -1640,8 +1927,8 @@ $("readterms").onclick = async () => {
 };
 $("termsclose").onclick = () => $("termsgate").classList.add("hidden");
 
-$("btn-connect").onclick = () => act(() => api("/api/connect", {}));
-$("btn-disconnect").onclick = () => act(() => api("/api/disconnect", {}));
+// --- leaving, and the network --------------------------------------------
+
 $("btn-leave").onclick = () => act(async () => {
   await api("/api/rooms/leave", {});
   show("lobby");
@@ -1655,22 +1942,24 @@ $("btn-open").onclick = () => act(() => api("/api/rooms/status", { status: "open
 // The team is not asked for any more: it is which seat the player is sitting
 // in. Slots 1-5 are Radiant and 6-10 are Dire, which is what the room screen
 // already shows, so a dropdown that could disagree with the seat was one
-// place too many for the same fact to live.
-$("btn-play").onclick = () => act(() => api("/api/play", {
-  mode: Number($("mode").value),
-  team: myTeam(),
-}));
-
-// myTeam reads the side out of the slot the player is sitting in. A
-// spectator, and anybody the room has not told us about yet, is Radiant -
-// the game requires a side and that is the one it defaults to.
+// place too many for the same fact to live (D57).
+//
+// myTeam reads the side out of the slot. A spectator, and anybody the room
+// has not told us about yet, is Radiant - the game requires a side and that
+// is the one it defaults to.
 function myTeam() {
   const me = ((state.room && state.room.members) || [])
     .find((m) => m.player_id === state.player_id && !m.spectator);
   return me && me.slot >= 5 ? "bad" : "good";
 }
 
+// --- settings -------------------------------------------------------------
+
 $("btn-diag").onclick = () => act(() => api("/api/diagnose", {}));
+$("btn-editprofile").onclick = () => $("mebtn").onclick();
+$("btn-password").onclick = () => $("p-password").onclick();
+$("btn-signout").onclick = () => $("p-signout").onclick();
+$("btn-showterms").onclick = () => $("readterms").onclick();
 
 // ----------------------------------------------------------------- poll
 
@@ -1701,6 +1990,7 @@ async function refresh() {
 // enough to be read.
 I18n.load("en").then(() => {
   I18n.apply();
+  drawSortHeads();
   showChat("lobby");
   refresh();
   setInterval(refresh, POLL_MS);

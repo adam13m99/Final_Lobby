@@ -1136,3 +1136,62 @@ suggested it might. The action bar is now Connect / Disconnect / Launch for
 everybody, the host's controls in their own row beneath, and Leave last — and
 it stays pinned to the bottom of the room screen, because with the chat dock
 open it otherwise sat below ten seats where nobody saw it.
+
+---
+
+## D58 — Nocturne: the interface the owner drew, adopted whole
+
+**2026-08-26 (T19).**
+
+The owner supplied a working HTML mock — `Gaming Matchmaking App Redesign/
+LobbyBaz.dc.html` — and asked for the front end to follow it. It is now the
+reference for the look; this file stays the reference for the behaviour.
+
+**What changed, and why it was worth changing:**
+
+- **One dark palette, defined once as tokens.** Every colour the interface
+  uses is a `--custom-property` on `:root`. Nothing below reaches for a hex
+  code, so the next reskin is one block rather than nine hundred lines.
+- **No web font.** The mock names one; fonts.googleapis.com is not reachable
+  from inside Iran, and a stylesheet that waits on it is a blank screen for
+  however long the DPI takes to give up. A system stack renders instantly and
+  looks the same on the two PCs this is tested on.
+- **The room list is a table, and every heading sorts it.** A player reads
+  the lobby for one thing at a time — who has space, who is closest, who is
+  at my level — and which one changes between one glance and the next. The
+  columns shed themselves in that order as the window narrows, so the room's
+  name never gives ground.
+- **Getting into a game is three numbered steps with one button under
+  them.** It replaced a row of buttons that were sometimes disabled. The
+  commonest failure in the two-PC test was two players in a room, neither on
+  its network, with nothing on the screen saying which of the three things
+  had not happened.
+- **The host's controls are a dialog, not a screen.** They are opened perhaps
+  once per room, and they were costing everyone else a third of the room
+  screen.
+- **Diagnostics is not a toolbar entry any more.** It is one button on the
+  settings screen, immediately under the three network facts it explains.
+- **The chat dock now starts open** rather than minimised. D56 chose Dota 2's
+  chat as the model and then started it collapsed, which is not what Dota
+  does; the mock shows it open, and with the room list now filling its panel
+  there is space for it. It still minimises to the tab strip when asked and
+  still reopens itself on an incoming message — `scripts/chatcheck.sh` proves
+  the second half over a live page.
+
+**Adopted the design, not the invented features.** The mock shows things the
+server has no notion of: a game mode stored on a room, "EU West" and "fra-02"
+regions, a Steam link, games-hosted counts, per-player ping, last-seen times.
+None of them were faked. Two are worth the owner's decision and are recorded
+in `docs/STATE.md` as open questions rather than silently dropped:
+
+- The mock puts a **Watch** button on rooms that are in game. The owner said
+  earlier, explicitly, that there is no Spectate button in the lobby. The
+  earlier instruction won; the button is not there.
+- The mock stores a **game mode** on the room and shows it in the room's
+  meta line and in the create dialog. Today the mode is the host's own, sent
+  to Dota when they launch (D57), and nothing about a room advertises it.
+
+**"Tournaments" became "Events" in the toolbar**, because at 72px the longer
+word does not fit and the mock had already made the choice. Nothing behind
+it changed: the screen id, the key namespace and the honest "not yet" are
+all as they were.

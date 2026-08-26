@@ -1,4 +1,4 @@
-/* LobbyBaz - the lobby (D42).
+/* LobbyBaz - the lobby (D42, reskinned to the Nocturne design on 2026-08-25).
 
    Dark, dense, and built for a 1366x768 laptop, because that is what most
    players in the target audience actually have in front of them.
@@ -9,104 +9,124 @@
    Block-axis properties - top, bottom, border-bottom - are fine and used
    freely: right-to-left flips the inline axis only.
 
-   Depth is carried by three things and no more: a surface's own colour, one
-   hairline border, and one soft shadow. A player reads this screen for two
-   seconds before deciding where to click, so anything that does not help them
-   find a room faster is decoration that costs contrast. */
+   Depth is carried by a surface's own colour and one hairline ring, drawn as
+   an inset box-shadow rather than a border so it never takes part in layout.
+   A player reads this screen for two seconds before deciding where to click,
+   and anything that does not help them find a room faster is decoration that
+   costs contrast. */
 
 :root {
   color-scheme: dark;
 
-  /* Surfaces, darkest to lightest. Each step is small on purpose: a lobby is
+  /* Surfaces, darkest to lightest. The steps are small on purpose: a lobby is
      mostly one colour, and the eye should be drawn by the accent, never by
      the furniture. */
-  --bg:      #0a0c11;
-  --bg2:     #0e1118;
-  --panel:   #141822;
-  --panel2:  #1a1f2b;
-  --panel3:  #232936;
-  --line:    #262c3a;
-  --line2:   #333b4c;
+  --bg:      #161826;
+  --sunk:    #14161f;
+  --bar-bg:  #14161f;
+  --head-bg: #191b28;
+  --panel:   #1b1d29;
+  --panel2:  #1f2130;
+  --panel3:  #21232f;
+  --raise:   #232539;
+  --line:    #292b31;
+  --line2:   #3f424d;
+  --line3:   #32353f;
+  --hair:    #24262f;
 
-  --text:    #eef0f6;
-  --muted:   #99a1b5;
-  --dim:     #6b7387;
+  --text:    #e9e9ed;
+  --text2:   #cfd3e5;
+  --muted:   #9397ab;
+  --dim:     #75798c;
+  --dimmer:  #6d7183;
+  --faint:   #4f5361;
 
-  /* One accent, warm, taken from Dota's own palette. The second is lighter
-     for hover rather than a different colour, so nothing on screen competes
-     with the primary action. */
-  --accent:  #f04d2a;
-  --accent2: #ff6b45;
-  --accent-soft: #2a1410;
+  /* One accent, a cool periwinkle. Everything interactive is drawn from it,
+     and nothing else on the screen is allowed to be this colour. */
+  --accent:      #9184d9;
+  --accent-line: #5d5294;
+  --accent-lit:  #b5abfc;
+  --accent-text: #d2cefd;
+  --accent-hi:   #e7e5fe;
+  --accent-soft: #2b2741;
+  --accent-deep: #423a6a;
+  --accent-ring: #4b4278;
+  --accent-wash: rgba(145,132,217,.10);
 
-  --good:    #35c46f;
-  --good-soft: #0f2418;
-  --warn:    #e8a72b;
-  --warn-soft: #241c0c;
-  --bad:     #e8543f;
-  --bad-soft: #251110;
+  /* Status. Muted rather than saturated: a room list where three things
+     shout is a room list where nothing is read. */
+  --good:      #a9cbb5;
+  --good-dot:  #7ea88c;
+  --good-soft: #1c2a24;
+  --good-line: #2c4034;
+  --warn:      #cfc48b;
+  --bad:       #cf8b86;
+  --bad-soft:  #2b1f22;
+  --bad-line:  #5a3a3d;
 
   /* The two sides of a Dota match. Used only where the split is real. */
-  --radiant: #4ba364;
-  --dire:    #c0483c;
+  --radiant: #7ea88c;
+  --dire:    #cf8b86;
 
-  --rail: 330px;
-  --bar: 167px;
+  --rail: 244px;
+  --bar: 72px;
   /* The room list's fixed columns. Held in variables because the header row
      and the rows are separate grids and would otherwise resolve differently
      the moment either had to give ground. */
-  --statw: 7.5rem;
-  --actw: 9.5rem;
+  --w-players: 128px;
+  --w-mmr: 92px;
+  --w-ping: 92px;
+  --w-status: 104px;
 
   --r-sm: 7px;
-  --r-md: 11px;
-  --r-lg: 16px;
+  --r-md: 9px;
+  --r-lg: 12px;
+  --r-xl: 14px;
 
-  --lift: 0 1px 0 rgba(255,255,255,.035) inset, 0 6px 18px rgba(0,0,0,.34);
-  --lift-sm: 0 1px 0 rgba(255,255,255,.03) inset, 0 2px 6px rgba(0,0,0,.28);
-  --ring: 0 0 0 2px rgba(240,77,42,.35);
+  --lift: 0 16px 40px rgba(0,0,0,.65);
+  --ring-line: inset 0 0 0 1px var(--line);
+  --focus: 0 0 0 2px rgba(145,132,217,.45);
 }
 
 * { box-sizing: border-box; }
 
+/* No web font. This runs on a PC inside Iran with the wider internet largely
+   unreachable, and a stylesheet that waits on fonts.googleapis.com is a
+   stylesheet that renders late or not at all. */
 body {
   margin: 0;
-  background:
-    radial-gradient(1200px 700px at 50% -10%, #161b26 0%, transparent 60%),
-    var(--bg);
+  background: var(--bg);
   color: var(--text);
-  font: 14px/1.55 "Segoe UI", system-ui, -apple-system, sans-serif;
-  font-feature-settings: "cv05", "ss01";
+  font: 400 14px/1.5 "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
 }
 
-h1, h2, h3 { margin: 0; font-weight: 660; letter-spacing: -0.015em; }
-h1 { font-size: 1.32rem; }
-h2 { font-size: 1.02rem; }
-h3 {
-  font-size: .7rem; text-transform: uppercase; letter-spacing: .09em;
-  color: var(--dim); font-weight: 700;
+h1, h2, h3, h4 { margin: 0; font-weight: 500; }
+h1 { font-size: 19px; }
+h2 { font-size: 15px; }
+h3, h4 {
+  font-size: 10.5px; font-weight: 500; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--dimmer);
 }
-h3 em { font-style: normal; text-transform: none; letter-spacing: 0; opacity: .7; }
-h4 {
-  margin: 0; font-size: .7rem; text-transform: uppercase; letter-spacing: .09em;
-  color: var(--dim); font-weight: 700;
-}
+h3 em { font-style: normal; text-transform: none; letter-spacing: 0; color: var(--dim); }
 
-.muted { color: var(--muted); }
-.small { font-size: .82rem; }
-.pad   { padding: 1rem 1.15rem; }
+.muted { color: var(--dim); }
+.small { font-size: 12px; }
+.pad   { padding: 14px; }
 .hidden { display: none !important; }
 .grow { flex: 1; min-width: 0; overflow-wrap: break-word; }
-
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb {
-  background: #262d3c; border-radius: 99px; border: 3px solid transparent;
-  background-clip: content-box;
+/* Kept off-screen rather than hidden: a password form needs a username field
+   the browser can see, and a hidden one it complains about in the console. */
+.offscreen {
+  position: absolute; width: 1px; height: 1px;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap;
 }
-::-webkit-scrollbar-thumb:hover { background: #38415a; background-clip: content-box; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #3f424d; border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: #4f5361; }
 
 /* ---------------------------------------------------------------- shell */
 
@@ -115,27 +135,15 @@ h4 {
 #shell {
   display: grid;
   grid-template-columns: var(--bar) minmax(0, 1fr) var(--rail);
-  grid-template-rows: 56px auto minmax(0, 1fr) auto;
+  grid-template-rows: 54px auto minmax(0, 1fr) auto;
   grid-template-areas:
     "bar head rail"
     "bar strip rail"
     "bar stage rail"
     "bar chat rail";
   height: 100vh;
+  min-height: 560px;
 }
-/* A narrower window takes it out of the numbers, not out of the room name:
-   a name that has to wrap costs a player the one thing the row is for. */
-@media (max-width: 1560px) { :root { --statw: 6rem; --actw: 8.2rem; } }
-/* Below this the sides give ground before the middle does. The toolbar keeps
-   its icons and loses padding; the rail keeps the friends list and loses
-   width. Both are furniture; the room list is the product. */
-@media (max-width: 1320px) {
-  :root { --statw: 5.2rem; --actw: 7.4rem; --rail: 272px; --bar: 128px; }
-  .nav { padding: .8rem .25rem; font-size: .93rem; }
-  .nav .ico { font-size: 1.7rem; width: 2.2rem; height: 2.2rem; }
-  .searchbox { flex: 1 1 8rem; }
-}
-
 @media (max-width: 1100px) {
   #shell {
     grid-template-columns: var(--bar) minmax(0, 1fr);
@@ -148,528 +156,582 @@ h4 {
 
 #toolbar {
   grid-area: bar;
-  background: linear-gradient(180deg, #12161f 0%, #0d1016 100%);
+  background: var(--bar-bg);
   border-inline-end: 1px solid var(--line);
-  display: flex; flex-direction: column; align-items: stretch;
-  padding: .7rem .5rem .6rem;
-  gap: .2rem;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 14px 0 12px; gap: 4px;
 }
 
+/* The mark, not the word. At 72px the name does not fit, and a lobby that
+   spells its own name at the player twice a second is not telling them
+   anything they did not know when they opened it. */
 .brand {
-  font-weight: 800; letter-spacing: .14em; font-size: 1rem;
-  color: var(--accent); text-align: center; padding: .6rem 0 1.1rem;
+  width: 34px; height: 34px; flex: none; margin-block-end: 14px;
+  border-radius: var(--r-md);
+  background: linear-gradient(150deg, var(--accent-line), #2b2741);
+  box-shadow: 0 0 0 1px var(--accent-deep);
+  display: grid; place-items: center;
+  font-size: 15px; font-weight: 600; letter-spacing: -.02em;
+  color: var(--accent-text);
 }
 
 .nav {
-  position: relative;
-  background: none; border: 0; color: var(--dim);
-  display: flex; flex-direction: column; align-items: center; gap: .45rem;
-  padding: 1.15rem .3rem; border-radius: var(--r-md);
-  font: inherit; font-size: 1.05rem; font-weight: 650; cursor: pointer;
+  width: 56px; height: 52px; flex: none;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px; border: 0; border-radius: 10px;
+  background: none; color: var(--dim);
+  font: inherit; font-size: 10.5px; letter-spacing: .04em; cursor: pointer;
   transition: color .14s ease, background .14s ease;
 }
-.nav .ico {
-  font-size: 2rem; line-height: 1;
-  display: grid; place-items: center; width: 2.7rem; height: 2.7rem;
+.nav .ico { font-size: 18px; line-height: 1; }
+.nav:hover:not(:disabled) { color: var(--text2); background: var(--panel3); }
+.nav.active {
+  color: var(--accent-text); background: var(--raise);
+  box-shadow: inset 0 0 0 1px #3a3560;
 }
-.nav:hover:not(:disabled) { color: var(--text); background: rgba(255,255,255,.04); }
-.nav.active { color: var(--text); background: var(--panel3); box-shadow: var(--lift-sm); }
-/* A short bar on the inline edge marks the open screen. It reads as "you are
-   here" faster than a background change alone. */
-.nav.active::before {
-  content: ""; position: absolute; inset-block: 28%; inset-inline-start: -.5rem;
-  width: 3px; border-radius: 99px; background: var(--accent);
-}
-.nav:disabled { opacity: .28; cursor: default; }
+.nav:disabled { opacity: .35; cursor: default; }
 .nav-gap { flex: 1; }
 
 /* The connection light. Its colour is the whole point, so it is the one
    thing in the toolbar that is never grey. */
-.nav.conn { cursor: default; font-size: .8rem; }
+.nav.conn {
+  cursor: default; gap: 5px; height: auto; padding-block-start: 10px;
+  font-size: 10px; color: var(--dim);
+}
+.nav.conn:hover { background: none; color: var(--dim); }
 .dot {
-  width: .55rem; height: .55rem; border-radius: 50%; background: var(--dim);
+  width: 7px; height: 7px; border-radius: 50%; background: var(--line2);
   transition: background .2s ease, box-shadow .2s ease;
 }
-.dot.ok   { background: var(--good); box-shadow: 0 0 0 4px rgba(53,196,111,.16); }
-.dot.wait { background: var(--warn); box-shadow: 0 0 0 4px rgba(232,167,43,.14); animation: pulse 1.6s ease-in-out infinite; }
-.dot.bad  { background: var(--bad);  box-shadow: 0 0 0 4px rgba(232,84,63,.14); }
-@keyframes pulse { 50% { opacity: .45; } }
+.dot.ok   { background: var(--good-dot); box-shadow: 0 0 8px var(--good-dot); }
+.dot.busy { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+.dot.bad  { background: var(--bad); box-shadow: 0 0 8px var(--bad); }
 
 /* ---------------------------------------------------------------- header */
 
 #top {
   grid-area: head;
-  display: flex; align-items: center; gap: .8rem;
-  padding: 0 1.1rem;
-  background: linear-gradient(180deg, #141822 0%, #11151d 100%);
+  display: flex; align-items: center; gap: 14px;
+  padding: 0 18px;
+  background: var(--head-bg);
   border-block-end: 1px solid var(--line);
 }
 
-.searchbox { flex: 0 1 300px; position: relative; }
-.searchbox input {
-  width: 100%; border-radius: 99px; padding-block: .45rem;
-  padding-inline: 2.1rem .9rem;
-}
+.searchbox { position: relative; flex: 1 1 220px; min-width: 170px; max-width: 300px; }
+.searchbox input { width: 100%; height: 34px; padding-inline: 28px 10px; font-size: 13px; }
 /* The magnifier is drawn by the stylesheet rather than sitting in the markup:
    it is decoration, and decoration in the DOM ends up read aloud. */
 .searchbox::before {
-  content: "";
-  position: absolute; inset-block-start: 50%; inset-inline-start: .8rem;
-  width: .72rem; height: .72rem; margin-block-start: -.5rem;
-  border: 1.6px solid var(--dim); border-radius: 50%;
-  box-shadow: 0 0 0 0 transparent;
-  pointer-events: none;
+  content: ""; position: absolute;
+  inset-block-start: 50%; inset-inline-start: 11px;
+  width: 8px; height: 8px; margin-block-start: -6px;
+  border: 1.5px solid var(--dim); border-radius: 50%; pointer-events: none;
 }
 .searchbox::after {
-  content: "";
-  position: absolute; inset-block-start: 50%; inset-inline-start: 1.42rem;
-  width: 1.6px; height: .42rem; margin-block-start: .06rem;
+  content: ""; position: absolute;
+  inset-block-start: 50%; inset-inline-start: 18px;
+  width: 1.5px; height: 5px; margin-block-start: 1px;
   background: var(--dim); transform: rotate(-45deg); transform-origin: top;
   pointer-events: none;
 }
 
-/* One segmented control rather than four loose pills. The filters are a
-   single choice, and four separate outlines make them look like four
-   separate switches. */
+/* One segmented control rather than six loose pills. The filters are a single
+   choice, and six separate outlines look like six separate switches.
+   It scrolls rather than wraps if a window is narrow enough to need it, but
+   the sizes below are chosen so that a 1366-wide laptop - the commonest
+   screen this will run on - never has to. */
 .filters {
-  display: flex; gap: 2px; flex: 0 0 auto;
-  background: #0d1017; border: 1px solid var(--line);
-  border-radius: 99px; padding: 3px;
+  display: flex; flex: 0 1 auto; min-width: 0; align-items: center; gap: 2px;
+  overflow-x: auto; scrollbar-width: none;
+  padding: 3px; border-radius: var(--r-md);
+  background: var(--sunk); box-shadow: var(--ring-line);
+}
+.filters::-webkit-scrollbar { display: none; }
+
+/* A laptop screen. The search box and the chips both give a little so that
+   the last filter is not sliced in half, which reads as a broken page
+   rather than as a list that scrolls. */
+@media (max-width: 1440px) {
+  #top { gap: 10px; }
+  .searchbox { max-width: 224px; }
+  .chip { padding: 0 8px; gap: 5px; }
 }
 .chip {
-  background: none; border: 0; color: var(--muted);
-  padding: .32rem .85rem; border-radius: 99px;
-  font: inherit; font-size: .78rem; font-weight: 620; cursor: pointer;
-  white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 6px; flex: none;
+  height: 28px; padding: 0 11px; border: 0; border-radius: var(--r-sm);
+  background: none; color: var(--muted);
+  font: inherit; font-size: 12.5px; font-weight: 500;
+  white-space: nowrap; cursor: pointer;
   transition: color .14s ease, background .14s ease;
 }
-.chip:hover { color: var(--text); background: rgba(255,255,255,.05); }
-.chip.active {
-  color: #fff;
-  background: linear-gradient(180deg, var(--accent2) 0%, var(--accent) 100%);
-  box-shadow: 0 2px 8px rgba(240,77,42,.3);
-}
+.chip:hover { color: var(--text2); }
+.chip.active { color: var(--accent-text); background: var(--accent-soft); }
+.chip .cdot { width: 7px; height: 7px; flex: none; border-radius: 50%; }
+.chip .cdot.open { background: var(--good-dot); box-shadow: 0 0 6px rgba(126,168,140,.55); }
+.chip .cdot.game { background: var(--bad); box-shadow: 0 0 6px rgba(207,139,134,.55); }
+
 .head-gap { flex: 1; }
 
-.status { display: flex; align-items: center; gap: .45rem; }
-
+.status { display: flex; flex: none; align-items: center; gap: 8px; font-size: 12px; }
 .pill {
-  font-size: .71rem; font-weight: 680; letter-spacing: .02em;
-  padding: .28rem .65rem; border-radius: 99px;
-  background: var(--panel2); color: var(--muted);
-  border: 1px solid var(--line); white-space: nowrap;
-  display: inline-flex; align-items: center; gap: .35rem;
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 26px; flex: none; padding: 0 9px; border-radius: var(--r-sm);
+  background: var(--sunk); color: var(--muted);
+  box-shadow: var(--ring-line); white-space: nowrap;
 }
-.pill.ok   { color: var(--good); border-color: #1e4630; background: var(--good-soft); }
-.pill.bad  { color: var(--bad);  border-color: #4a221d; background: var(--bad-soft); }
-.pill.wait { color: var(--warn); border-color: #45360f; background: var(--warn-soft); }
-.pill.quiet { font-weight: 600; }
+.pill.ok   { background: var(--good-soft); color: var(--good); box-shadow: inset 0 0 0 1px var(--good-line); }
+.pill.bad  { background: var(--bad-soft); color: var(--bad); box-shadow: inset 0 0 0 1px var(--bad-line); }
+.pill .live {
+  width: 6px; height: 6px; border-radius: 50%; background: currentColor;
+  animation: pulse 2.4s infinite;
+}
+@keyframes pulse { 0%, 100% { opacity: 1 } 50% { opacity: .35 } }
 
-/* The player's own card. It is a button, so it has to look pressable without
-   shouting louder than the primary action beside the room list. */
+/* The player's own card. A separator rather than a box: it is who you are,
+   not another control. */
 .me {
-  display: flex; flex-direction: column; align-items: flex-end;
-  background: var(--panel2); border: 1px solid var(--line);
-  border-radius: var(--r-md); padding: .3rem .8rem;
-  color: var(--text); font: inherit; cursor: pointer; line-height: 1.25;
-  transition: border-color .14s ease, background .14s ease;
+  display: flex; align-items: center; gap: 9px; flex: none;
+  padding: 0; padding-inline-start: 14px; margin-inline-start: 4px;
+  border: 0; border-inline-start: 1px solid var(--line);
+  background: none; color: var(--text);
+  font: inherit; text-align: start; cursor: pointer; line-height: 1.25;
 }
-.me:hover { border-color: var(--line2); background: var(--panel3); }
-.me span, .me small { white-space: nowrap; }
-.me strong { font-weight: 640; }
-.me small { color: var(--muted); font-size: .69rem; font-variant-numeric: tabular-nums; }
+.me .who { white-space: nowrap; }
+.me .name { font-size: 13px; font-weight: 500; }
+.me small { display: block; font-size: 11px; color: var(--dim); white-space: nowrap; }
+.me:hover .name { color: var(--accent-text); }
 
 /* --------------------------------------------------------------- strips */
 
 #banners, #banner, #update, #termsmoved { grid-area: strip; }
 #banners:empty { display: none; }
 
-.strip { display: flex; gap: .6rem; padding: .6rem 1.1rem 0; overflow-x: auto; }
+.strip { display: flex; gap: 8px; padding: 12px 18px 0; overflow-x: auto; }
 .ad {
   flex: 0 0 auto; max-width: 32rem;
-  background: linear-gradient(180deg, var(--panel2) 0%, var(--panel) 100%);
-  border: 1px solid var(--line); border-radius: var(--r-md);
-  padding: .5rem .9rem; font-size: .84rem;
-  display: flex; align-items: baseline; gap: .5rem;
-  box-shadow: var(--lift-sm);
+  background: var(--panel); box-shadow: var(--ring-line);
+  border-radius: var(--r-lg); padding: 10px 12px; font-size: 12.5px;
 }
-.ad strong { font-weight: 660; }
-.ad span { color: var(--muted); }
-.ad a { color: var(--accent2); text-decoration: none; font-weight: 620; }
-.ad a:hover { text-decoration: underline; }
+.ad b { display: block; font-weight: 500; }
+.ad a { color: var(--accent-text); }
 
 .banner {
-  padding: .65rem 1.1rem; font-size: .87rem; font-weight: 550;
-  background: var(--bad-soft); color: #ffbdb2;
-  border-block-end: 1px solid #4a221d;
-  display: flex; align-items: center; gap: 1rem;
+  display: flex; align-items: center; gap: 12px;
+  margin: 12px 18px 0; padding: 10px 12px; border-radius: var(--r-md);
+  background: var(--bad-soft); box-shadow: inset 0 0 0 1px var(--bad-line);
+  font-size: 13px;
 }
-.banner.update { background: var(--good-soft); color: #a9ecc0; border-block-end-color: #1e4630; }
-/* Not an error and not good news: something the person has to do. */
-.banner.warn { background: var(--warn-soft); color: #f0dfb0; border-block-end-color: #45360f; }
-.banner.warn button { background: var(--warn); color: #221a05; }
-.banner.warn button.primary { background: var(--good); color: #06210f; }
-.banner button {
-  background: var(--good); border: 0; color: #06210f; font: inherit; font-weight: 700;
-  padding: .3rem .9rem; border-radius: var(--r-sm); cursor: pointer;
+.banner .icon {
+  width: 20px; height: 20px; flex: none; border-radius: 50%;
+  background: var(--bad); color: #241417;
+  display: grid; place-items: center; font-size: 12px; font-weight: 700;
 }
+.banner.warn { background: #2b2620; box-shadow: inset 0 0 0 1px #4a3f2c; }
+.banner.warn .icon { background: var(--warn); color: #241f14; }
+.banner.update { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-ring); }
+.banner.update .icon { background: var(--accent-deep); color: var(--accent-text); }
+.banner .grow { font-size: 13px; }
+.banner .sub { font-size: 12px; color: var(--muted); }
 
 /* ---------------------------------------------------------------- stage */
 
-#stage { grid-area: stage; overflow-y: auto; padding: 1.1rem; }
-
-.screen { display: flex; flex-direction: column; gap: 1.1rem; min-width: 0; }
-/* A screen fills the stage rather than ending wherever its content does. The
-   old lobby left half the window empty below the last room, which reads as a
-   page that failed to load rather than as a lobby with three rooms in it. */
+#stage { grid-area: stage; overflow-y: auto; padding: 16px 18px 0; }
+.screen { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 #stage > .screen { min-height: 100%; }
 
+/* The lobby is one panel, and it owns the height it is given. A panel that
+   sized itself to its rows left a hole under a short list, which reads as a
+   page that failed to load rather than as a lobby with three rooms in it. */
+#screen-lobby { display: flex; }
+#screen-lobby > .roomspanel { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
 .panel {
-  background: linear-gradient(180deg, var(--panel) 0%, #12161f 100%);
-  border: 1px solid var(--line); border-radius: var(--r-lg);
-  overflow: hidden; min-width: 0;
-  box-shadow: var(--lift);
+  background: var(--panel); box-shadow: var(--ring-line);
+  border-radius: var(--r-lg); overflow: hidden; min-width: 0;
 }
 .panel-head {
-  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
-  padding: .85rem 1.15rem; border-block-end: 1px solid var(--line);
-  background: rgba(255,255,255,.018);
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px;
 }
-.panel-head.plain { background: none; }
-.inline { display: flex; gap: .5rem; align-items: center; }
-.empty-state { padding: 4rem 1rem; text-align: center; }
-.empty-state h2 { margin-block-end: .6rem; }
+.panel-head h2 { font-size: 15px; }
+.panel-head .count { font-size: 12px; color: var(--dim); }
+/* The sort hint is an aside, not a heading. Lower case keeps it out of the
+   way of the two things beside it that are shouting. */
+.panel-head .hint { font-size: 11.5px; color: var(--dimmer); text-transform: lowercase; }
+.inline { display: flex; gap: 8px; align-items: center; }
 
 /* An empty list should say so in the middle of its own space rather than
    leaving a hole the reader has to interpret. */
 .nothing {
-  display: flex; flex-direction: column; align-items: center; gap: .3rem;
-  padding: 3rem 1rem; color: var(--dim); text-align: center;
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 10px;
+  padding: 40px; text-align: center;
 }
-.nothing .big { font-size: 1.6rem; opacity: .5; }
+.nothing .mark {
+  width: 46px; height: 46px; border-radius: var(--r-lg);
+  background: var(--panel3); box-shadow: inset 0 0 0 1px var(--line3);
+  display: grid; place-items: center; color: var(--dim); font-size: 19px;
+}
+.nothing h2 { font-size: 15px; }
+.nothing p { margin: 0; max-width: 320px; font-size: 12.5px; color: var(--dim); }
+.nothing .inline { margin-block-start: 6px; }
+.empty-state { padding: 4rem 1rem; text-align: center; }
+
+/* ------------------------------------------------------------- controls */
+
+input, select, textarea {
+  height: 34px; padding: 0 10px; border-radius: var(--r-md);
+  border: 1px solid var(--line2); background: var(--sunk);
+  color: var(--text); font: inherit; font-size: 13px;
+}
+textarea { height: auto; padding: 8px 10px; resize: vertical; }
+input::placeholder, textarea::placeholder { color: var(--dimmer); }
+input:focus, select:focus, textarea:focus {
+  outline: none; border-color: var(--accent-line); box-shadow: var(--focus);
+}
+input.narrow { width: 7rem; }
+
+button {
+  height: 32px; padding: 0 13px; border-radius: var(--r-md);
+  border: 1px solid var(--line2); background: none; color: var(--text2);
+  font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer;
+  transition: background .14s ease, border-color .14s ease, color .14s ease;
+}
+button:hover:not(:disabled) { background: var(--panel3); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+button:focus-visible { outline: none; box-shadow: var(--focus); }
+
+/* The one accented button. Outlined rather than filled: on a screen this
+   dark a solid block of accent is the brightest thing in the room, and it
+   is rarely the most important. */
+button.primary {
+  border-color: var(--accent); color: var(--accent-text);
+  background: var(--accent-wash);
+}
+button.primary:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--accent-lit); }
+button.primary:active:not(:disabled) { background: var(--accent-deep); }
+button.big { height: 36px; padding: 0 18px; font-size: 13.5px; }
+button.tiny { height: 24px; padding: 0 8px; font-size: 11px; border-radius: var(--r-sm); }
+button.ghost { border-color: var(--line3); color: var(--muted); }
+button.ghost:hover:not(:disabled) { color: var(--text2); }
+button.danger { border-color: #4a3335; color: var(--bad); }
+button.danger:hover:not(:disabled) { background: var(--bad-soft); }
+button.launch {
+  border-color: var(--good-line); color: var(--good); background: rgba(126,168,140,.08);
+}
+button.launch:hover:not(:disabled) { background: var(--good-soft); }
+
+.field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.field > span { font-size: 11.5px; color: var(--muted); }
+.inline-field { flex-direction: row; align-items: center; gap: 8px; }
+.checkline {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 12.5px; color: var(--text2);
+}
+.checkline input { width: 15px; height: 15px; accent-color: var(--accent); padding: 0; }
+
+/* A segmented choice: one question, three answers, one outline round them. */
+.segment {
+  display: flex; gap: 3px; padding: 3px; border-radius: var(--r-md);
+  background: var(--sunk); box-shadow: var(--ring-line);
+}
+.segment button {
+  flex: 1; height: 30px; border: 0; background: none; color: var(--muted);
+  border-radius: var(--r-sm); font-size: 12.5px;
+}
+.segment button.active { background: var(--accent-soft); color: var(--accent-text); }
+
+/* A note the reader is meant to take in without acting on. */
+.note {
+  display: flex; align-items: center; gap: 9px;
+  padding: 10px 12px; border-radius: var(--r-md);
+  background: #202233; box-shadow: inset 0 0 0 1px #2f3346;
+  font-size: 11.5px; color: var(--muted);
+}
+.note .icon {
+  width: 18px; height: 18px; flex: none; border-radius: 50%;
+  background: var(--accent-deep); color: var(--accent-text);
+  display: grid; place-items: center; font-size: 11px; font-weight: 600;
+}
 
 /* ------------------------------------------------------------ room list */
 
-/* One grid shared by the header row and every room, so the columns line up
-   without either knowing the other's widths. */
 /* Every column is a fixed width, including the one holding the button. The
    old last column was `auto`, so a row with two buttons pushed its numbers
    one way and a row with one pushed them the other, and no two rows lined
    up. Nothing here sizes to its content. */
 .roomhead, .room {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) repeat(3, var(--statw)) var(--actw);
-  gap: .75rem; align-items: center;
-}
-.roomhead > span + span, .room > .stat { text-align: center; }
-
-/* One box per fact, all the same size, so the eye can run down a column
-   without re-finding where the numbers are on every row. */
-.stat {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: .15rem; height: 3.2rem;
-  border: 1px solid var(--line); border-radius: var(--r-md);
-  background: rgba(255,255,255,.022);
+  grid-template-columns:
+    minmax(0, 1fr) var(--w-players) var(--w-mmr) var(--w-ping) var(--w-status);
+  gap: 12px;
 }
 .roomhead {
-  padding: .55rem 1.15rem .55rem 1.15rem; font-size: .67rem; font-weight: 720;
-  text-transform: uppercase; letter-spacing: .09em; color: var(--dim);
+  flex: none; padding: 0 14px 7px;
   border-block-end: 1px solid var(--line);
-  background: rgba(0,0,0,.16);
 }
-.roomhead .pingcol { cursor: help; text-decoration: underline dotted; }
+/* Every heading sorts. A room list is read for one thing at a time - who has
+   space, who is closest, who is at my level - and which one it is changes
+   between one glance and the next. */
+.roomhead button {
+  display: inline-flex; align-items: center; gap: 2px;
+  justify-self: start; height: auto; padding: 0;
+  border: 0; background: none; color: var(--dimmer);
+  font: inherit; font-size: 10.5px; font-weight: 500;
+  letter-spacing: .1em; text-transform: uppercase;
+}
+.roomhead button:hover { background: none; color: var(--text2); }
+.roomhead button.on { color: var(--text2); }
+.roomhead .arrow { color: var(--accent-lit); }
 
-/* The list scrolls inside its own panel, so the column headings stay put and
-   the panel keeps its shape however many rooms are open. */
-.roomspanel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.roomlist { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+.roomlist { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; }
 .room {
-  position: relative;
-  padding: .85rem 1.15rem;
-  border-block-end: 1px solid var(--line);
-  transition: background .14s ease;
+  align-items: center; padding: 9px 14px;
+  border-block-end: 1px solid #21232f; cursor: pointer;
 }
-.room:last-child { border-block-end: 0; }
-.room:hover { background: rgba(255,255,255,.028); }
-/* A stripe on the inline edge, coloured by whether the room can be entered.
-   It is the only thing on the row that can be read without focusing. */
-.room::before {
-  content: ""; position: absolute; inset-block: .55rem; inset-inline-start: 0;
-  width: 3px; border-radius: 99px; background: transparent;
-  transition: background .14s ease;
-}
-.room.can-join::before { background: var(--good); }
-.room.shut::before { background: var(--line2); }
+.room:hover { background: var(--panel2); }
 
-.room-main { display: flex; gap: .7rem; align-items: flex-start; min-width: 0; }
-.room-head-who { display: flex; align-items: center; gap: .8rem; min-width: 0; }
-.room-title { display: flex; align-items: center; gap: .45rem; flex-wrap: wrap; }
-.room-title strong { font-size: .98rem; font-weight: 660; letter-spacing: -.01em; }
-.room-desc {
-  color: var(--muted); font-size: .82rem; margin-block-start: .12rem;
-  overflow-wrap: anywhere;
+.room-who { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.room-name {
+  font-size: 13.5px; font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.room-players { margin-block-start: .4rem; display: flex; flex-wrap: wrap; gap: .3rem; }
+/* One line under the name carrying everything else about the room. It is
+   allowed to run out of space and be cut; the name is not. */
+.room-meta { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.room-meta .rest {
+  font-size: 11.5px; color: var(--dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.state {
+  flex: none; height: 15px; padding: 0 5px; border-radius: 4px;
+  display: inline-flex; align-items: center;
+  font-size: 9.5px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase;
+  background: var(--good-soft); color: var(--good);
+}
+.state.game  { background: #2a2733; color: var(--muted); }
+.state.shut  { background: var(--panel3); color: var(--dimmer); }
 
-/* An avatar is initials on a colour derived from the account id, so the same
-   person is the same colour on every machine and nobody has to upload
-   anything. Two players with the same initials still differ by hue. */
+/* How full a room is, as a number and as ten marks. The marks are read
+   faster than the number and the number settles the ambiguity. */
+.room-seats { display: flex; align-items: center; gap: 8px; }
+.room-seats .n { width: 34px; font-size: 12.5px; font-weight: 500; color: var(--text2); }
+.ticks { display: flex; gap: 2px; }
+.ticks i { width: 4px; height: 13px; border-radius: 1px; background: #2c2f3d; }
+.ticks i.on { background: var(--accent); }
+.ticks.full i.on { background: var(--bad); }
+
+.room-mmr { font-size: 12.5px; color: var(--text2); }
+.room-mmr .kind { font-size: 10.5px; color: var(--dimmer); }
+
+/* Three bars, lit by how good the number is. Zero means the host has not
+   reported one yet, which is not the same as an excellent connection and
+   must never be drawn as one (D54). */
+.room-ping { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--dimmer); }
+.room-ping.good { color: var(--good); }
+.room-ping.fair { color: var(--warn); }
+.room-ping.poor { color: var(--bad); }
+.bars { display: flex; align-items: flex-end; gap: 1.5px; height: 11px; }
+.bars i { width: 3px; border-radius: 1px; background: currentColor; }
+.bars i:nth-child(1) { height: 4px; }
+.bars i:nth-child(2) { height: 7px; opacity: .3; }
+.bars i:nth-child(3) { height: 11px; opacity: .3; }
+.room-ping.fair .bars i:nth-child(2),
+.room-ping.good .bars i:nth-child(2) { opacity: 1; }
+.room-ping.good .bars i:nth-child(3) { opacity: 1; }
+
+.room-actions { display: flex; align-items: center; gap: 7px; }
+.room-actions button { width: 62px; height: 28px; padding: 0; flex: none; font-size: 12.5px; }
+/* Whether a match is running in there. It is the only thing on the row that
+   can be read without focusing on it. */
+.livedot { width: 8px; height: 8px; flex: none; border-radius: 50%; }
+.livedot.open { background: var(--good-dot); box-shadow: 0 0 7px rgba(126,168,140,.55); }
+.livedot.game { background: var(--bad); box-shadow: 0 0 7px rgba(207,139,134,.55); }
+
+/* An avatar is a coloured tile with initials in it. There are no uploaded
+   pictures and there is no plan for any: a name has to be readable at 26px
+   whatever somebody chose to call themselves. */
 .avatar {
-  flex: none; display: grid; place-items: center;
-  width: 2.1rem; height: 2.1rem; border-radius: var(--r-md);
-  font-size: .74rem; font-weight: 750; letter-spacing: .01em;
-  color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.4);
-  border: 1px solid rgba(255,255,255,.09);
-  box-shadow: var(--lift-sm);
+  width: 30px; height: 30px; flex: none; border-radius: 8px;
+  display: grid; place-items: center;
+  font-size: 11px; font-weight: 600; letter-spacing: .01em;
 }
-.avatar.sm { width: 1.55rem; height: 1.55rem; border-radius: var(--r-sm); font-size: .62rem; }
-.avatar.lg { width: 2.5rem; height: 2.5rem; font-size: .84rem; }
+.avatar.sm { width: 26px; height: 26px; border-radius: 7px; font-size: 10px; }
+.avatar.xs { width: 24px; height: 24px; border-radius: 7px; font-size: 10px; }
+.avatar.lg { width: 52px; height: 52px; border-radius: 13px; font-size: 17px; }
 
-/* Ten seats drawn as ten marks. A player deciding which room to join is
-   asking "is there room for me", and a filled bar answers that in the time
-   it takes to move the eye past it - "7/10" does not. */
-.pips { display: flex; gap: 2px; align-items: center; }
-.pip {
-  width: 6px; height: 17px; border-radius: 2px;
-  background: #20263300; box-shadow: inset 0 0 0 1px var(--line);
+@media (max-width: 1180px) {
+  .roomhead, .room {
+    grid-template-columns: minmax(0, 1fr) 118px var(--w-status);
+  }
+  .rcol-hide { display: none !important; }
 }
-.pip.on { background: var(--accent); box-shadow: none; }
-.pip.you { background: var(--good); box-shadow: none; }
-.room-count {
-  font-variant-numeric: tabular-nums; font-weight: 680; font-size: .78rem;
-  color: var(--muted);
-}
-.room-count b { color: var(--text); font-weight: 700; }
 
-/* The latency column. It is the host's number, never the reader's (D54), so
-   it is labelled in the header and again in a tooltip on every cell. */
-.room-ping {
-  font-variant-numeric: tabular-nums; cursor: help;
-  display: flex; align-items: center; gap: .45rem;
-}
-.stat[title] { cursor: help; }
-.room-ping .n { font-weight: 660; font-size: .86rem; }
-.room-ping.good .n { color: var(--good); }
-.room-ping.fair .n { color: var(--warn); }
-.room-ping.poor .n { color: var(--bad); }
-.room-ping.unknown .n { color: var(--dim); }
-/* Three rising bars, the shape every network indicator uses. */
-.bars { display: flex; align-items: flex-end; gap: 2px; height: 13px; flex: none; }
-.bars i { width: 4px; border-radius: 1px; background: var(--panel3); display: block; }
-.bars i:nth-child(1) { height: 40%; }
-.bars i:nth-child(2) { height: 70%; }
-.bars i:nth-child(3) { height: 100%; }
-.room-ping.good .bars i.lit { background: var(--good); }
-.room-ping.fair .bars i.lit { background: var(--warn); }
-.room-ping.poor .bars i.lit { background: var(--bad); }
+/* ------------------------------------------------------------ room screen */
 
-.mmr {
-  display: inline-flex; align-items: baseline; gap: .25rem;
-  font-variant-numeric: tabular-nums;
+.roomtop { display: flex; align-items: center; gap: 12px; }
+.roomtop .who { min-width: 0; }
+.roomtop .title { display: flex; align-items: center; gap: 8px; }
+.roomtop h2 { font-size: 15.5px; }
+.roomtop .sub {
+  font-size: 11.5px; color: var(--dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.mmr .v { font-weight: 680; font-size: .88rem; }
-.mmr .k { font-size: .68rem; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; }
-.mmr.floor .v { color: var(--warn); }
+.roomtop button { height: 30px; }
 
-.tag {
-  background: var(--panel2); border: 1px solid var(--line); border-radius: 99px;
-  padding: .12rem .55rem; font-size: .73rem; color: var(--muted); white-space: nowrap;
-  display: inline-flex; align-items: center; gap: .3rem;
+/* The three steps between sitting down and being in the game, as three
+   steps. The first version of this screen was a row of buttons that were
+   sometimes disabled, and the commonest failure in the two-PC test was two
+   players in a room, neither on the network, with nothing on screen saying
+   so. A numbered list cannot be misread that way. */
+.stepper {
+  display: flex; align-items: stretch; gap: 10px;
+  padding: 12px 14px; border-radius: var(--r-lg);
+  background: var(--panel); box-shadow: var(--ring-line);
 }
-.tag.host { color: var(--warn); border-color: #45360f; background: var(--warn-soft); }
-.tag.lock { color: var(--dim); }
-.tag b { color: var(--text); font-weight: 640; }
-
-.badge {
-  font-size: .64rem; font-weight: 760; letter-spacing: .07em; text-transform: uppercase;
-  padding: .2rem .5rem; border-radius: 99px;
-  background: var(--good-soft); color: #6fd18f; border: 1px solid #1e4630;
-  white-space: nowrap;
+.step {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px;
+  padding: 9px 11px; border-radius: var(--r-md);
+  box-shadow: inset 0 0 0 1px #282b38;
 }
-/* A badge with nothing in it is a status nobody has set yet, not a status. */
-.badge:empty { display: none; }
-.badge.locked { background: var(--bad-soft); color: #f0a08f; border-color: #4a221d; }
-.badge.replace { background: var(--warn-soft); color: #ecc96a; border-color: #45360f; }
-
-.room-actions { display: flex; gap: .4rem; }
-.room-actions button { flex: 1; }
+.step.now { background: var(--accent-wash); box-shadow: inset 0 0 0 1px var(--accent-ring); }
+.step .mark {
+  width: 22px; height: 22px; flex: none; border-radius: 50%;
+  display: grid; place-items: center; font-size: 11px; font-weight: 600;
+  background: var(--hair); color: var(--dimmer);
+}
+.step.now .mark { background: var(--accent-deep); color: var(--accent-text); }
+.step.done .mark { background: #2a3d31; color: var(--good); }
+.step .body { min-width: 0; }
+.step .t { font-size: 12.5px; font-weight: 500; color: var(--dim); }
+.step.now .t, .step.done .t { color: var(--text); }
+.step .d {
+  font-size: 11px; color: var(--dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.stepper > button { flex: none; min-width: 168px; height: auto; font-size: 13.5px; }
 
 /* ---------------------------------------------------------------- slots */
 
-/* Dota is five against five, and a lobby that does not say which five you are
-   joining is hiding the only structural fact about the room. The two columns
-   are the two teams, headed and coloured as the game colours them. */
-.teams {
-  display: grid; grid-template-columns: repeat(2, minmax(0,1fr));
-  gap: .9rem; padding: 1.1rem;
-}
-@media (max-width: 760px) { .teams { grid-template-columns: 1fr; } }
-
-.team { display: flex; flex-direction: column; gap: .4rem; min-width: 0; }
+.teams { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+.team { border-radius: var(--r-lg); background: var(--panel); box-shadow: var(--ring-line); overflow: hidden; }
 .team-head {
-  display: flex; align-items: center; gap: .5rem;
-  font-size: .68rem; font-weight: 760; text-transform: uppercase; letter-spacing: .1em;
-  padding-block-end: .15rem;
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 13px; border-block-end: 1px solid var(--hair);
+  font-size: 11px; font-weight: 500; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--text2);
 }
-.team-head .swatch { width: .55rem; height: .55rem; border-radius: 2px; }
-.team-head .n { margin-inline-start: auto; color: var(--dim); font-variant-numeric: tabular-nums; }
-.team.radiant .team-head { color: var(--radiant); }
+.team-head .swatch { width: 8px; height: 8px; flex: none; border-radius: 2px; }
 .team.radiant .swatch { background: var(--radiant); }
-.team.dire .team-head { color: var(--dire); }
 .team.dire .swatch { background: var(--dire); }
+.team-head .n {
+  margin-inline-start: auto; font-size: 11.5px; font-weight: 400;
+  letter-spacing: 0; text-transform: none; color: var(--dim);
+}
+.team-body { padding: 6px; }
 
 .slot {
-  display: flex; align-items: center; gap: .65rem;
-  background: var(--panel2); border: 1px solid var(--line);
-  border-radius: var(--r-md); padding: .5rem .7rem; min-height: 50px;
-  transition: border-color .14s ease, background .14s ease;
+  display: flex; align-items: center; gap: 9px;
+  height: 38px; padding: 0 9px; margin-block-end: 3px;
+  border-radius: 8px; box-shadow: inset 0 0 0 1px #282b38;
+  background: var(--panel2);
 }
-.slot.empty {
-  border-style: dashed; background: rgba(255,255,255,.012);
-  color: var(--dim);
-}
-.slot.you { border-color: var(--accent); background: var(--accent-soft); }
+.slot.empty { background: none; box-shadow: inset 0 0 0 1px #232634; }
+.slot.you { background: var(--accent-wash); box-shadow: inset 0 0 0 1px var(--accent-ring); }
+.slot.you .slot-name { color: var(--accent-text); }
 /* An empty seat you may take says so and lights up under the pointer. A card
    that invites a click has to look like one. */
-.slot.takeable { cursor: pointer; color: var(--muted); }
-.slot.takeable:hover {
-  border-style: solid; border-color: var(--accent);
-  background: var(--accent-soft); color: var(--text);
-}
-.slot.takeable:hover .slot-name { color: var(--accent2); }
-.team.radiant .slot:not(.empty) { border-inline-start: 2px solid var(--radiant); }
-.team.dire .slot:not(.empty) { border-inline-start: 2px solid var(--dire); }
-
+.slot.takeable { cursor: pointer; }
+.slot.takeable:hover { background: var(--panel3); }
+.slot.takeable:hover .slot-name { color: var(--accent-text); }
 .slot-num {
-  width: 1.5rem; flex: none; text-align: center;
-  color: var(--dim); font-size: .74rem; font-weight: 700;
-  font-variant-numeric: tabular-nums;
+  width: 18px; flex: none; text-align: end;
+  font-size: 11px; font-weight: 500; color: var(--dimmer);
 }
-.slot-body { flex: 1; min-width: 0; }
-.slot-name { font-weight: 640; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.slot-sub { font-size: .74rem; color: var(--muted); font-variant-numeric: tabular-nums; }
-.slot button {
-  background: none; border: 1px solid var(--line); color: var(--muted);
-  border-radius: var(--r-sm); font: inherit; font-size: .74rem;
-  padding: .15rem .55rem; cursor: pointer;
-}
+.slot-name { font-size: 13px; font-weight: 500; white-space: nowrap; }
+.slot-sub { font-size: 11.5px; color: var(--dim); white-space: nowrap; }
+.slot .gap { flex: 1; }
+.slot button { height: 22px; padding: 0 8px; font-size: 11px; border-radius: var(--r-sm); }
 .slot button:hover { color: var(--bad); border-color: var(--bad); background: var(--bad-soft); }
 
-.specrow { padding: 0 1.1rem 1.1rem; }
-.spectators { display: flex; gap: .5rem; margin-block-start: .5rem; flex-wrap: wrap; }
-.spectators .slot { flex: 1 1 190px; }
+/* Spectators are a line, not a panel. Nobody is ever spectating and the
+   seats are reserved for staff; a whole card for that was a card of nothing. */
+.specrow {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 14px; border-radius: var(--r-lg);
+  background: var(--panel); box-shadow: var(--ring-line);
+}
+.specrow .what { font-size: 12.5px; color: var(--dim); }
+.spectators { display: flex; gap: 8px; flex-wrap: wrap; }
+.spectators .slot { height: 30px; margin: 0; }
 
-.describerow { display: flex; gap: .5rem; padding: .9rem 1.15rem 0; flex-wrap: wrap; }
+.describerow { display: flex; gap: 8px; flex-wrap: wrap; }
 .describerow input { flex: 1; min-width: 10rem; }
 
 /* -------------------------------------------------------------- actions */
 
-/* Connect, Launch and Leave are the reason this screen exists, so they stay
-   in view while the seats scroll behind them. The first version put them
-   below ten slots and a spectator row, where a player with the chat open
-   never saw them at all. */
-.actions {
-  padding: 1.1rem; display: flex; flex-direction: column; gap: .9rem;
-  position: sticky; inset-block-end: 0; z-index: 5;
-}
-.actionrow { display: flex; align-items: center; gap: .55rem; flex-wrap: wrap; }
-.net {
-  color: var(--muted); font-size: .8rem; margin-inline-start: auto;
-  font-variant-numeric: tabular-nums;
-}
-
-button, select, input, textarea { font: inherit; border-radius: var(--r-sm); }
-button {
-  background: var(--panel2); border: 1px solid var(--line); color: var(--text);
-  padding: .45rem .9rem; cursor: pointer; font-weight: 580;
-  transition: background .14s ease, border-color .14s ease, transform .08s ease, box-shadow .14s ease;
-}
-button:hover:not(:disabled) { border-color: var(--line2); background: var(--panel3); }
-button:active:not(:disabled) { transform: translateY(1px); }
-button:disabled { opacity: .35; cursor: default; }
-button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
-  outline: 0; box-shadow: var(--ring);
-}
-
-button.primary {
-  background: linear-gradient(180deg, var(--accent2) 0%, var(--accent) 100%);
-  border-color: #c53c1f; color: #fff; font-weight: 660;
-  box-shadow: 0 2px 10px rgba(240,77,42,.3);
-}
-button.primary:hover:not(:disabled) {
-  background: linear-gradient(180deg, #ff7d5b 0%, var(--accent2) 100%);
-  border-color: var(--accent2);
-}
-button.launch {
-  background: linear-gradient(180deg, #5cb87a 0%, var(--radiant) 100%);
-  border-color: #3d8a53; color: #fff; font-weight: 660;
-  box-shadow: 0 2px 10px rgba(75,163,100,.26);
-}
-button.launch:hover:not(:disabled) { filter: brightness(1.1); }
-button.ghost   { background: none; }
-button.danger  { color: var(--bad); border-color: #4a221d; background: var(--bad-soft); }
-button.danger:hover:not(:disabled) { background: #331715; border-color: var(--bad); }
-button.big     { padding: .55rem 1.4rem; font-size: .95rem; }
-button.tiny    { padding: .2rem .6rem; font-size: .75rem; }
-
-input, select, textarea {
-  background: #0d1017; border: 1px solid var(--line); color: var(--text);
-  padding: .45rem .7rem;
-  transition: border-color .14s ease, box-shadow .14s ease;
-}
-input:hover, select:hover, textarea:hover { border-color: var(--line2); }
-input:focus, select:focus, textarea:focus { outline: 0; border-color: var(--accent); box-shadow: var(--ring); }
-input::placeholder, textarea::placeholder { color: #5a6377; }
-select { cursor: pointer; }
-
-.field { display: flex; flex-direction: column; gap: .35rem; font-size: .8rem; color: var(--muted); }
-.field em { font-style: normal; opacity: .75; }
-.inline-field { flex-direction: row; align-items: center; gap: .5rem; }
+.actionrow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.net { font-size: 11.5px; color: var(--dim); margin-inline-start: auto; }
 
 /* ----------------------------------------------------------------- rail */
 
 #rail {
   grid-area: rail;
+  display: flex; flex-direction: column; min-height: 0;
+  background: var(--head-bg);
   border-inline-start: 1px solid var(--line);
-  background: var(--bg2);
-  display: flex; flex-direction: column; gap: .7rem;
-  padding: .7rem; min-height: 0;
 }
-/* Friends now own the whole rail. The chat that used to share it went to
-   the bottom dock, and half an empty column beside a short friends list was
-   the worst of both. */
-.railtop { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
-.friendlist { flex: 1; }
+.rail-head {
+  display: flex; align-items: center; gap: 8px; flex: none;
+  height: 54px; padding: 0 12px; border-block-end: 1px solid var(--hair);
+}
+.rail-head .t { font-size: 13.5px; font-weight: 500; }
+.rail-head .n { font-size: 11.5px; color: var(--dimmer); }
+.iconbtn {
+  width: 26px; height: 26px; flex: none; padding: 0;
+  border-radius: 6px; border: 1px solid var(--line3);
+  background: none; color: var(--muted); font-size: 14px; line-height: 1;
+}
+.iconbtn:hover { background: var(--panel3); color: var(--text); }
 
-.findrow { display: flex; gap: .4rem; padding: .6rem .8rem 0; }
-.findrow input { flex: 1; min-width: 0; }
-.findresult { padding: .45rem .8rem 0; margin: 0; }
+.railtop { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.findrow { display: flex; gap: 6px; padding: 8px 8px 0; }
+.findrow input { flex: 1; min-width: 0; height: 30px; font-size: 12.5px; }
+.findresult { padding: 6px 10px 0; margin: 0; font-size: 12px; }
 .findresult:empty { display: none; }
 
-.friendlist {
-  overflow-y: auto; padding: .45rem; display: flex; flex-direction: column; gap: .1rem;
+.friendlist { flex: 1; overflow-y: auto; padding: 8px; }
+/* Grouped by where somebody is, because that is the only question the rail
+   answers: can I play with this person right now. */
+.friend-group {
+  padding: 4px 6px; margin-block-start: 6px;
+  font-size: 10px; font-weight: 500; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--dimmer);
 }
+.friend-group:first-child { margin-block-start: 0; }
 .friend {
-  display: flex; align-items: center; gap: .6rem;
-  padding: .4rem .5rem; border-radius: var(--r-md);
+  display: flex; align-items: center; gap: 9px;
+  padding: 6px; border-radius: 8px;
   transition: background .14s ease;
 }
-.friend:hover { background: var(--panel2); }
 .friend.clickable { cursor: pointer; }
+.friend:hover { background: var(--panel3); }
+.friend.off .avatar { opacity: .6; }
+.friend.off .name { color: var(--dim); }
 .friend .who { flex: 1; min-width: 0; }
-.friend .name { font-weight: 620; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.friend .name {
+  font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .friend .where {
-  font-size: .73rem; color: var(--dim);
+  font-size: 11px; color: var(--dimmer);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.friend .acts { display: flex; gap: 4px; }
+.friend .acts button { height: 22px; padding: 0 7px; font-size: 10.5px; border-radius: 6px; }
 .friend .unread {
-  background: var(--accent); color: #fff; border-radius: 99px;
-  font-size: .67rem; font-weight: 750; padding: .05rem .45rem;
+  background: var(--accent); color: #14161f; border-radius: 99px;
+  font-size: 10px; font-weight: 700; padding: 1px 6px;
 }
-.friend .acts { display: flex; gap: .25rem; opacity: 0; transition: opacity .14s ease; }
-.friend:hover .acts { opacity: 1; }
-.friend-group { padding: .6rem .5rem .25rem; }
-.friend-empty { padding: 1.2rem .8rem; }
+.friend-empty { padding: 16px 10px; font-size: 12px; }
 
 /* A dot on the avatar rather than beside the name: presence belongs to the
    person, and the rail is narrow enough that a separate column costs a word
@@ -677,264 +739,263 @@ select { cursor: pointer; }
 .who-av { position: relative; flex: none; }
 .who-av .live {
   position: absolute; inset-block-end: -2px; inset-inline-end: -2px;
-  width: .55rem; height: .55rem; border-radius: 50%;
-  border: 2px solid var(--bg2); background: var(--dim);
+  width: 8px; height: 8px; border-radius: 50%;
+  border: 2px solid var(--head-bg); background: var(--line2);
 }
-.who-av .live.on { background: var(--good); }
-.who-av .live.game { background: var(--warn); }
+.who-av .live.on { background: var(--good-dot); }
+.who-av .live.game { background: var(--accent); }
 
 /* ----------------------------------------------------------------- chat */
 
-/* The dock is a row of the shell grid, not something floating over it, so
-   opening it takes height off the stage instead of covering rooms. */
+/* A card floating in the bottom of the column rather than a band welded
+   across it: the dock is one of several things on this screen, and a full
+   width slab reads as the floor of the window. */
 .chatdock {
-  grid-area: chat;
-  position: relative;
+  grid-area: chat; position: relative;
   display: flex; flex-direction: column;
-  height: 34vh; min-height: 12rem; max-height: 26rem;
-  background: linear-gradient(180deg, var(--panel) 0%, #10141c 100%);
-  border-block-start: 1px solid var(--line2);
-  box-shadow: 0 -14px 34px rgba(0,0,0,.34);
-  transition: height .16s ease;
+  height: 212px; margin: 12px 18px 14px;
+  border-radius: var(--r-lg);
+  background: var(--panel); box-shadow: var(--ring-line);
+  overflow: hidden; transition: height .16s ease;
 }
 /* Minimised, the dock is its tab strip and nothing else - the same gesture
    Dota's own main-menu chat uses (D42.3). */
-.chatdock.collapsed { height: auto; min-height: 0; box-shadow: none; }
-.chatdock.collapsed .chatbody,
-.chatdock.collapsed .tabmenu { display: none; }
+.chatdock.collapsed { height: 38px; }
+.chatdock.collapsed .chatbody, .chatdock.collapsed .tabmenu { display: none; }
 .chatdock.collapsed .tabmin span { transform: rotate(180deg); }
 
 .chattabs {
-  position: relative;
-  display: flex; align-items: stretch; gap: 2px;
-  padding: 0 .5rem; background: #0c0f16;
-  border-block-end: 1px solid var(--line);
+  position: relative; display: flex; align-items: center; gap: 4px; flex: none;
+  height: 38px; padding: 0 10px 0 12px;
+  border-block-end: 1px solid var(--hair);
 }
-.tabstrip { display: flex; align-items: stretch; gap: 2px; min-width: 0; overflow-x: auto; }
+.tabstrip { display: flex; align-items: center; gap: 4px; min-width: 0; overflow-x: auto; }
+.tabstrip::-webkit-scrollbar { display: none; }
 .tabgap { flex: 1; }
+.presence { font-size: 11.5px; color: var(--dimmer); white-space: nowrap; }
 
-/* Browser tabs: they sit on the edge, the open one is lit, and the one with
-   something waiting in it glows until it is read. */
 .chattab {
-  display: flex; align-items: center; gap: .45rem;
-  background: none; border: 0; border-block-end: 2px solid transparent;
-  color: var(--dim); padding: .55rem .9rem; max-width: 12rem;
-  font: inherit; font-size: .8rem; font-weight: 640; cursor: pointer;
-  white-space: nowrap; transition: color .14s ease, background .14s ease;
+  display: inline-flex; align-items: center; gap: 6px; flex: none;
+  height: 26px; padding: 0 10px; border: 0; border-radius: var(--r-sm);
+  background: none; color: var(--dim);
+  font: inherit; font-size: 12.5px; font-weight: 500; white-space: nowrap;
+  max-width: 12rem;
 }
 .chattab > span:first-child { overflow: hidden; text-overflow: ellipsis; }
-.chattab:hover:not(:disabled) { color: var(--text); background: rgba(255,255,255,.04); }
-.chattab.active {
-  color: var(--text); background: var(--panel2);
-  border-block-end-color: var(--accent);
+.chattab:hover:not(:disabled) { background: var(--panel3); color: var(--text2); }
+.chattab.active { background: var(--raise); color: var(--accent-text); }
+.chattab:disabled { opacity: .35; cursor: default; }
+.chattab.unread::after {
+  content: ""; width: 5px; height: 5px; flex: none;
+  border-radius: 50%; background: var(--accent-lit);
 }
-.chattab:disabled { opacity: .3; cursor: default; }
-.chattab.unread { color: var(--accent2); }
-.chattab.unread::before {
-  content: ""; width: .42rem; height: .42rem; border-radius: 50%;
-  background: var(--accent); flex: none;
-}
-.chattab .x {
-  color: var(--dim); font-size: .95rem; line-height: 1;
-  padding: 0 .1rem; border-radius: var(--r-sm);
-}
+.chattab .x { color: var(--dimmer); font-size: 13px; line-height: 1; padding: 0 1px; border-radius: 4px; }
 .chattab .x:hover { color: var(--text); background: rgba(255,255,255,.1); }
 
 .tabadd, .tabmin {
-  background: none; border: 0; color: var(--dim);
-  padding: 0 .7rem; font-size: 1rem; line-height: 1; cursor: pointer;
+  width: 26px; height: 26px; flex: none; padding: 0;
+  border-radius: 6px; border: 1px solid var(--line3);
+  background: none; color: var(--muted); font-size: 12px; line-height: 1;
 }
-.tabadd:hover, .tabmin:hover { color: var(--text); background: rgba(255,255,255,.05); }
+.tabadd { border: 0; }
+.tabadd:hover, .tabmin:hover { background: var(--panel3); color: var(--text); }
 .tabmin span { display: inline-block; transition: transform .16s ease; }
 
 .tabmenu {
-  position: absolute; inset-block-start: 100%; inset-inline-start: .5rem;
+  position: absolute; inset-block-start: 100%; inset-inline-start: 8px;
   z-index: 20; min-width: 14rem; max-height: 15rem; overflow-y: auto;
-  background: var(--panel2); border: 1px solid var(--line2);
-  border-radius: var(--r-md); box-shadow: var(--lift);
-  padding: .3rem;
+  background: #1e2030; box-shadow: 0 0 0 1px var(--line2), var(--lift);
+  border-radius: var(--r-md); padding: 4px;
 }
 .menurow {
-  display: flex; align-items: center; gap: .55rem; width: 100%;
-  background: none; border: 0; color: var(--text);
-  padding: .4rem .5rem; border-radius: var(--r-sm);
-  font: inherit; font-size: .84rem; cursor: pointer; text-align: start;
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  height: auto; padding: 6px; border: 0; border-radius: 8px;
+  background: none; color: var(--text); font-size: 12.5px; text-align: start;
 }
 .menurow:hover { background: var(--panel3); }
-.menurow .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
 .chatbody { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 .chatlog {
-  flex: 1; overflow-y: auto; padding: .8rem 1rem;
-  display: flex; flex-direction: column; gap: .4rem;
+  flex: 1; overflow-y: auto; padding: 8px 12px;
+  display: flex; flex-direction: column; gap: 4px;
 }
-.msg { font-size: .87rem; overflow-wrap: anywhere; line-height: 1.5; }
-.msg .who { font-weight: 660; color: #b9c2d6; }
-.msg .who.self { color: var(--accent2); }
-/* Somebody arriving or a room opening is context, not conversation. It sits
-   quieter so the eye skips it when catching up. */
-.msg.system {
-  color: var(--dim); font-size: .79rem; font-style: italic;
-  padding-inline-start: .6rem; border-inline-start: 2px solid var(--line);
+/* Time, who, what - three columns, so a log read at a glance lines up.
+   The clock is the quietest thing on the line because it is the least
+   often wanted. */
+.msg {
+  display: flex; align-items: baseline; gap: 8px;
+  font-size: 12.5px; line-height: 1.5;
 }
+.msg .at {
+  flex: none; width: 34px; font-size: 11px; color: var(--faint);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.msg .who { flex: none; font-weight: 500; color: var(--text2); white-space: nowrap; }
+.msg .who.self { color: var(--accent-lit); }
+.msg .said { min-width: 0; overflow-wrap: anywhere; }
+.msg.system .who { color: var(--faint); font-weight: 400; }
+.msg.system .said { color: var(--dimmer); }
 
-.chatbox {
-  display: flex; align-items: center; gap: .5rem; padding: .6rem .7rem;
-  border-block-start: 1px solid var(--line); background: rgba(0,0,0,.22);
-}
-/* The box says where the words are going. One input serves every tab, so
-   without this a private message and a room line look identical to type. */
+.chatbox { display: flex; align-items: center; gap: 8px; flex: none; padding: 8px 12px 10px; }
+.chatbox input { flex: 1; min-width: 0; height: 32px; font-size: 12.5px; }
 .chatto {
   flex: none; max-width: 11rem; overflow: hidden; text-overflow: ellipsis;
-  white-space: nowrap; font-size: .76rem; font-weight: 660;
-  color: var(--accent2); background: var(--accent-soft);
-  border: 1px solid rgba(240,77,42,.3); border-radius: 99px;
-  padding: .24rem .65rem;
+  white-space: nowrap; font-size: 11.5px; font-weight: 500;
+  color: var(--accent-text); background: var(--accent-soft);
+  border-radius: 99px; padding: 4px 10px;
 }
-.chatbox input { flex: 1; min-width: 0; }
+
+/* --------------------------------------------------------------- settings */
+
+.settings { max-width: 880px; display: flex; flex-direction: column; gap: 12px; }
+.card {
+  padding: 14px; border-radius: var(--r-lg);
+  background: var(--panel); box-shadow: var(--ring-line);
+}
+.card > h3 { margin-block-end: 12px; }
+.card-rows > div {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 0; border-block-end: 1px solid var(--panel3);
+}
+.card-rows > div:last-child { border-block-end: 0; }
+.card-rows .t { font-size: 13px; }
+.card-rows .d { font-size: 11.5px; color: var(--dim); }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px 20px; }
+.fact .k { font-size: 11.5px; color: var(--muted); }
+.fact .v { font-size: 13px; margin-block-start: 3px; }
+.fact .v.good { color: var(--good); }
+.twoup { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.profilerow { display: flex; align-items: center; gap: 14px; margin-block-end: 14px; }
 
 /* ---------------------------------------------------------- diagnostics */
 
 .diaglist { display: flex; flex-direction: column; }
 .check {
-  display: flex; align-items: flex-start; gap: .8rem;
-  padding: .8rem 1.15rem; border-block-end: 1px solid var(--line);
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 12px 14px; border-block-end: 1px solid var(--line);
 }
 .check:last-child { border-block-end: 0; }
 .check .mark {
-  flex: none; width: 1.35rem; height: 1.35rem; border-radius: 50%;
-  display: grid; place-items: center;
-  font-weight: 800; font-size: .78rem;
+  width: 20px; height: 20px; flex: none; border-radius: 50%;
+  display: grid; place-items: center; font-size: 11px; font-weight: 700;
 }
-.check.ok  .mark { color: var(--good); background: var(--good-soft); border: 1px solid #1e4630; }
-.check.bad .mark { color: var(--bad);  background: var(--bad-soft);  border: 1px solid #4a221d; }
-.check .body { flex: 1; }
-.check .name { font-weight: 620; }
-.check .detail { color: var(--muted); font-size: .83rem; }
-.check .ms {
-  color: var(--dim); font-size: .78rem; font-variant-numeric: tabular-nums;
-  padding-block-start: .2rem;
-}
+.check.ok .mark   { background: var(--good-soft); color: var(--good); }
+.check.bad .mark  { background: var(--bad-soft); color: var(--bad); }
+.check.warn .mark { background: #2b2620; color: var(--warn); }
+.check .t { font-size: 13px; }
+.check .d { font-size: 12px; color: var(--dim); }
 
 /* ---------------------------------------------------------------- gates */
 
 .gate {
   position: fixed; inset: 0; z-index: 50;
-  background: rgba(5,6,10,.72);
-  backdrop-filter: blur(6px);
-  display: grid; place-items: center; padding: 1rem;
-  animation: fade .16s ease;
+  display: grid; place-items: center; padding: 24px;
+  background: rgba(8,9,14,.66);
 }
-@keyframes fade { from { opacity: 0; } }
 .gate-card {
-  background: linear-gradient(180deg, #171c27 0%, #12161f 100%);
-  border: 1px solid var(--line2); border-radius: var(--r-lg);
-  padding: 1.8rem; width: min(27rem, 100%);
-  display: flex; flex-direction: column; gap: .9rem;
-  box-shadow: 0 24px 60px rgba(0,0,0,.55);
-  animation: rise .18s ease;
+  width: 520px; max-width: 100%;
+  border-radius: var(--r-xl); background: #1e2030;
+  box-shadow: 0 0 0 1px #595d6c, var(--lift);
+  overflow: hidden;
 }
-@keyframes rise { from { transform: translateY(8px); opacity: 0; } }
-.gate-card.wide-card { width: min(36rem, 100%); height: min(33rem, 90vh); padding: 0; gap: 0; }
-.gate-card > p { margin: -.5rem 0 0; }
-/* A face at the top of a dialog about a person, so it is obvious whose
-   account is being changed on a shared PC. */
-.gate-who { display: flex; align-items: center; gap: .8rem; }
-.gate-who h1 { font-size: 1.28rem; }
-.gate-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
-.gate-err { color: var(--bad); font-size: .85rem; margin: 0; min-height: 1.2em; }
-
-/* The network banner. Deliberately the loudest thing on the room screen:
-   being in a room and being on its network are different states, and the
-   first two-PC test was lost to that difference being invisible. */
-.netbanner {
-  padding: .8rem 1rem;
-  border: 1px solid transparent; border-radius: var(--r-md);
-  margin-block-end: .3rem;
-  font-size: .92rem; font-weight: 620; line-height: 1.4;
-  display: flex; align-items: center; gap: .6rem;
+.gate-card.narrow { width: 400px; }
+.gate-card.wide-card { width: min(36rem, 100%); height: min(33rem, 90vh); display: flex; flex-direction: column; }
+.gate-head { padding: 15px 18px 12px; border-block-end: 1px solid var(--line); }
+.gate-head h2 { font-size: 16px; margin-block-end: 2px; }
+.gate-head p { margin: 0; font-size: 12px; color: var(--dim); }
+.gate-body { padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; }
+.gate-foot {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 12px 18px 15px; border-block-start: 1px solid var(--line);
 }
-.netbanner.ok   { color: var(--good); border-color: #1e4630; background: var(--good-soft); }
-.netbanner.bad  { color: var(--bad);  border-color: #4a221d; background: var(--bad-soft); }
-.netbanner.wait { color: var(--warn); border-color: #45360f; background: var(--warn-soft); }
-
-/* ------------------------------------------------------------- the gate */
-
-.modetabs { display: flex; gap: .25rem; margin-block-end: .3rem; }
-.checkrow { display: flex; align-items: center; gap: .5rem; font-size: .85rem; color: var(--muted); }
-.checkrow input { width: auto; accent-color: var(--accent); }
-#nickonly, #accountform { display: flex; flex-direction: column; gap: .8rem; }
-#nickonly.hidden, #accountform.hidden { display: none; }
-
-/* Said before a password is chosen, not after it is forgotten. */
-.warn-note {
-  margin: 0; padding: .55rem .75rem; border-radius: var(--r-sm);
-  background: var(--warn-soft); color: #ecc96a; border: 1px solid #45360f;
-  font-size: .82rem;
-}
-
-/* A button that reads as a link: it opens something to read rather than
-   changing anything, and a full button beside the primary action would
-   compete with it. */
-.linkish {
-  background: none; border: 0; padding: 0; color: var(--accent2);
-  font: inherit; font-size: .84rem; text-decoration: underline;
-  cursor: pointer; align-self: flex-start;
-}
-.linkish:hover { color: var(--accent); background: none; border: 0; }
-
+.gate-err { margin: 0; font-size: 12px; color: var(--bad); min-height: 1em; }
+.gate-err:empty { display: none; }
 .terms {
-  flex: 1; overflow-y: auto; margin: 0; padding: 1.1rem 1.3rem;
-  font: inherit; font-size: .86rem; color: var(--text);
-  white-space: pre-wrap; overflow-wrap: break-word;
+  flex: 1; min-height: 0; overflow-y: auto; margin: 0; padding: 14px 18px;
+  font: inherit; font-size: 12.5px; color: var(--text2); white-space: pre-wrap;
 }
+.modetabs { display: flex; gap: 3px; padding: 3px; border-radius: var(--r-md); background: var(--sunk); }
+.modetabs .chattab { flex: 1; justify-content: center; }
 
 /* ------------------------------------------------------------ moderation */
-/* Long lists of rows that are read rather than clicked through: sanctions,
-   audit entries, rooms, announcements. They share one shape so a moderator
-   reading four panels is reading one layout four times. */
 
-.record { border-block-start: 1px solid var(--line); padding: 1.1rem 1.3rem; }
-.record h4 { margin: 1.3rem 0 .55rem; }
-.record h4:first-of-type { margin-block-start: .4rem; }
-
-.loglist { display: flex; flex-direction: column; }
-.logrow {
-  display: flex; align-items: center; gap: .6rem;
-  padding: .55rem 1.3rem; border-block-start: 1px solid var(--line);
-  font-size: .85rem;
+.modgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+.record { display: flex; flex-direction: column; gap: 10px; padding: 14px; }
+.record .line { display: flex; align-items: center; gap: 10px; }
+.labels { display: flex; gap: 6px; flex-wrap: wrap; }
+.label {
+  font-size: 11px; padding: 2px 8px; border-radius: 99px;
+  background: var(--panel3); color: var(--text2);
 }
-.logrow:first-child { border-block-start: 0; }
+.logline {
+  display: flex; gap: 10px; padding: 8px 14px;
+  border-block-end: 1px solid var(--line); font-size: 12px;
+}
+.logline .at { flex: none; color: var(--faint); font-variant-numeric: tabular-nums; }
+.logline .what { color: var(--text2); }
 
-.labelrow { display: flex; flex-wrap: wrap; gap: .4rem; margin-block-end: .7rem; }
-.labeltag {
-  display: inline-flex; align-items: center; gap: .4rem;
-  padding: .2rem .55rem; border-radius: 99px;
-  background: var(--panel3); border: 1px solid var(--line);
-  font-size: .78rem;
+/* ------------------------------------------------------------ leftovers */
+
+/* Small shared pieces the screens above all borrow. */
+.badge {
+  display: inline-flex; align-items: center; height: 17px; padding: 0 6px;
+  border-radius: 5px; font-size: 10px; font-weight: 500;
+  letter-spacing: .06em; text-transform: uppercase;
+  background: var(--good-soft); color: var(--good);
+}
+.badge.game { background: #2a2733; color: var(--muted); }
+.badge.shut { background: var(--panel3); color: var(--dimmer); }
+.tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 99px; font-size: 11px;
+  background: var(--panel3); color: var(--text2);
+}
+.tag.you { background: var(--accent-soft); color: var(--accent-text); }
+.tag .ms { color: var(--dimmer); }
+.lock { color: var(--dim); }
+.quiet { color: var(--dim); }
+.plain { background: none; }
+.wide { width: 100%; }
+.hostonly.hidden, .signup-only.hidden { display: none !important; }
+
+/* A form standing on its own inside a dialog, with no head-body-foot. */
+form.gate-card, .gate-card.plain {
+  padding: 18px; display: flex; flex-direction: column; gap: 12px;
+}
+.gate-card h1 { font-size: 17px; }
+.gate-who { display: flex; align-items: center; gap: 10px; }
+.gate-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.checkrow { display: flex; align-items: center; gap: 9px; font-size: 12.5px; }
+.checkrow input { width: 15px; height: 15px; padding: 0; accent-color: var(--accent); }
+.linkish {
+  align-self: flex-start; height: auto; padding: 0;
+  border: 0; background: none; color: var(--accent-text);
+  font-size: 12px; text-decoration: underline;
+}
+.linkish:hover { background: none; color: var(--accent-lit); }
+.warn-note {
+  margin: 0; padding: 8px 10px; border-radius: var(--r-md);
+  background: #2b2620; box-shadow: inset 0 0 0 1px #4a3f2c;
+  font-size: 11.5px; color: var(--warn);
 }
 
-.sanctionform, .bannerform {
-  display: flex; flex-wrap: wrap; gap: .6rem; align-items: center;
+/* The network banner in the room. It has to be impossible to miss: the first
+   two-PC test failed because both players were in a room, neither was on its
+   network, and the only sign was a small pill in the header. */
+.netbanner {
+  padding: 10px 12px; border-radius: var(--r-md); font-size: 13px;
+  background: var(--panel3); box-shadow: inset 0 0 0 1px var(--line3);
 }
-.bannerform { flex-direction: column; align-items: stretch; padding: 0 1.3rem 1.1rem; }
-.sanctionform #mod-reason { flex: 1; min-width: 14rem; }
-.sanctionform #mod-minutes { width: 6rem; }
-.bannerform textarea { resize: vertical; font-size: .88rem; }
+.netbanner.ok   { background: var(--good-soft); color: var(--good); box-shadow: inset 0 0 0 1px var(--good-line); }
+.netbanner.wait { background: #2b2620; color: var(--warn); box-shadow: inset 0 0 0 1px #4a3f2c; }
+.netbanner.bad  { background: var(--bad-soft); color: var(--bad); box-shadow: inset 0 0 0 1px var(--bad-line); }
 
-/* A number that is at most five digits should not take the width of a
-   sentence. Used by the MMR floor beside the door. */
-.narrow { width: 7.5rem; }
-
-/* Present for assistive technology and password managers, absent from the
-   layout. Not display:none, which both of those ignore. */
-.offscreen {
-  position: absolute; width: 1px; height: 1px;
-  padding: 0; border: 0; overflow: hidden; clip-path: inset(50%);
-}
-
-/* Somebody who has asked their system for less movement gets less movement.
-   Nothing here carries meaning that only the animation conveys. */
-@media (prefers-reduced-motion: reduce) {
-  * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
-}
+/* Moderation forms and the audit log. */
+.sanctionform, .bannerform { display: flex; flex-direction: column; gap: 10px; padding: 14px; }
+.labelrow { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 0 14px 14px; }
+.labeltag { display: inline-flex; align-items: center; gap: 6px; }
+.loglist { display: flex; flex-direction: column; max-height: 22rem; overflow-y: auto; }
+.logrow { display: flex; gap: 10px; padding: 8px 14px; border-block-end: 1px solid var(--line); font-size: 12px; }
+.logrow .at { flex: none; color: var(--faint); font-variant-numeric: tabular-nums; }
+.detail { font-size: 12px; color: var(--dim); }
+.actions { display: flex; flex-direction: column; gap: 12px; }
