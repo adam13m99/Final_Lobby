@@ -57,6 +57,11 @@ deploy_coordinator() {
   echo "==> uploading"
   upload_verified bin/coordinator /opt/finallobby/coordinator.new
   scp_up deploy/coordinator.service /etc/systemd/system/coordinator.service
+  # The terms are served from a file rather than compiled in (D37), so they
+  # travel with the binary that serves them. Bumping TermsVersion without
+  # shipping the text it names is how everybody ends up re-accepting the old
+  # terms.
+  upload_verified docs/terms-en.md /etc/finallobby/terms-en.md
 
   echo "==> installing"
   ssh_run bash -s <<'REMOTE'

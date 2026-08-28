@@ -70,7 +70,9 @@ type Response struct {
 	// path to a host they have not joined.
 	RelayMillis int `json:"relay_ms,omitempty"`
 
-	// Launch
+	// Launch. DotaPath is also filled in on a status reply, where it is the
+	// install the service would use: Settings shows it, because "we could not
+	// find Dota" and "we found the wrong Dota" look the same to a player.
 	DotaPath string   `json:"dota_path,omitempty"`
 	Args     []string `json:"args,omitempty"`
 

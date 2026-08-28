@@ -35,6 +35,13 @@ something to see, and opens it. No installer, no server, no tunnel — so the
 room screen will say the network service is not running, and everything else
 is real. Ctrl-C stops it and deletes the throwaway database.
 
+**Shipping is part of finishing, not a separate errand (D62).** Run
+`./scripts/ship.sh` after the commit: it deploys the coordinator, the terms
+text it serves and the relay, then republishes the app. Deploying the server
+without republishing the app is the invisible mistake — the server is healthy,
+the API is new, and every installed copy is still drawing last week's
+interface.
+
 **To test on a second PC:** run `./scripts/publish.sh`. It builds, stamps
 the server details into the binaries, uploads, and prints a link. Open that
 link on each PC, run the file, allow one prompt, pick a name. Then follow
@@ -56,6 +63,7 @@ curl -s -H "Authorization: Bearer $TOKEN" http://87.107.110.199:7001/v1/diag
 |---|---|---|
 | `bash scripts/check.sh` | every module builds, vets, passes its own tests; the front-end JS and string files parse; no secret is tracked; the Rust shell compiles | seconds |
 | `./scripts/try.sh` | nothing — it runs the product. A coordinator and an app on this PC, a lobby seeded with four players and three rooms, opened in the browser. Ctrl-C deletes everything it made | ~40s |
+| `bash scripts/termscheck.sh` | that the terms cannot be accepted without being scrolled to the end, and can be once they have (D61). A one-shot render cannot see a gate that lives between a scroll position and a disabled attribute | ~50s |
 | `bash scripts/preview.sh <name>` | nothing — it photographs. Boots a real coordinator and app on throwaway data, seeds four players and three rooms with different doors, and drives headless Chrome through every screen into `scripts/shots/<name>/` | ~40s |
 | `bash scripts/live.sh` | nothing — it **is** the product, running, at one fixed address, updating itself. Front-end edits appear in the open window within two seconds; Go edits are rebuilt and the app restarted at the same address. Open it once and leave it | ~60s to start, then stays up |
 | `bash scripts/chatcheck.sh` | that a private message arriving **opens the chat dock by itself and gives the sender a tab** — driven live over the DevTools Protocol, because the dock reacts to a change between two polls and a single snapshot can never show it | ~50s |
@@ -240,6 +248,9 @@ there; this is the summary.
 | T19 the owner's design, adopted (D58) | **done** — looked at, at 1440 and at 1366 |
 | T20 the owner's answers, and the last unwired routes (D59) | **done** — ping, last seen, watching seats, invitations |
 | T21 deployed to production with accounts on (D60) | **done** — build 2026.08.26-0846, verified over the real internet |
+| T22 orientation docs for both halves | **done** — `docs/backend.md`, `docs/frontend.md` |
+| T23 settings, sign in, create account, terms (D61) | **done** — the owner's second mock, adopted; looked at, at 1440 and at 1366 |
+| T23 every change reaches the server (D62) | **done** — `scripts/ship.sh`, and the finish ritual names it |
 
 **The interface was redesigned on 2026-08-25** at the owner's request: the
 old one was flat, grey and mostly empty space. What changed, beyond colour

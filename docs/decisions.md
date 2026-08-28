@@ -1330,3 +1330,103 @@ to prove the path end to end: sign-up against the live terms, a room hosted,
 and a ping reported on the heartbeat coming back on the right seat. The room
 closes on the host grace. The account is harmless and can be sanctioned or
 ignored.
+
+---
+
+## D61 — The front door is allowed to be flashy
+
+**2026-08-28 (T23).** The owner handed over a second mock — *App screens
+redesign request* — covering the four screens the Nocturne pass (D58) had not
+touched: settings, sign in, create account and the terms. It was adopted.
+
+Everything else in this product is a dense working screen somebody reads in
+two seconds, and the whole stylesheet is written against that: small steps
+between surfaces, one accent, nothing that moves. The sign-in card breaks all
+of it — a halo that breathes, a lit gradient border, a bar of light crossing
+the top edge, and a card that rises as it appears.
+
+**That is right, and it is right for a reason that does not generalise.** The
+gate is shown perhaps twice in an installation's life, it is the first thing
+anybody ever sees of LobbyBaz, and nothing on it competes for attention with
+anything else. Motion costs nothing where there is nothing to read. The same
+treatment on the room list would cost a player the two seconds they spend
+choosing a room, which is the only thing that screen is for.
+
+So: **the door may be flashy, the rooms may not.** Every loop is decorative,
+every one of them is dropped under `prefers-reduced-motion`, and none of them
+carries information — the states they sit beside are all readable without
+them.
+
+**Settings gained a second column and lost a card head.** It was a column of
+three narrow cards down the side of a 1440px window, which reads as an
+unfinished page rather than a short one. It is now a page header with the
+build number in it, an identity banner in the accent — the one place the
+product says your own name back to you — and a two-column grid.
+
+**The terms are gated on being scrolled.** Accept does nothing until the text
+has reached the end, with two per cent of slack for sub-pixel rounding, and a
+bar under the header says how far through the reader is. Consent to a wall of
+text nobody scrolled is not consent, and the gate costs an honest reader about
+four seconds. The banner that used to offer *Accept* beside *Read them* now
+offers only the modal: it was a button for agreeing to something without
+looking at it, three inches from the machinery built to prevent exactly that.
+
+**The terms are rendered, not dumped.** They arrive as markdown because a
+markdown file is what the owner edits, and the page now turns the handful of
+shapes that file uses into elements. It builds nodes rather than markup: that
+text is a document somebody types into, and typing into it must never reach
+the page.
+
+**Three sections in the mock were not built: Game got half, Audio & voice and
+Notifications got none.** They are features, not decoration, and the mock's
+README says so itself. Dota's location is real — the service already finds it,
+and it now reports the path rather than only a yes — so the Game card shows
+where the game is and says what that means. Launch options, push-to-talk, an
+input meter and three notification toggles are not real, and a switch that
+does nothing is worse than an absent one: it teaches somebody the product
+lies. They are the owner's to ask for.
+
+**The terms text moved to 2026-08-28.** The old opening was a note addressed
+to the product owner, and every player who signed up read it. It is now the
+mock's line — plain language, not legal advice — and two things the old text
+was missing came across from the mock: what hosting costs the person who does
+it, and that the relay carries Dota and nothing else. Bumping the version
+re-prompts everybody, which is the point.
+
+---
+
+## D62 — Every change goes to the server in the same breath as the commit
+
+**2026-08-28 (T23).** The owner asked, in as many words, that every change we
+make reach the server so they can test it live.
+
+They are not going to run `try.sh`. They have the installed app and the live
+lobby, and that is the product as far as they are concerned. A change that
+exists only in this repository is a change they cannot see, cannot judge and
+cannot approve, which makes the whole loop — build, look, decide — run at the
+speed of somebody remembering to deploy.
+
+**`scripts/ship.sh` is the whole job in one command**, and the finish ritual in
+`CLAUDE.md` now names it beside the commit and the push:
+
+1. `deploy.sh all` — the coordinator binary **and the terms text it serves**,
+   then the relay.
+2. `publish.sh` — the desktop app, stamped, uploaded, and published as the
+   installer that installed copies upgrade themselves to.
+
+**Step 2 is the one that gets forgotten**, and it is invisible when it is: the
+server is healthy, the API is the new one, and every installed copy is still
+drawing last week's interface. Nothing in the health check catches it, because
+nothing is wrong with the server.
+
+**The terms file now travels with the coordinator.** It was placed by hand
+during D60 and `deploy.sh` never touched it again, so editing `docs/terms-en.md`
+changed nothing that any player could read. Bumping `TermsVersion` without
+shipping the text it names is how everybody gets re-prompted to accept the old
+terms.
+
+**What ship.sh does not do is decide.** It never runs on its own, it is not
+wired into a hook, and it is not safe to run half-way: the box carries an
+unrelated live business, so both scripts inside it stay the audited ones that
+touch UDP 443 and TCP 7001 and say out loud at the end whether the neighbours
+are still up.

@@ -46,7 +46,7 @@ sleep 3
 # The caller may name their own screens; SHOTS is a JSON array of
 # [name, script] pairs, the script run in the page before the shutter.
 export SHOTS="${SHOTS:-$(cat <<'JSON'
-[["lobby",""],["room","show(\"room\")"],["mod","show(\"mod\")"],["checks","show(\"checks\")"],["profile","$(\"mebtn\").click()"]]
+[["lobby",""],["room","show(\"room\")"],["mod","show(\"mod\")"],["settings","show(\"settings\")"],["signin","gateMode(\"signup\");$(\"namegate\").classList.remove(\"hidden\")"],["terms","$(\"namegate\").classList.add(\"hidden\");openTerms(\"signup\")"]]
 JSON
 )}"
 node "$SP/preview-shots.js" "$APP_URL" "$(cygpath -w "$OUT")" "$CDP"

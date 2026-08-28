@@ -88,7 +88,26 @@ permanent; only `stage` changes.
 | Moderation | `#screen-mod` | `renderMod` — hidden unless the session holds a role |
 
 Dialogs are separate: create a room, room settings, invite, profile,
-password, terms. All of them plain `.gate` overlays toggled by a class.
+password, the front door and the terms. All of them plain `.gate` overlays
+toggled by a class. Two carry `.gate.blur`, which blurs the application behind
+them rather than merely darkening it: the sign-in card (`#namegate`) and the
+terms (`#termsgate`). Those two stand in front of the whole product rather
+than in front of one screen, and D61 says why they are allowed to look it.
+
+**The front door** (`#namegate`) is one card with three shapes, switched in
+place by `gateMode`: a typed name when the server has no accounts, signing in,
+and creating one. Switching tabs must not replay the entrance animation, so
+nothing is remounted — classes are toggled and that is all. It carries two
+live numbers, drawn by `drawGateStatus` at open and again on every poll while
+it is open.
+
+**The terms** (`#termsgate`) are markdown from the coordinator, rendered by
+`drawTerms` into real elements — never `innerHTML`; that text is a file
+somebody edits and editing it must not reach the page. `termsRead` turns the
+scroll position into a percentage and a verdict, and Accept is inert below
+98%. `openTerms(purpose)` takes one of three: `signup` ticks the checkbox on
+the way out, `accept` records the acceptance against the account, `read`
+shows no Accept button at all.
 
 ## The rules the tests enforce
 
@@ -176,6 +195,8 @@ any layout change at **1366×768** — the commonest laptop this will run on.
 | friends rail | `renderFriends`, `invitationRows`, `whereabouts`, `ago`, `friendRow` |
 | chat dock | `renderChatDock`, `drawTabs`, `drawLog`, `openDock`, `notice`, `ping` |
 | settings | `renderSettings`, `renderDiag` |
+| the door | `gateMode`, `drawGateStatus` |
+| the terms | `openTerms`, `termsRead`, `drawTerms`, `inline` |
 | moderation | `renderMod`, `lookUp`, `renderRecord`, `drawSanctions`, `drawByThem` |
 | screens | `show` |
 | events | every handler, wired once at load |
@@ -352,6 +373,7 @@ invited and then refused (D41).
 | `bash scripts/try.sh` | The same sandbox, opened once, deleted on Ctrl-C. |
 | `bash scripts/preview.sh <name>` | The same sandbox photographed. One PNG per screen into `scripts/shots/<name>/`. |
 | `bash scripts/chatcheck.sh` | Drives the live page over CDP to prove the dock opens on an incoming message. |
+| `bash scripts/termscheck.sh` | Drives the live page over CDP to prove the terms gate opens, refuses, and then allows. |
 
 All of them are loopback-only, on a throwaway database, with `APPDATA`
 redirected so your own signed-in session is untouched. None contacts the live
@@ -373,7 +395,9 @@ WIDE=1366 TALL=768 bash scripts/preview.sh small
 3. **Look at it.** At 1440 and at 1366.
 4. `bash scripts/check.sh` — the sixteen interface tests run here.
 5. `bash scripts/smoke.sh` if you touched `server.go` or anything it calls.
-6. `bash scripts/chatcheck.sh` if you touched the dock.
+6. `bash scripts/chatcheck.sh` if you touched the dock;
+   `bash scripts/termscheck.sh` if you touched the terms or the door.
+7. `./scripts/ship.sh` after the commit, so the owner can look at it (D62).
 7. `scripts/preview.sh` and look at the pictures.
 8. `STATE.md`, a decision entry if the reasoning is worth keeping, one commit
    naming the task, `./scripts/git-sync.sh push`.
@@ -389,3 +413,12 @@ WIDE=1366 TALL=768 bash scripts/preview.sh small
 6. **Never keep a second copy of server state in the page.**
 7. **Never call `api()` bare from a handler** — wrap it in `act()`.
 8. **Never judge a change by reading it.** Photograph it, or open it.
+9. **Never put motion on a working screen.** The sign-in card and the terms
+   are the two exceptions, they are exceptions for a reason that does not
+   generalise (D61), and every loop on them is dropped under
+   `prefers-reduced-motion`.
+10. **Never draw a control for something that does not exist.** A toggle that
+    does nothing teaches somebody the product lies, and they will not find out
+    which half was true.
+11. **Never leave a change on this PC.** `./scripts/ship.sh` after the commit
+    (D62). The owner tests on the live product.

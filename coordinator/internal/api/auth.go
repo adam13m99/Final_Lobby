@@ -34,7 +34,7 @@ const sessionHeader = "X-LobbyBaz-Session"
 // TermsVersion is the version of the terms and conditions this build asks
 // people to accept. Bumping it re-prompts everybody, which is the point:
 // consent to one text is not consent to a different one.
-const TermsVersion = "2026-08-24"
+const TermsVersion = "2026-08-28"
 
 type ctxKey int
 

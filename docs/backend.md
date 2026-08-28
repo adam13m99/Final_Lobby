@@ -181,6 +181,12 @@ packages:
 | `ticket/` | The short-lived credential the relay checks. |
 | `player/` | The live registry: who is online, their nick, MMR, in-game flag, relay ping. In memory. |
 | `account/` | Usernames, Argon2id passwords, sessions, terms acceptance, last-seen. SQLite. |
+
+The terms themselves are a **file**, not a compiled-in string: `-terms-file`
+points at `/etc/finallobby/terms-en.md`, which `deploy.sh coordinator` uploads
+from `docs/terms-en.md`. `api.TermsVersion` names the version in force, and
+bumping it re-prompts everybody — so bumping it without shipping the text it
+names asks the world to re-accept the terms they already had.
 | `social/` | Friends, blocks, private messages, room invitations. SQLite. |
 | `moderation/` | Roles, sanctions, labels, banners, the audit log. SQLite. |
 | `chat/` | The lobby and room channels. In memory, cursor-based. |
@@ -356,7 +362,8 @@ are `status`, `connect`, `disconnect`, `launch`, `ping`.
 |---|---|
 | `scripts/check.sh` | Every module builds, vets, tests; the front end parses. **Ground truth.** |
 | `scripts/smoke.sh` | A real coordinator on a throwaway database and two real apps walked through the whole path. |
-| `scripts/deploy.sh relay\|coordinator\|status\|logs` | Build and install on the server. |
+| `scripts/ship.sh` | **Both of the next two, in order.** Everything changed reaches the live server (D62). |
+| `scripts/deploy.sh relay\|coordinator\|status\|logs` | Build and install on the server. `coordinator` also ships `docs/terms-en.md`. |
 | `scripts/publish.sh` | Build the installer, upload it, print the link. |
 | `scripts/build.sh` | Build one thing without deploying it. |
 | `scripts/git-sync.sh push\|pull` | Git through the server, because GitHub is DPI-blocked here. |
@@ -369,6 +376,9 @@ before it finishes.
 
 ## Where to be careful
 
+0. **Ship it.** `./scripts/ship.sh` after the commit. Deploying the server
+   without republishing the app leaves every installed copy on the old
+   interface, and nothing about the server looks wrong (D62).
 1. **UDP 443 only.** Never bind TCP 443, never touch nginx or CoreDNS.
 2. **Never regenerate the relay key.** Every installed client carries the
    public half.

@@ -74,8 +74,12 @@ func (a *Agent) status() ipc.Response {
 	defer a.mu.Unlock()
 
 	resp := ipc.Response{RoomID: a.roomID, State: "idle"}
-	if _, err := dota.FindInstall(); err == nil {
+	// The path, not only the fact. Settings shows it, because "we could not
+	// find Dota" and "we found the wrong Dota" look identical to a player
+	// otherwise, and the second one happens on machines with two libraries.
+	if exe, err := dota.FindInstall(); err == nil {
 		resp.DotaFound = true
+		resp.DotaPath = exe
 	}
 	if a.adapter != nil {
 		resp.AdapterName = a.adapter.Name()

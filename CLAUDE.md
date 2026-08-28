@@ -46,7 +46,17 @@ Before writing code, every session:
    cheapest thing to read in the whole repository.
 
 Finishing a task means: tests pass, `STATE.md` updated, one commit naming the
-task number, pushed via `./scripts/git-sync.sh push`.
+task number, pushed via `./scripts/git-sync.sh push`, **and shipped with
+`./scripts/ship.sh`** so the live server and the published installer match the
+working tree.
+
+**Ship every change.** The owner tests on the live product, not on this PC, so
+a change that only exists here cannot be looked at by the person who asked for
+it (D62). `./scripts/ship.sh` is the whole job in one command: the coordinator
+and the terms text it serves, the relay, and the desktop app republished as an
+installer that installed copies upgrade themselves to. Running `deploy.sh`
+alone is the easy mistake and the invisible one - the server is healthy, the
+API is new, and every installed copy is still showing last week's interface.
 
 ## Hard rules — do not "improve" these
 

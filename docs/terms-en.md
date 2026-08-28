@@ -1,14 +1,9 @@
 # LobbyBaz — Terms of Use
 
-**Version 2026-08-24**
+**Version 2026-08-28**
 
-> **For the product owner: this is a draft written by engineering so the
-> sign-up screen has something real behind its checkbox, not legal advice.
-> Read it and change anything you disagree with — it is your product and your
-> liability, not mine. If LobbyBaz ever takes money, or grows past friends of
-> friends, have somebody qualified look at it. Nothing here should be treated
-> as reviewed. Changing it means bumping `TermsVersion` in the coordinator,
-> which re-prompts everybody, which is the point.**
+> Plain language, not legal advice. If LobbyBaz ever takes money or grows past
+> friends of friends, have a lawyer read this properly.
 
 ## What LobbyBaz is
 
@@ -47,7 +42,17 @@ it here.
 - Do not pretend to be somebody else, and do not share an account.
 - Your declared MMR should be roughly honest. It is how other players decide
   whether a game will be worth playing.
+- Do not use the relay for traffic that is not Dota 2.
 - Follow the law where you are.
+
+## Hosting a room
+
+When you host, the match runs on your PC and everybody in the room plays
+through it for as long as it lasts. They reach you through our relay, so they
+never see your address and you never see theirs.
+
+Hosting uses your upload while the match runs. If your PC goes away the room
+gets one minute to see you come back, and closes if you do not.
 
 ## What we can do about it
 

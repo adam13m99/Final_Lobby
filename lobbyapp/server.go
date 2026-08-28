@@ -305,6 +305,7 @@ func (s *server) state(w http.ResponseWriter, r *http.Request) {
 		out["connected"] = resp.Connected
 		out["adapter"] = resp.AdapterName
 		out["dota_running"] = resp.DotaRunning
+		out["dota_path"] = resp.DotaPath
 		out["relay_ms"] = resp.RelayMillis
 		if resp.VirtualIP != "" {
 			out["virtual_ip"] = resp.VirtualIP

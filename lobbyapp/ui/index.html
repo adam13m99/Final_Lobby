@@ -21,54 +21,88 @@
 <!-- The gate. It only appears when the player does something that cannot be
      done anonymously, and what it asks for depends on the server: a
      coordinator with no database has no accounts, and there the app asks for
-     a name and nothing else, exactly as it did before (D37, D45). -->
-<div id="namegate" class="gate hidden">
-  <form class="gate-card" id="nameform">
-    <h1 data-t="namegate.title"></h1>
-    <p class="muted" id="namewhy"></p>
+     a name and nothing else, exactly as it did before (D37, D45).
 
-    <!-- Accounts off: a typed name, and that is all there is. -->
-    <div id="nickonly">
-      <input id="nameinput" maxlength="20" data-t-placeholder="namegate.name.placeholder" autocomplete="off">
-      <label class="field">
-        <span><span data-t="namegate.mmr"></span> <em data-t="namegate.mmr.note"></em></span>
-        <input id="mmrinput" type="number" min="0" max="15000" data-t-placeholder="namegate.mmr.placeholder" autocomplete="off">
-      </label>
-    </div>
+     It is the one deliberately flashy surface in the product (D61). Everything
+     else is a dense working screen a player reads in two seconds; this is the
+     first thing they ever see, it is shown perhaps twice in an install's life,
+     and it is the only place a little light costs nothing. The app stays
+     visible and blurred behind it so it is plainly a door in front of a room
+     rather than a different application. -->
+<div id="namegate" class="gate blur hidden">
+  <div class="authwrap">
+    <div class="authglow" aria-hidden="true"></div>
+    <form class="authcard" id="nameform">
+      <span class="authsweep" aria-hidden="true"></span>
+      <div class="authinner">
 
-    <!-- Accounts on. -->
-    <div id="accountform" class="hidden">
-      <div class="modetabs">
-        <button type="button" class="chattab active" data-mode="signin" data-t="auth.signin"></button>
-        <button type="button" class="chattab" data-mode="signup" data-t="auth.signup"></button>
+        <div class="authhead">
+          <span class="lbtile" data-t="app.short"></span>
+          <span class="wordmark" data-t="namegate.title"></span>
+          <div class="head-gap"></div>
+          <span class="authnet" id="authnet">
+            <span class="dot" aria-hidden="true"></span><span id="authnettext"></span>
+          </span>
+        </div>
+        <div class="authrule" aria-hidden="true"></div>
+
+        <!-- Accounts on: two doors into the same card, switched in place. -->
+        <div class="modetabs hidden" id="authtabs">
+          <button type="button" class="chattab active" data-mode="signin" data-t="auth.signin"></button>
+          <button type="button" class="chattab" data-mode="signup" data-t="auth.signup"></button>
+        </div>
+
+        <h1 id="gatetitle"></h1>
+        <p class="muted small" id="namewhy"></p>
+
+        <!-- Accounts off: a typed name, and that is all there is. -->
+        <div id="nickonly">
+          <label class="field">
+            <span data-t="auth.yourname"></span>
+            <input id="nameinput" maxlength="20" data-t-placeholder="namegate.name.placeholder" autocomplete="off">
+          </label>
+          <label class="field">
+            <span><span data-t="namegate.mmr"></span><em data-t="namegate.mmr.note"></em></span>
+            <input id="mmrinput" type="number" min="0" max="15000" data-t-placeholder="namegate.mmr.placeholder" autocomplete="off">
+          </label>
+        </div>
+
+        <!-- Accounts on. Four fields, and on the sign-up side they pair off
+             two to a row: a column of four boxes reads as a long form, and
+             this one is short. -->
+        <div id="accountform" class="hidden">
+          <div class="authfields" id="authfields">
+            <label class="field">
+              <span data-t="auth.username"></span>
+              <input id="a-user" maxlength="24" autocomplete="username">
+            </label>
+            <label class="field signup-only">
+              <span data-t="auth.displayname"></span>
+              <input id="a-nick" maxlength="20" data-t-placeholder="auth.displayname.placeholder" autocomplete="nickname">
+            </label>
+            <label class="field">
+              <span><span data-t="auth.password"></span><em class="signin-only" data-t="auth.nohint"></em></span>
+              <input id="a-pass" type="password" maxlength="72" autocomplete="current-password">
+            </label>
+            <label class="field signup-only">
+              <span><span data-t="namegate.mmr"></span><em data-t="auth.mmr.optional"></em></span>
+              <input id="a-mmr" type="number" min="0" max="15000" data-t-placeholder="namegate.mmr.placeholder" autocomplete="off">
+            </label>
+          </div>
+          <p class="warn-note signup-only" data-t="auth.norecovery"></p>
+          <label class="checkrow signup-only">
+            <input id="a-terms" type="checkbox">
+            <span data-t="auth.terms"></span>
+            <button type="button" class="linkish" id="readterms" data-t="auth.termslink"></button>
+          </label>
+        </div>
+
+        <button class="primary block" type="submit" id="gatego"></button>
+        <p class="gate-err" id="nameerr"></p>
+        <p class="authfoot" id="authfoot"></p>
       </div>
-      <label class="field">
-        <span data-t="auth.username"></span>
-        <input id="a-user" maxlength="24" autocomplete="username">
-      </label>
-      <label class="field signup-only">
-        <span data-t="auth.displayname"></span>
-        <input id="a-nick" maxlength="20" autocomplete="nickname">
-      </label>
-      <label class="field">
-        <span data-t="auth.password"></span>
-        <input id="a-pass" type="password" maxlength="72" autocomplete="current-password">
-      </label>
-      <label class="field signup-only">
-        <span><span data-t="namegate.mmr"></span> <em data-t="namegate.mmr.note"></em></span>
-        <input id="a-mmr" type="number" min="0" max="15000" data-t-placeholder="namegate.mmr.placeholder" autocomplete="off">
-      </label>
-      <p class="warn-note signup-only" data-t="auth.norecovery"></p>
-      <label class="checkrow signup-only">
-        <input id="a-terms" type="checkbox">
-        <span data-t="auth.terms"></span>
-      </label>
-      <button type="button" class="linkish signup-only" id="readterms" data-t="auth.readterms"></button>
-    </div>
-
-    <button class="primary" type="submit" id="gatego"></button>
-    <p class="gate-err" id="nameerr"></p>
-  </form>
+    </form>
+  </div>
 </div>
 
 <div id="shell">
@@ -154,8 +188,7 @@
      halves: read them, then accept them. -->
 <div id="termsmoved" class="banner warn hidden">
   <span data-t="terms.changed"></span>
-  <button class="tiny" id="termsread" data-t="terms.read"></button>
-  <button class="tiny primary" id="termsaccept" data-t="terms.accept"></button>
+  <button class="tiny primary" id="termsread" data-t="terms.readaccept"></button>
 </div>
 <div id="banners" class="strip"></div>
 <div id="banner" class="banner hidden"></div>
@@ -273,61 +306,87 @@
      toolbar entry; it belongs beside the facts it diagnoses. -->
 <section id="screen-settings" class="screen hidden">
   <div class="settings">
-    <div>
-      <h1 data-t="settings.title"></h1>
-      <p class="muted small" data-t="settings.blurb"></p>
+
+    <!-- The build number sits in the page header rather than in a card of its
+         own. It is the first thing anybody is asked for when something is
+         wrong, and hunting for it wastes the call. -->
+    <div class="sethead">
+      <div>
+        <h1 data-t="settings.title"></h1>
+        <p class="muted small" data-t="settings.blurb"></p>
+      </div>
+      <div class="head-gap"></div>
+      <div class="stamp" id="set-build"></div>
     </div>
 
-    <div class="card">
-      <h3 data-t="settings.profile"></h3>
-      <div class="profilerow">
-        <span id="set-face"></span>
-        <div>
-          <div id="set-name" style="font-size: 14.5px; font-weight: 500;"></div>
-          <div class="muted small" id="set-sub"></div>
+    <!-- Who the server thinks you are, said once, in the accent, at the top.
+         Everything below is about this machine; this is about the person. -->
+    <div class="identity">
+      <span class="edge" aria-hidden="true"></span>
+      <span id="set-face"></span>
+      <div class="idwho">
+        <div class="idname">
+          <span id="set-name"></span>
+          <span class="tag hostable hidden" id="set-hostable" data-t="settings.hostable"></span>
         </div>
-        <div class="head-gap"></div>
+        <div class="muted small" id="set-sub"></div>
+      </div>
+      <div class="head-gap"></div>
+      <div class="idacts">
         <button id="btn-editprofile" data-t="settings.edit"></button>
         <button class="hidden" id="btn-password" data-t="auth.changepw"></button>
-        <button class="hidden" id="btn-signout" data-t="auth.signout"></button>
+        <button class="hidden danger" id="btn-signout" data-t="auth.signout"></button>
       </div>
     </div>
 
-    <div class="card">
-      <h3 data-t="settings.network"></h3>
-      <div class="facts">
-        <div class="fact">
-          <div class="k" data-t="settings.adapter"></div>
-          <div class="v" id="fact-adapter"></div>
+    <div class="setgrid">
+      <div class="card">
+        <div class="cardhead">
+          <h3 data-t="settings.network"></h3>
+          <div class="head-gap"></div>
+          <span class="muted small" id="diagwhen"></span>
         </div>
-        <div class="fact">
-          <div class="k" data-t="settings.relay"></div>
-          <div class="v" id="fact-relay"></div>
+        <div class="tiles">
+          <div class="tile">
+            <div class="k" data-t="settings.adapter"></div>
+            <div class="v" id="fact-adapter"></div>
+          </div>
+          <div class="tile">
+            <div class="k" data-t="settings.relay"></div>
+            <div class="v"><span id="fact-relay"></span> <em class="q" id="fact-relayq"></em></div>
+          </div>
+          <div class="tile">
+            <div class="k" data-t="settings.service"></div>
+            <div class="v"><span class="sdot" id="fact-servicedot" aria-hidden="true"></span><span id="fact-service"></span></div>
+          </div>
         </div>
-        <div class="fact">
-          <div class="k" data-t="settings.service"></div>
-          <div class="v" id="fact-service"></div>
+        <!-- Three checks take a few seconds and say nothing while they run.
+             An indeterminate bar is the difference between "working" and
+             "broken" for the person watching it. -->
+        <div class="sweep hidden" id="diagbar"><span aria-hidden="true"></span></div>
+        <div class="inline cardfoot">
+          <button class="primary" id="btn-diag" data-t="checks.run"></button>
+          <span class="muted small" data-t="checks.what"></span>
         </div>
+        <div id="diaglist" class="diaglist"></div>
       </div>
-      <div class="inline" style="margin-block-start: 14px;">
-        <button class="primary" id="btn-diag" data-t="checks.run"></button>
-        <span class="muted small" id="diagwhen"></span>
+
+      <div class="card">
+        <h3 data-t="settings.game"></h3>
+        <div class="field">
+          <span data-t="settings.game.where"></span>
+          <div class="pathbox" id="fact-dota"></div>
+        </div>
+        <p class="muted small" id="set-gamenote"></p>
       </div>
-      <div id="diaglist" class="diaglist" style="margin-block-start: 10px;"></div>
     </div>
 
-    <div class="card">
+    <div class="about">
       <h3 data-t="settings.about"></h3>
-      <div class="facts">
-        <div class="fact">
-          <div class="k" data-t="settings.version"></div>
-          <div class="v" id="fact-version"></div>
-        </div>
-        <div class="fact">
-          <div class="k" data-t="settings.terms"></div>
-          <div class="v"><button class="linkish" id="btn-showterms" data-t="auth.readterms"></button></div>
-        </div>
-      </div>
+      <span id="fact-version"></span>
+      <span data-t="settings.novalve"></span>
+      <div class="head-gap"></div>
+      <button class="linkish" id="btn-showterms" data-t="auth.readterms"></button>
     </div>
   </div>
 </section>
@@ -709,14 +768,30 @@
   </form>
 </div>
 
-<!-- The terms. Read before the checkbox is ticked, not after. -->
-<div id="termsgate" class="gate hidden">
-  <div class="gate-card wide-card">
-    <div class="panel-head plain">
-      <h2 data-t="auth.termstitle"></h2>
-      <button class="tiny" id="termsclose" data-t="profile.cancel"></button>
+<!-- The terms. Read before the checkbox is ticked, not after: the Accept
+     button is inert until the text has been scrolled to the end, and the bar
+     under the header says how far that is. Consent to a wall of text nobody
+     scrolled is not consent, and the gate costs an honest reader four
+     seconds. -->
+<div id="termsgate" class="gate blur hidden">
+  <div class="termscard">
+    <div class="termshead">
+      <div>
+        <h2 data-t="auth.termstitle"></h2>
+        <p class="muted small" id="termsver"></p>
+      </div>
+      <div class="head-gap"></div>
+      <span class="muted small" id="termspct"></span>
+      <button class="tiny" id="termsclose" data-t="terms.close"></button>
     </div>
-    <pre class="terms" id="termstext"></pre>
+    <div class="termsbar" aria-hidden="true"><span id="termsfill"></span></div>
+    <div class="termsbody" id="termstext"></div>
+    <div class="termsfoot">
+      <span class="small" id="termsstate"></span>
+      <div class="head-gap"></div>
+      <button id="termsnot" data-t="terms.notnow"></button>
+      <button class="primary" id="termsok" data-t="terms.acceptgo"></button>
+    </div>
   </div>
 </div>
 

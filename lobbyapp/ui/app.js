@@ -26,6 +26,9 @@ let sortDir = "desc";
 let query = "";
 let busy = false;
 let authMode = "signin";
+// Why the gate opened, if it opened for a reason. Kept so that switching
+// between the two tabs does not lose it.
+let gateWhy = "";
 
 // The chat dock. dmTabs is what the tab strip shows, dmLogs what each of
 // those tabs holds, and seen the last thing this window noticed in a tab -
@@ -90,8 +93,8 @@ function banner(msg) {
 // for - the app has to keep working against the server that is running today.
 function needName(why) {
   if (state.accounts ? state.signed_in : state.named) return false;
+  gateWhy = why;
   gateMode(authMode);
-  $("namewhy").textContent = t(why);
   $("nameerr").textContent = "";
   $("namegate").classList.remove("hidden");
   ($("accountform").classList.contains("hidden") ? $("nameinput") : $("a-user")).focus();
@@ -99,22 +102,53 @@ function needName(why) {
 }
 
 // gateMode switches the gate between its three shapes: a name, signing in, or
-// creating an account.
+// creating an account. All three live in the same card and the card does not
+// move between them, so switching tabs does not replay the entrance.
 function gateMode(mode) {
   authMode = mode;
   const accounts = !!state.accounts;
+  const signup = accounts && mode === "signup";
   $("nickonly").classList.toggle("hidden", accounts);
   $("accountform").classList.toggle("hidden", !accounts);
+  $("authtabs").classList.toggle("hidden", !accounts);
   for (const f of document.querySelectorAll(".signup-only")) {
-    f.classList.toggle("hidden", !accounts || mode !== "signup");
+    f.classList.toggle("hidden", !signup);
   }
+  for (const f of document.querySelectorAll(".signin-only")) {
+    f.classList.toggle("hidden", signup);
+  }
+  $("authfields").classList.toggle("pair", signup);
   for (const tab of document.querySelectorAll(".modetabs .chattab")) {
     tab.classList.toggle("active", tab.dataset.mode === mode);
   }
   $("a-pass").setAttribute("autocomplete",
-    mode === "signup" ? "new-password" : "current-password");
+    signup ? "new-password" : "current-password");
+
+  // Naming yourself and signing back in are different errands and the card
+  // says which one it is. The reason the gate opened - somebody pressed Join
+  // with no name - outranks the standing blurb, but only on the side where it
+  // makes sense: it is about picking a name, not about remembering one.
+  const naming = !accounts || signup;
+  $("gatetitle").textContent = t(naming ? "auth.signup.title" : "auth.signin.title");
+  $("namewhy").textContent = t(naming
+    ? (gateWhy || "auth.signup.blurb") : "auth.signin.blurb");
   $("gatego").textContent = t(!accounts ? "namegate.submit"
-    : mode === "signup" ? "auth.signup" : "auth.signin");
+    : signup ? "auth.signup" : "auth.signin");
+  // Once now, rather than on the next poll: a card that opens blank and fills
+  // in two seconds later looks like a card that is still loading.
+  drawGateStatus(state);
+}
+
+// The card's own two live facts: whether the server is answering, and how many
+// people are already inside. Both are readable before signing in, which is the
+// point - the door should say whether it is worth opening.
+function drawGateStatus(s) {
+  const up = !s.coordinator_error;
+  $("authnet").classList.toggle("off", !up);
+  $("authnettext").textContent = !up ? t("auth.relay.down")
+    : s.relay_ms ? t("auth.relay", { n: s.relay_ms }) : t("auth.relay.up");
+  $("authfoot").textContent = s.online === undefined ? ""
+    : t("auth.foot", { n: s.online || 0, r: (s.rooms || []).length });
 }
 
 function esc(s) {
@@ -203,6 +237,9 @@ function render() {
   // version in force, and this account not on it.
   $("termsmoved").classList.toggle("hidden",
     !(s.signed_in && s.terms_version && s.terms_accepted === false));
+
+  // The front door carries live numbers, so it is redrawn while it is open.
+  if (!$("namegate").classList.contains("hidden")) drawGateStatus(s);
 
   renderUpdate(s.update);
   renderAds(s.banners || []);
@@ -1351,17 +1388,32 @@ function renderSettings(s) {
   if (s.username) bits.push(t("profile.signedin", { username: s.username }));
   else bits.push(t("profile.local"));
   bits.push(s.mmr ? t("status.mmr", { n: s.mmr }) : t("status.nomm"));
+  bits.push(t("profile.mmrweek"));
   $("set-sub").textContent = bits.join(" · ");
+  // Host capable is a fact, not a boast: the service is answering and it can
+  // find Dota on this disk. Both come from the service, neither is a guess.
+  $("set-hostable").classList.toggle("hidden", !(s.service && s.dota_path));
 
   $("btn-password").classList.toggle("hidden", !s.signed_in);
   $("btn-signout").classList.toggle("hidden", !s.signed_in);
+  $("set-build").textContent = t("settings.build", { v: s.version || t("status.dash") });
 
   $("fact-adapter").textContent = s.adapter || t("settings.adapter.none");
   $("fact-relay").textContent = s.relay_ms
-    ? t("net.relay", { n: s.relay_ms })
+    ? t("checks.ms", { n: s.relay_ms })
     : t(s.connected ? "settings.relay.unknown" : "settings.relay.off");
+  // "good" is only said where there is a number to call good. A quality word
+  // beside a blank is the sort of thing people quote back down the phone.
+  const quick = s.relay_ms > 0 && s.relay_ms <= 60;
+  $("fact-relayq").textContent = quick ? t("settings.relay.good") : "";
   $("fact-service").textContent = t(s.service ? "status.service.up" : "status.service.down");
-  $("fact-version").textContent = s.version || t("status.dash");
+  $("fact-servicedot").classList.toggle("up", !!s.service);
+
+  $("fact-dota").textContent = s.dota_path || t("settings.dota.none");
+  $("set-gamenote").textContent = t(!s.service ? "settings.game.unknown"
+    : s.dota_path ? "settings.game.found" : "settings.game.missing");
+
+  $("fact-version").textContent = t("settings.version", { v: s.version || t("status.dash") });
 }
 
 // ----------------------------------------------------------- diagnostics
@@ -1369,6 +1421,8 @@ function renderSettings(s) {
 function renderDiag() {
   $("btn-diag").disabled = !!state.diag_running;
   $("btn-diag").textContent = t(state.diag_running ? "checks.running" : "checks.run");
+  // Three checks take a few seconds and print nothing while they run.
+  $("diagbar").classList.toggle("hidden", !state.diag_running);
 
   const checks = state.diagnostics;
   if (!checks) return;
@@ -1388,7 +1442,10 @@ function renderDiag() {
 
   if (state.diag_at) {
     $("diagwhen").textContent = t("checks.when", {
-      time: new Date(state.diag_at).toLocaleTimeString(I18n.lang),
+      // Hours and minutes. Seconds and an AM in a card header are three
+      // extra things to read and none of them answer the question.
+      time: new Date(state.diag_at).toLocaleTimeString(I18n.lang,
+        { hour: "2-digit", minute: "2-digit" }),
     });
   }
 }
@@ -1908,11 +1965,10 @@ $("passform").onsubmit = async (e) => {
   }
 };
 
-// The terms moved under somebody who had already agreed to the old ones.
-$("termsread").onclick = () => $("readterms").onclick();
-$("termsaccept").onclick = () => act(async () => {
-  await api("/api/auth/terms", { version: state.terms_version });
-});
+// The terms moved under somebody who had already agreed to the old ones. The
+// banner used to offer accepting them without reading them, which is exactly
+// the thing the modal below was built to stop.
+$("termsread").onclick = () => openTerms("accept");
 
 $("p-signout").onclick = () => act(async () => {
   await api("/api/auth/signout", {});
@@ -2103,20 +2159,129 @@ $("findform").onsubmit = async (e) => {
 
 // --- the terms ------------------------------------------------------------
 
-// Shown as text, in a <pre>, exactly as the server sent them. They are an
-// agreement somebody is about to accept; rendering them as markup would mean
-// the words on screen could differ from the words on file.
-$("readterms").onclick = async () => {
+// Three doors lead here and they want different things on the way out.
+// Somebody signing up needs the checkbox ticked; somebody whose terms moved
+// under them needs the acceptance recorded against their account; somebody
+// reading them from Settings out of curiosity needs neither. The button along
+// the bottom follows, and it is inert until the text has been scrolled to the
+// end - consent to a wall nobody read is not consent.
+let termsPurpose = "read";
+
+function openTerms(purpose) {
+  termsPurpose = purpose;
+  $("termsok").classList.toggle("hidden", purpose === "read");
+  $("termsver").textContent = state.terms_version
+    ? t("terms.version", { v: state.terms_version }) : "";
+  const box = $("termstext");
+  box.textContent = "";
+  box.appendChild(el("p", null, t("auth.termsloading")));
+  box.scrollTop = 0;
   $("termsgate").classList.remove("hidden");
-  $("termstext").textContent = t("auth.termsloading");
-  try {
-    const got = await api("/api/terms");
-    $("termstext").textContent = got.text || "";
-  } catch (err) {
-    $("termstext").textContent = err.message;
+  termsRead();
+  api("/api/terms")
+    .then((got) => drawTerms(got.text || ""))
+    .catch((err) => {
+      box.textContent = "";
+      box.appendChild(el("p", null, err.message));
+      termsRead();
+    });
+}
+
+function shutTerms() { $("termsgate").classList.add("hidden"); }
+
+// How far down the reader has got, as a percentage and as a verdict. The two
+// per cent of slack absorbs sub-pixel rounding, which otherwise leaves a
+// document that has plainly been read to the end sitting at 99.
+function termsRead() {
+  const box = $("termstext");
+  const room = box.scrollHeight - box.clientHeight;
+  const pct = room <= 1 ? 100 : Math.min(100, Math.round((box.scrollTop / room) * 100));
+  const done = pct >= 98;
+  $("termsfill").style.width = pct + "%";
+  $("termspct").textContent = t("terms.pct", { n: pct });
+  $("termsstate").textContent = t(done ? "terms.readend" : "terms.scroll");
+  $("termsstate").classList.toggle("done", done);
+  $("termsok").disabled = !done;
+}
+
+// The terms arrive as markdown, because a markdown file is what the owner
+// edits. This turns the handful of shapes that file actually uses into
+// elements, and it builds nodes rather than markup: the text is a document
+// somebody types into, and typing into it must never reach the page.
+function drawTerms(text) {
+  const box = $("termstext");
+  box.textContent = "";
+  for (const block of String(text).split(/\n\s*\n/)) {
+    const lines = block.split("\n").map((l) => l.trim()).filter(Boolean);
+    if (!lines.length) continue;
+    const head = lines[0];
+    // The title and the version line are both in the header two inches
+    // above, and a document that introduces itself twice reads as a draft.
+    if (head.startsWith("# ")) continue;
+    if (/^\*\*Version .*\*\*$/.test(head) && lines.length === 1) continue;
+    if (head.startsWith("#")) {
+      box.appendChild(inline(el("h3"), head.replace(/^#+\s*/, "")));
+      lines.shift();
+      if (!lines.length) continue;
+    }
+    if (lines[0].startsWith("> ")) {
+      const quote = el("blockquote");
+      quote.appendChild(inline(el("p"), join(lines, /^>\s?/)));
+      box.appendChild(quote);
+      continue;
+    }
+    if (lines[0].startsWith("- ")) {
+      const list = el("ul");
+      for (const line of lines) {
+        if (line.startsWith("- ")) list.appendChild(inline(el("li"), line.slice(2)));
+        // A wrapped bullet is a continuation of the one above it, not a new
+        // one. Markdown says so by indenting; we have already trimmed.
+        else if (list.lastChild) inline(list.lastChild, " " + line);
+      }
+      box.appendChild(list);
+      continue;
+    }
+    box.appendChild(inline(el("p"), join(lines, null)));
   }
+  termsRead();
+}
+
+// A paragraph wrapped at 78 characters is one paragraph, not nine.
+function join(lines, strip) {
+  return lines.map((l) => (strip ? l.replace(strip, "") : l)).join(" ");
+}
+
+// Bold is the only inline mark the terms use, and so the only one honoured.
+function inline(node, text) {
+  String(text).split("**").forEach((part, i) => {
+    if (!part) return;
+    node.appendChild(i % 2 ? el("strong", null, part) : document.createTextNode(part));
+  });
+  return node;
+}
+
+$("termstext").onscroll = termsRead;
+$("termsclose").onclick = shutTerms;
+$("termsnot").onclick = shutTerms;
+$("termsok").onclick = () => {
+  if (termsPurpose === "signup") {
+    $("a-terms").checked = true;
+    shutTerms();
+    return;
+  }
+  act(async () => {
+    await api("/api/auth/terms", { version: state.terms_version });
+    shutTerms();
+    banner(t("terms.accepted"));
+  });
 };
-$("termsclose").onclick = () => $("termsgate").classList.add("hidden");
+
+// The sign-up checkbox's own link. It sits inside the label, so the click has
+// to be stopped or opening the terms also ticks the box it is gating.
+$("readterms").onclick = (e) => {
+  e.preventDefault();
+  openTerms("signup");
+};
 
 // --- leaving, and the network --------------------------------------------
 
@@ -2150,7 +2315,10 @@ $("btn-diag").onclick = () => act(() => api("/api/diagnose", {}));
 $("btn-editprofile").onclick = () => $("mebtn").onclick();
 $("btn-password").onclick = () => $("p-password").onclick();
 $("btn-signout").onclick = () => $("p-signout").onclick();
-$("btn-showterms").onclick = () => $("readterms").onclick();
+// From Settings this is usually curiosity, and there is nothing to accept.
+// It is the third door onto the same text when the terms have moved.
+$("btn-showterms").onclick = () =>
+  openTerms(state.signed_in && state.terms_accepted === false ? "accept" : "read");
 
 // ----------------------------------------------------------------- poll
 
