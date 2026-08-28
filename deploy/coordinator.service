@@ -15,6 +15,12 @@ Group=finallobby
 # on (D60): -db gives it usernames, Argon2id passwords, sessions, durable
 # MMR, the friend graph, moderation and last-seen times, and makes the
 # session rather than the request body decide who a call is from (D53).
+#
+# -head-admin names the one account that can appoint and unappoint admins
+# (D47). It is idempotent - a second start with the same account changes
+# nothing - and it takes a username, because nobody has ever read an account
+# id off a screen. It stays here rather than being run once by hand so that a
+# rebuilt server comes back with its staff intact.
 ExecStart=/opt/finallobby/coordinator \
     -listen 0.0.0.0:7001 \
     -relay-addr 87.107.110.199:443 \
@@ -23,7 +29,8 @@ ExecStart=/opt/finallobby/coordinator \
     -dist-dir /var/lib/finallobby/dist \
     -download-key-file /etc/finallobby/download.key \
     -db /var/lib/finallobby/db/lobby.db \
-    -terms-file /etc/finallobby/terms-en.md
+    -terms-file /etc/finallobby/terms-en.md \
+    -head-admin arman13m99
 
 Restart=always
 RestartSec=2s

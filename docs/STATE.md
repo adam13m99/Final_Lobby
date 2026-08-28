@@ -17,9 +17,8 @@ server comes up. Build `2026.08.26-0846` is published and served from
 `/d/<key>/` on the server.
 
 What remains is Task 16 itself — the real two-PC match — which needs a second
-machine and a person at each. Also outstanding: **no head admin has been
-appointed**, because `-head-admin` takes an account id and none existed at
-deploy time. One restart once somebody has signed up.
+machine and a person at each. **The head admin is `arman13m99`** (D63), named
+in `deploy/coordinator.service` so a rebuilt server comes back with it.
 
 **To watch the product while it is being changed:** run `bash scripts/live.sh`,
 open the address it prints once, and leave that window open. It serves the
@@ -251,6 +250,7 @@ there; this is the summary.
 | T22 orientation docs for both halves | **done** — `docs/backend.md`, `docs/frontend.md` |
 | T23 settings, sign in, create account, terms (D61) | **done** — the owner's second mock, adopted; looked at, at 1440 and at 1366 |
 | T23 every change reaches the server (D62) | **done** — `scripts/ship.sh`, and the finish ritual names it |
+| T24 head admin appointed (D63) | **done** — `arman13m99`, named in the unit file, granted 2026-08-28 |
 
 **The interface was redesigned on 2026-08-25** at the owner's request: the
 old one was flat, grey and mostly empty space. What changed, beyond colour

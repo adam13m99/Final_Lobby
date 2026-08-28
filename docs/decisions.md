@@ -1430,3 +1430,29 @@ wired into a hook, and it is not safe to run half-way: the box carries an
 unrelated live business, so both scripts inside it stay the audited ones that
 touch UDP 443 and TCP 7001 and say out loud at the end whether the neighbours
 are still up.
+
+---
+
+## D63 — The head admin is named, not numbered, and a bad name is loud rather than fatal
+
+**2026-08-28 (T24).** The owner signed up and gave a username: `arman13m99`.
+`-head-admin` took an account id, and nobody has ever read an account id off a
+screen. It now takes **either**: a username first, an account id second, and a
+refusal if it is neither.
+
+**The old flag inserted the grant without looking.** A typo made an account
+that does not exist the head admin, silently — and it could not be corrected,
+because the second attempt fails with `ErrHeadAdminSet`. That is a one-keystroke
+way to lock the product out of ever having staff.
+
+**It lives in the unit file, permanently.** That is what makes a rebuilt server
+come back with its staff intact, and it is idempotent: a restart with the same
+account changes nothing. But it also means the flag is read on every start of a
+live service — so an unresolvable name **no longer exits**. It logs an error
+and the coordinator carries on. A lobby full of real players must not go down
+because somebody was renamed. Anyone can read the answer out of the journal:
+
+    level=INFO msg="head admin" who=arman13m99 account=a_3427029f79090d91d0de7c18
+
+`arman13m99` has held the role since 2026-08-28 23:24 server time. D47 is
+otherwise unchanged: there is still no self-service path to it.

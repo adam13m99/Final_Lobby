@@ -12,6 +12,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -39,7 +40,7 @@ func main() {
 	authFile := flag.String("auth-token-file", "", "file holding the shared bearer token for the player API (empty = open)")
 	distDir := flag.String("dist-dir", "", "directory holding the published installer and version.json (empty = serve no downloads)")
 	dlKeyFile := flag.String("download-key-file", "", "file holding the unguessable path segment the download is served under")
-	headAdmin := flag.String("head-admin", "", "account id to make head admin (D47: done once, at deployment)")
+	headAdmin := flag.String("head-admin", "", "username or account id to make head admin (D47: done once, at deployment)")
 	termsFile := flag.String("terms-file", "", "file holding the terms of use served at /v1/terms (empty = a placeholder saying so)")
 	dbPath := flag.String("db", "", "SQLite file holding accounts and kick history (empty = run without accounts)")
 	debug := flag.Bool("debug", false, "verbose logging")
@@ -132,12 +133,19 @@ func main() {
 		// D47: the head admin is bootstrapped at deployment, not through the
 		// app. A self-service path to the most privileged role in the system
 		// is a door with no purpose.
+		// Loud, and not fatal. This flag lives permanently in the unit file
+		// so a rebuilt server comes back with its staff, which means it is
+		// read on every restart - and a lobby full of real players must not
+		// go down because the name in it was renamed or misspelled. The
+		// journal says so in as many words instead.
 		if *headAdmin != "" {
-			if err := mod.BootstrapHeadAdmin(*headAdmin, time.Now()); err != nil {
-				log.Error("cannot make that account the head admin", "account", *headAdmin, "err", err)
-				os.Exit(1)
+			if id, err := resolveAccount(accounts, *headAdmin); err != nil {
+				log.Error("cannot make that account the head admin", "who", *headAdmin, "err", err)
+			} else if err := mod.BootstrapHeadAdmin(id, time.Now()); err != nil {
+				log.Error("cannot make that account the head admin", "account", id, "err", err)
+			} else {
+				log.Info("head admin", "who", *headAdmin, "account", id)
 			}
-			log.Info("head admin", "account", *headAdmin)
 		} else if head, _ := mod.HeadAdmin(); head == "" {
 			log.Warn("there is no head admin - nobody can appoint moderators; pass -head-admin once with an account id")
 		}
@@ -277,4 +285,27 @@ func friendsOrNil(s *social.Store) api.Friends {
 		return nil
 	}
 	return s
+}
+
+// resolveAccount turns whatever was passed to -head-admin into an account id.
+//
+// The flag used to take an account id and nothing else, and it inserted the
+// grant without looking: a typo made somebody who does not exist the head
+// admin, silently, and the mistake could not be undone because the second
+// attempt fails with ErrHeadAdminSet. Meanwhile the only handle anybody
+// actually knows is the username - nobody has ever read an account id off a
+// screen.
+//
+// So: a username first, an account id second, and a refusal if it is neither.
+func resolveAccount(accounts *account.Store, who string) (string, error) {
+	folded := strings.ToLower(strings.TrimSpace(who))
+	if a, err := accounts.ByUsername(folded); err == nil {
+		return a.ID, nil
+	} else if !errors.Is(err, account.ErrNoSuchAccount) {
+		return "", err
+	}
+	if a, err := accounts.Get(strings.TrimSpace(who)); err == nil {
+		return a.ID, nil
+	}
+	return "", fmt.Errorf("no account has the username or id %q", who)
 }
