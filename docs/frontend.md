@@ -335,6 +335,23 @@ Consequences worth knowing:
 - `desktop/dist/index.html` is a placeholder. The real interface is served
   over loopback by the Go binary; nothing in `dist/` is what a player sees.
 
+## Notifications live in the shell, not the page
+
+`desktop/src/main.rs` polls `/api/state` every five seconds on its own thread
+and raises five desktop notifications from it (D45, D66): your room filling
+up, the host starting the match, a joinable room opening, a friend coming
+online, and the tunnel dropping under you.
+
+**None of this is in `app.js`, and it must not move there.** The page stops
+running when the window is closed to the tray, which is the only time a
+notification is worth raising.
+
+The page's whole part in it is the Notifications card in Settings: five
+checkboxes named for the fields of `session.Notify`, saved as a complete set
+to `POST /api/notifications`, read back from `state.notify`. The switches are
+read by the tray on every poll, so turning one off stops it immediately rather
+than at the next restart.
+
 ## The API the page talks to
 
 `lobbyapp/server.go` serves `/api/*` on loopback. It is not a proxy to the

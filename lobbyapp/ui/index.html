@@ -394,6 +394,36 @@
           <span class="muted small" id="set-optsnote" data-t="settings.opts.note"></span>
         </div>
       </div>
+
+      <!-- Five real interruptions, each with its own switch (D66). Nothing
+           here is aspirational: every line is raised by the tray process in
+           desktop/src/main.rs, which is why they keep working while the
+           window is closed. -->
+      <div class="card">
+        <h3 data-t="settings.notify"></h3>
+        <p class="muted small" data-t="settings.notify.what"></p>
+        <label class="checkline">
+          <input type="checkbox" id="nt-room_opens">
+          <span data-t="settings.notify.roomopens"></span>
+        </label>
+        <label class="checkline">
+          <input type="checkbox" id="nt-friend_online">
+          <span data-t="settings.notify.friend"></span>
+        </label>
+        <label class="checkline">
+          <input type="checkbox" id="nt-tunnel_drops">
+          <span data-t="settings.notify.tunnel"></span>
+        </label>
+        <label class="checkline">
+          <input type="checkbox" id="nt-room_full">
+          <span data-t="settings.notify.roomfull"></span>
+        </label>
+        <label class="checkline">
+          <input type="checkbox" id="nt-match_starts">
+          <span data-t="settings.notify.match"></span>
+        </label>
+        <p class="muted small" data-t="settings.notify.tray"></p>
+      </div>
     </div>
 
     <div class="about">

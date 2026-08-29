@@ -1425,7 +1425,24 @@ function renderSettings(s) {
   // half-typed line is how a settings field ends up impossible to edit.
   const opts = $("set-opts");
   if (document.activeElement !== opts) opts.value = s.launch_options || "";
+
+  // The five switches, unless one is in flight. A poll that lands between the
+  // click and the answer would flip the box back under the finger that just
+  // moved it, and then flip it again a moment later.
+  if (!notifySaving) {
+    const on = s.notify || {};
+    for (const k of NOTIFY_KEYS) $("nt-" + k).checked = !!on[k];
+  }
 }
+
+// The five things LobbyBaz will interrupt somebody for (D66). The names are
+// the field names on the wire and the second half of the checkbox ids, so
+// adding a sixth is one string here, one line of markup and one field in
+// session.Notify - and nothing to keep in step by hand.
+const NOTIFY_KEYS = [
+  "room_opens", "friend_online", "tunnel_drops", "room_full", "match_starts",
+];
+let notifySaving = false;
 
 // ----------------------------------------------------------- diagnostics
 
@@ -2343,6 +2360,22 @@ $("set-opts").oninput = () => {
   $("set-optsnote").textContent = t("settings.opts.note");
   $("set-optsnote").classList.remove("done");
 };
+
+// Notifications. The whole set is sent on every change rather than the one
+// switch that moved: there is then no way for two saves crossing to leave
+// half of somebody's choice stored.
+for (const k of NOTIFY_KEYS) {
+  $("nt-" + k).onchange = () => act(async () => {
+    const body = {};
+    for (const j of NOTIFY_KEYS) body[j] = $("nt-" + j).checked;
+    notifySaving = true;
+    try {
+      await api("/api/notifications", body);
+    } finally {
+      notifySaving = false;
+    }
+  });
+}
 
 // ----------------------------------------------------------------- poll
 

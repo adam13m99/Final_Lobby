@@ -218,6 +218,24 @@ EMPTYOPT=$(call POST /api/launchoptions '{"options":""}')
 expect "and they can be cleared again"             '"ok":true'     "$EMPTYOPT"
 
 say ""
+say "=== which notifications this PC wants ==="
+# The tray process reads these off /api/state on every poll, so what matters
+# is that state answers with all five, resolved rather than null: a null there
+# means "none of them" to the tray, and an installation that had never been
+# asked would go quiet (D66).
+STATE=$(call GET "/api/state")
+expect "a fresh installation wants all of them"    '"room_opens":true'   "$STATE"
+expect "including the two it already had"          '"match_starts":true' "$STATE"
+
+OFF=$(call POST /api/notifications \
+  '{"room_full":true,"match_starts":true,"room_opens":false,"friend_online":false,"tunnel_drops":true}')
+expect "the set can be saved"                      '"ok":true'     "$OFF"
+
+STATE=$(call GET "/api/state")
+expect "and state reports what was switched off"   '"room_opens":false'  "$STATE"
+expect "and what was left on"                      '"tunnel_drops":true' "$STATE"
+
+say ""
 say "=== what the page actually draws ==="
 # Everything above this point proves the HTTP layer. None of it opens the
 # page, and a single stray brace in app.js gives the player a blank window

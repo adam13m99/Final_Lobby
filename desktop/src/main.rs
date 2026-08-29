@@ -20,6 +20,7 @@
 //! So this process starts the Go binary, waits for it to say which loopback
 //! address and token it is serving on, and points a webview at it.
 
+use std::collections::HashSet;
 use std::io::{BufRead, BufReader};
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
@@ -215,23 +216,33 @@ fn start_server(app: &tauri::AppHandle) -> Result<String, String> {
     Ok(url)
 }
 
-/// watch raises the two notifications D45 asks for: a room filling up, and a
-/// host starting the match.
+/// watch raises the desktop notifications: the two D45 asked for - a room
+/// filling up, a host starting the match - and the three the owner added on
+/// 2026-08-29 (D66): a room opening in the lobby, a friend coming online, and
+/// the tunnel dropping under a player who is in a room.
 ///
 /// It runs here rather than in the page because the page is not running when
 /// the window is hidden in the tray, and hidden in the tray is exactly when a
 /// notification is worth anything. A player who is watching the lobby can see
 /// the room fill with their own eyes.
 ///
-/// Both are edge-triggered against the previous poll. Level-triggering would
-/// notify every five seconds for as long as the condition held, which is how
-/// a player learns to ignore notifications.
+/// **Every one of them is edge-triggered against the previous poll.**
+/// Level-triggering would notify every five seconds for as long as the
+/// condition held, which is how a player learns to ignore notifications.
+///
+/// **Every one of them is switchable, and the switches are read here on every
+/// poll** rather than captured once at start-up: somebody who turns a
+/// notification off because it is interrupting them means now, not the next
+/// time they restart the app.
 fn watch(app: tauri::AppHandle, url: String) {
     let state_url = url.replace("/?t=", "/api/state?t=");
     let token = url.split("t=").nth(1).unwrap_or_default().to_string();
 
     let mut was_full = false;
     let mut was_playing = false;
+    let mut was_connected = false;
+    let mut known_rooms: HashSet<String> = HashSet::new();
+    let mut online_friends: HashSet<String> = HashSet::new();
     let mut first = true;
 
     loop {
@@ -246,35 +257,122 @@ fn watch(app: tauri::AppHandle, url: String) {
             Err(_) => continue,
         };
 
-        let room = &state["room"];
-        if !room.is_object() {
-            was_full = false;
-            was_playing = false;
-            continue;
+        // The switches, read fresh every poll. A missing "notify" object
+        // means an older app server is answering, and the honest reading of
+        // that is the behaviour it had: the two D45 notifications on, the
+        // three that came later off.
+        let on = |key: &str, fallback: bool| -> bool {
+            state["notify"][key].as_bool().unwrap_or(fallback)
+        };
+
+        // --- the lobby: rooms that were not there a moment ago -----------
+        //
+        // Only joinable ones, and a room is remembered only while it stays
+        // joinable: one that fills up and empties again is a fresh chance to
+        // play, and saying so is the entire point of this notification.
+        let mut rooms_now: HashSet<String> = HashSet::new();
+        let mut opened: Vec<(String, String)> = Vec::new();
+        if let Some(list) = state["rooms"].as_array() {
+            for r in list {
+                let id = match r["id"].as_str() {
+                    Some(i) => i.to_string(),
+                    None => continue,
+                };
+                if r["joinable"].as_bool() != Some(true) {
+                    continue;
+                }
+                if !known_rooms.contains(&id) {
+                    opened.push((
+                        r["name"].as_str().unwrap_or("A room").to_string(),
+                        r["host_nick"].as_str().unwrap_or("").to_string(),
+                    ));
+                }
+                rooms_now.insert(id);
+            }
         }
 
-        let seats = room["seats"].as_i64().unwrap_or(0);
-        let full = seats >= 10;
-        let playing = room["status"].as_str() == Some("locked_in_game");
+        // --- friends: who is online who was not --------------------------
+        let mut friends_now: HashSet<String> = HashSet::new();
+        let mut arrived: Vec<String> = Vec::new();
+        if let Some(list) = state["friends"]["friends"].as_array() {
+            for f in list {
+                let id = match f["player_id"].as_str() {
+                    Some(i) => i.to_string(),
+                    None => continue,
+                };
+                if f["online"].as_bool() != Some(true) {
+                    continue;
+                }
+                if !online_friends.contains(&id) {
+                    arrived.push(
+                        f["display_name"].as_str().unwrap_or("A friend").to_string(),
+                    );
+                }
+                friends_now.insert(id);
+            }
+        }
+
+        // --- this player's own room, and their own tunnel ----------------
+        let room = &state["room"];
+        let in_room = room.is_object();
+        let full = in_room && room["seats"].as_i64().unwrap_or(0) >= 10;
+        let playing = in_room && room["status"].as_str() == Some("locked_in_game");
+        let connected = state["connected"].as_bool() == Some(true);
 
         // The first poll establishes what is already true. Announcing the
         // state of a room the player is looking at, the moment they open the
-        // app, is noise.
+        // app, is noise - and without this the first poll would announce
+        // every room already in the lobby and every friend already online.
         if first {
             was_full = full;
             was_playing = playing;
+            was_connected = connected;
+            known_rooms = rooms_now;
+            online_friends = friends_now;
             first = false;
             continue;
         }
 
-        if full && !was_full {
+        if full && !was_full && on("room_full", true) {
             notify(&app, "The room is full", "All ten slots are taken.");
         }
-        if playing && !was_playing {
+        if playing && !was_playing && on("match_starts", true) {
             notify(&app, "The match is starting", "The host has locked the room.");
         }
+
+        // A player already sitting in a room is not looking for another one.
+        if !in_room && on("room_opens", false) {
+            for (name, host) in &opened {
+                let body = if host.is_empty() {
+                    "A room just opened.".to_string()
+                } else {
+                    format!("{host} just opened a room.")
+                };
+                notify(&app, name, &body);
+            }
+        }
+
+        if on("friend_online", false) {
+            for name in &arrived {
+                notify(&app, name, "is online.");
+            }
+        }
+
+        // Only while they are in a room. Outside one there is no tunnel to
+        // lose, and "not connected yet" is not the same event as "dropped".
+        if in_room && was_connected && !connected && on("tunnel_drops", false) {
+            notify(
+                &app,
+                "The connection to the room dropped",
+                "Open LobbyBaz - the room is still there, and Reconnect is on the room screen.",
+            );
+        }
+
         was_full = full;
         was_playing = playing;
+        was_connected = connected;
+        known_rooms = rooms_now;
+        online_friends = friends_now;
     }
 }
 

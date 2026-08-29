@@ -119,6 +119,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /api/state", s.guard(s.state))
 	mux.HandleFunc("POST /api/profile", s.guard(s.saveProfile))
 	mux.HandleFunc("POST /api/launchoptions", s.guard(s.saveLaunchOptions))
+	mux.HandleFunc("POST /api/notifications", s.guard(s.saveNotifications))
 	mux.HandleFunc("POST /api/chat", s.guard(s.postChat))
 	mux.HandleFunc("POST /api/rooms/create", s.guard(s.createRoom))
 	mux.HandleFunc("POST /api/rooms/join", s.guard(s.joinRoom))
@@ -288,6 +289,10 @@ func (s *server) state(w http.ResponseWriter, r *http.Request) {
 		"host_ip":   cfg.HostIP,
 
 		"launch_options": cfg.LaunchOptions,
+		// Resolved, never the raw pointer: the tray process reads this to
+		// decide whether to interrupt somebody, and a null there would mean
+		// "none of them" to it rather than "all of them" (D66).
+		"notify": cfg.Notifications(),
 	}
 	if cfg.VirtualIP != "" {
 		out["virtual_ip"] = cfg.VirtualIP
@@ -501,6 +506,25 @@ func (s *server) saveLaunchOptions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "launch_options": opts})
+}
+
+// saveNotifications stores which desktop notifications this PC wants.
+//
+// The whole set arrives every time, never one switch, so there is no way for
+// the stored value to end up half written by two saves crossing. Like the
+// launch options these belong to the installation and the coordinator is not
+// told: which interruptions somebody wants is about the machine in front of
+// them (D66).
+func (s *server) saveNotifications(w http.ResponseWriter, r *http.Request) {
+	var body session.Notify
+	if !decode(w, r, &body) {
+		return
+	}
+	if err := s.update_(func(c *session.Config) { c.Notify = &body }); err != nil {
+		fail(w, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "notify": body})
 }
 
 // --- chat ---------------------------------------------------------------

@@ -30,6 +30,13 @@ type Config struct {
 	// so the coordinator has no use for it and is not told.
 	LaunchOptions string `json:"launch_options,omitempty"`
 
+	// Notify is which desktop notifications this installation wants (D66).
+	// A pointer, and nil means "all of them": a config file written before
+	// this field existed decodes to nil, and if the zero struct were the
+	// answer every player who upgraded would silently lose the two
+	// notifications they already had.
+	Notify *Notify `json:"notify,omitempty"`
+
 	// Session is the coordinator session this installation is signed in
 	// with, when the server has accounts (D37, D53). It is what makes the
 	// friends list and everything else account-scoped work, and it survives
@@ -50,6 +57,39 @@ type Config struct {
 	RelayPub    string `json:"relay_pub,omitempty"`
 	IsHost      bool   `json:"is_host,omitempty"`
 	IsSpectator bool   `json:"is_spectator,omitempty"`
+}
+
+// Notify is the five things LobbyBaz will interrupt somebody for. Each is a
+// separate switch because they interrupt for different reasons: two are about
+// the room you are already sitting in, two are about the lobby you are not
+// looking at, and the last is about your own connection failing.
+//
+// Every field is "do raise this", so the all-true value is the default and
+// reads the way the switches on the screen do.
+type Notify struct {
+	RoomFull     bool `json:"room_full"`
+	MatchStarts  bool `json:"match_starts"`
+	RoomOpens    bool `json:"room_opens"`
+	FriendOnline bool `json:"friend_online"`
+	TunnelDrops  bool `json:"tunnel_drops"`
+}
+
+// AllNotifications is what a fresh installation does, and what an older one
+// keeps when it has never been asked.
+func AllNotifications() Notify {
+	return Notify{
+		RoomFull: true, MatchStarts: true, RoomOpens: true,
+		FriendOnline: true, TunnelDrops: true,
+	}
+}
+
+// Notifications resolves the stored setting, filling in the default for a
+// config that predates it. Never returns a zero struct by accident.
+func (c *Config) Notifications() Notify {
+	if c.Notify == nil {
+		return AllNotifications()
+	}
+	return *c.Notify
 }
 
 // Prepare fills in everything the player should never have to type: the

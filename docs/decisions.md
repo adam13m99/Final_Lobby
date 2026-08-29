@@ -1561,3 +1561,55 @@ use for them and is not told.
 accepts any token `launch.IsPlayerFlag` accepts rather than a list of nine. No
 useful list of Dota engine flags exists to keep, and keeping a bad one would
 mean rejecting the working setting somebody has used for a decade.
+
+---
+
+## D66 — five notifications, five switches, raised by the tray
+
+**2026-08-29.** The third of the owner's three answers to the redesign mock's
+proposals: *"3- Notifications — three toggles (a room opens, a friend comes
+online, the tunnel drops) ... yes i want it"*.
+
+Two notifications already existed, from D45: your room filling up, and the
+host starting the match. They were raised by the Tauri shell rather than the
+page, **because the page is not running when the window is closed to the
+tray, and closed to the tray is exactly when a notification is worth
+anything.** The three new ones join them there for the same reason. A room
+opening in the lobby is only news to somebody who is not looking at the lobby.
+
+**All five are switchable, and all five are shown on one card.** The owner
+asked for three switches; the two that already existed went on the same card,
+because a screen headed "Notifications" that omits two of the notifications
+the product actually sends is a worse lie than one that lists a switch doing
+nothing.
+
+**The switches are stored per installation and the coordinator is never
+told.** Which interruptions somebody wants is about the machine in front of
+them, not about who they are — the same reasoning as the launch options
+(D65), and the same place: `session.Config`.
+
+**`Config.Notify` is a pointer, and nil means all of them.** A config file
+written before this field existed decodes to nil. Had the zero struct been the
+answer, every player who upgraded would have silently lost the two
+notifications they already had, and nothing would have looked wrong. The tray
+applies the mirror image of the same rule: a `notify` object missing from
+`/api/state` means an older app server is answering, so the two old
+notifications are on and the three new ones are off — the behaviour that
+server actually had.
+
+**Every one is edge-triggered against the previous poll, and the first poll
+only establishes what is already true.** Level-triggering would fire every
+five seconds for as long as the condition held; announcing the first poll
+would greet a player who opened the app with one notification per room in the
+lobby and one per friend already online. Both are how somebody learns to
+ignore notifications, or to uninstall.
+
+**Three details that are not obvious:**
+
+- **A room is only remembered while it is joinable.** One that fills up and
+  empties again is a fresh chance to play, and saying so is the point.
+- **"A room opens" is suppressed while you are in a room.** Somebody sitting
+  in a lobby of their own is not shopping for another one.
+- **"The tunnel dropped" only fires while you are in a room**, and only on the
+  connected-to-disconnected edge. Outside a room there is nothing to lose, and
+  "not connected yet" is a different event from "dropped".
