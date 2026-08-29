@@ -251,6 +251,7 @@ there; this is the summary.
 | T23 settings, sign in, create account, terms (D61) | **done** — the owner's second mock, adopted; looked at, at 1440 and at 1366 |
 | T23 every change reaches the server (D62) | **done** — `scripts/ship.sh`, and the finish ritual names it |
 | T24 head admin appointed (D63) | **done** — `arman13m99`, named in the unit file, granted 2026-08-28 |
+| T25 the host picks a side too (D64) | **done** — the room address follows the host instead of sitting in slot 0 |
 
 **The interface was redesigned on 2026-08-25** at the owner's request: the
 old one was flat, grey and mostly empty space. What changed, beyond colour

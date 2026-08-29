@@ -57,13 +57,13 @@ func RoomSubnet(roomIndex int) (netip.Prefix, error) {
 	return netip.PrefixFrom(base, subnetBits), nil
 }
 
-// HostIP returns the address the room's host always occupies. Clients are
-// told this address directly, which is why Dota never needs LAN discovery.
-func HostIP(roomIndex int) (netip.Addr, error) {
-	return SlotIP(roomIndex, 0)
-}
-
-// SlotIP returns the address for a player slot. Slot 0 is the host.
+// SlotIP returns the address for a player slot.
+//
+// There used to be a HostIP helper beside this one, returning slot 0, because
+// the host was always in slot 0. The host now sits where they like (D64) and
+// the room tracks which seat that is, so a function whose name promises "the
+// host's address" from a room index alone would be stating a rule the room no
+// longer has. room.hostAddr asks the room instead.
 func SlotIP(roomIndex, slot int) (netip.Addr, error) {
 	if slot < 0 || slot >= PlayerSlots {
 		return netip.Addr{}, fmt.Errorf("%w: player slot %d", ErrSlotRange, slot)

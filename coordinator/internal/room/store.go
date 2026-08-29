@@ -327,7 +327,7 @@ func nonPlayingMembership(r *Room, seat int, kind SeatKind) (Membership, error) 
 	if err != nil {
 		return Membership{}, err
 	}
-	host, err := ipam.HostIP(r.Index)
+	host, err := hostAddr(r)
 	if err != nil {
 		return Membership{}, err
 	}
@@ -351,7 +351,7 @@ func membershipFor(r *Room, slot int, isHost bool) (Membership, error) {
 	if err != nil {
 		return Membership{}, err
 	}
-	host, err := ipam.HostIP(r.Index)
+	host, err := hostAddr(r)
 	if err != nil {
 		return Membership{}, err
 	}
@@ -368,6 +368,16 @@ func membershipFor(r *Room, slot int, isHost bool) (Membership, error) {
 		IsHost:    isHost,
 		Kind:      SeatPlayer,
 	}, nil
+}
+
+// hostAddr is the address every client in a room is told to connect to.
+//
+// It is the host's own virtual IP, derived from the seat the host is sitting
+// in - not a fixed slot-0 address (D64). This is the single change that lets
+// the host pick a side: everything else about a seat move already worked for
+// the nine other people in the room.
+func hostAddr(r *Room) (netip.Addr, error) {
+	return ipam.SlotIP(r.Index, r.HostSlot)
 }
 
 // newRoomID returns an identifier no room has held before.

@@ -159,9 +159,17 @@ seats revokes the ticket (D57): after a move the address the old ticket names
 is not theirs, and anti-spoof would drop everything they sent. The coordinator
 revokes on a successful move and the app reconnects in the same action.
 
-**The host is always slot 0**, for the room's whole life, which maps to the
-deterministic host address every client is told to connect to. Nobody moves
-into slot 0 and the host never moves out of it.
+**The room's address follows the host, not the other way round** (D64).
+`Room.HostSlot` is the seat the host is sitting in; every membership derives
+its `HostIP` from it, and `Move` maintains it. The host therefore picks a side
+like anybody else, slot 0 is an ordinary Radiant seat once they get up, and a
+host who crashed comes back to the seat they left rather than the lowest free
+one. Until 2026-08-29 the host was nailed to slot 0 because slot 0's address
+*was* the room's address, which made the person who opened a room to play Dire
+the only person who could not sit there.
+
+The one seat the host cannot take is a watching seat: the match runs on their
+machine, and `JoinObserver` refuses `HostID` before anything else.
 
 It was a /28 until 2026-08-24. Sixteen addresses held thirteen seats with
 every one spoken for, and the room is eighteen seats (D38), so the block

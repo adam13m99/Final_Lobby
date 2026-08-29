@@ -182,8 +182,19 @@ func TestKickedPlayerCannotSneakBackIntoAnotherSeat(t *testing.T) {
 func TestCannotHoldTwoSeatsAtOnce(t *testing.T) {
 	s := NewStore()
 	r, _, _ := s.Create("host", "test", when())
-	if _, err := s.JoinObserver(r.ID, Anyone("host"), when()); err != ErrAlreadyJoined {
-		t.Fatalf("playing host took an observer seat: %v", err)
+	if _, err := s.Join(r.ID, Anyone("p2"), when()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.JoinObserver(r.ID, Anyone("p2"), when()); err != ErrAlreadyJoined {
+		t.Fatalf("a seated player took an observer seat as well: %v", err)
+	}
+	if _, err := s.JoinAdmin(r.ID, "p2", when()); err != ErrAlreadyJoined {
+		t.Fatalf("a seated player took an admin seat as well: %v", err)
+	}
+	// The host is refused the gallery outright rather than for being seated
+	// (D64), which is a stronger rule: it holds while they are away too.
+	if _, err := s.JoinObserver(r.ID, Anyone("host"), when()); err != ErrHostCannotWatch {
+		t.Fatalf("the host took an observer seat: %v", err)
 	}
 	if _, err := s.JoinAdmin(r.ID, "host", when()); err != ErrAlreadyJoined {
 		t.Fatalf("playing host took an admin seat: %v", err)

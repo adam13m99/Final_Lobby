@@ -30,19 +30,24 @@ func TestRoomSubnetLayout(t *testing.T) {
 	}
 }
 
-func TestHostIPIsDeterministic(t *testing.T) {
-	got, err := ipam.HostIP(8)
+// Every seat's address is a pure function of the room and the seat, and it
+// has to stay one: clients are handed an address directly, which is the whole
+// reason Dota never needs LAN discovery. Which of these ten the host occupies
+// is the room's business now (D64), not this package's.
+func TestSlotAddressesAreDeterministic(t *testing.T) {
+	got, err := ipam.SlotIP(8, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got.String() != "10.87.1.2" {
-		t.Fatalf("HostIP(8) = %s, want 10.87.1.2", got)
+		t.Fatalf("SlotIP(8, 0) = %s, want 10.87.1.2", got)
 	}
-	// The host must equal slot 0. Clients are handed this address directly,
-	// which is the whole reason Dota never needs LAN discovery.
-	slot0, _ := ipam.SlotIP(8, 0)
-	if slot0 != got {
-		t.Fatalf("SlotIP(8,0) = %s, want %s", slot0, got)
+	last, err := ipam.SlotIP(8, ipam.PlayerSlots-1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if last.String() != "10.87.1.11" {
+		t.Fatalf("SlotIP(8, 9) = %s, want 10.87.1.11", last)
 	}
 }
 

@@ -306,16 +306,65 @@ func TestMovingOntoSomebodyElseIsRefused(t *testing.T) {
 	}
 }
 
-// Slot 0 belongs to the host for the room's whole life: the client, the relay
-// and the room list all read the host out of it.
-func TestNobodyMovesIntoOrOutOfTheHostSlot(t *testing.T) {
+// The host picks a side like everybody else (D64). They used to be nailed to
+// slot 0 because slot 0 was the address clients connected to; the address now
+// follows them, so the seat is theirs to choose.
+func TestTheHostMovesLikeAnybodyElse(t *testing.T) {
 	r := newRoom(t)
-	r.Join(room.Anyone("p2"), t0)
-	if err := r.Move("p2", 0); !errors.Is(err, room.ErrHostSlot) {
-		t.Fatalf("moving into slot 0: err = %v, want ErrHostSlot", err)
+	if _, err := r.Join(room.Anyone("p2"), t0); err != nil {
+		t.Fatal(err)
 	}
-	if err := r.Move("host-1", 4); !errors.Is(err, room.ErrHostSlot) {
-		t.Fatalf("the host moving out: err = %v, want ErrHostSlot", err)
+	if err := r.Move("host-1", 7); err != nil {
+		t.Fatalf("the host moving to Dire: %v", err)
+	}
+	if r.Slots[7] != "host-1" {
+		t.Errorf("slot 7 = %q, want the host", r.Slots[7])
+	}
+	if r.Slots[0] != "" {
+		t.Errorf("the host's old slot still holds %q", r.Slots[0])
+	}
+	if r.HostSlot != 7 {
+		t.Errorf("HostSlot = %d, want 7 - the address every client is told", r.HostSlot)
+	}
+	// And the seat they left is an ordinary seat now, not a reserved one.
+	if err := r.Move("p2", 0); err != nil {
+		t.Fatalf("taking the seat the host left: %v", err)
+	}
+	if r.HostSlot != 7 {
+		t.Errorf("somebody else's move changed HostSlot to %d", r.HostSlot)
+	}
+}
+
+// The one seat the host still cannot take. The match runs on their machine.
+func TestTheHostCannotWatchTheirOwnRoom(t *testing.T) {
+	r := newRoom(t)
+	if _, err := r.JoinObserver(room.Anyone("host-1"), t0); !errors.Is(err, room.ErrHostCannotWatch) {
+		t.Fatalf("err = %v, want ErrHostCannotWatch", err)
+	}
+}
+
+// A host who crashed comes back to the seat they were in, not to the lowest
+// free one - their address is derived from it, and in the meantime somebody
+// else may have taken the seat they started in.
+func TestAReturningHostReclaimsTheirOwnSeat(t *testing.T) {
+	r := newRoom(t)
+	if err := r.Move("host-1", 6); err != nil {
+		t.Fatal(err)
+	}
+	r.Join(room.Anyone("p2"), t0)
+	r.Leave("host-1", t0)
+	if r.HostGraceUntil.IsZero() {
+		t.Fatal("the host left and no grace timer started")
+	}
+	slot, err := r.Join(room.Anyone("host-1"), t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slot != 6 {
+		t.Errorf("the host came back to slot %d, want 6", slot)
+	}
+	if !r.HostGraceUntil.IsZero() {
+		t.Error("the host is back and the room is still counting down")
 	}
 }
 

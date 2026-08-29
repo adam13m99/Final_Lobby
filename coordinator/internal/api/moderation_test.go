@@ -241,23 +241,34 @@ func TestAnAdminChangesTheHost(t *testing.T) {
 		t.Fatalf("host = %v, want %s", view["host_id"], mateID)
 	}
 
-	// The new host takes the address every client was told to connect to, so
-	// they must come back with a fresh ticket rather than their old one.
+	// Nobody changes seat any more (D64): the address clients connect to
+	// follows the host, so the new host keeps the seat they were sitting in
+	// and their own virtual IP does not move.
 	rec, fresh := g.do(http.MethodPost, "/v1/rooms/"+roomID+"/connect", mate, map[string]any{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("reconnecting: %d", rec.Code)
 	}
-	if fresh["virtual_ip"] != hostIP {
-		t.Errorf("the new host is at %v, want the host address %s", fresh["virtual_ip"], hostIP)
+	if fresh["virtual_ip"] == hostIP {
+		t.Errorf("the new host was moved into the old host's seat at %s", hostIP)
 	}
 	if fresh["is_host"] != true {
 		t.Errorf("the new host is not marked as host: %v", fresh)
 	}
+	if fresh["host_ip"] != fresh["virtual_ip"] {
+		t.Errorf("the host is told to connect to %v while sitting at %v",
+			fresh["host_ip"], fresh["virtual_ip"])
+	}
 
-	// And the old host is still in the room, at the seat the new host left.
-	rec, _ = g.do(http.MethodPost, "/v1/rooms/"+roomID+"/connect", host, map[string]any{})
+	// And everybody else is now pointed at the new host's machine. This is the
+	// whole of the change: the address is a property of who is hosting, not of
+	// which chair they happen to be in.
+	rec, old := g.do(http.MethodPost, "/v1/rooms/"+roomID+"/connect", host, map[string]any{})
 	if rec.Code != http.StatusOK {
 		t.Errorf("the old host was thrown out: %d", rec.Code)
+	}
+	if old["host_ip"] != fresh["virtual_ip"] {
+		t.Errorf("the old host is still told to connect to %v, but the room is hosted at %v",
+			old["host_ip"], fresh["virtual_ip"])
 	}
 	_ = hostID
 }

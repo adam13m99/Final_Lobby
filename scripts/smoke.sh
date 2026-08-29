@@ -399,11 +399,32 @@ expect "a player can move to a free seat"         '"ok":true'    "$MOVED"
 SEATED=$(call GET "/api/state")
 expect "and the room says they are sitting there" "\"slot\":7" "$SEATED"
 
-HOSTSEAT=$(callb POST /api/rooms/slot '{"slot":0}')
-refuse "nobody may take the host's seat"          '"ok":true'    "$HOSTSEAT"
-
+# The host picks a side like anybody else (D64), and the address the room is
+# reached at follows them. This is the assertion that matters: after the move,
+# the other player must be pointed at where the host actually is, or Dota
+# connects to an empty address and nobody can tell why.
 HOSTMOVE=$(call POST /api/rooms/slot '{"slot":4}')
-refuse "and the host may not leave it"            '"ok":true'    "$HOSTMOVE"
+expect "the host can pick a side too"             '"ok":true'    "$HOSTMOVE"
+
+HOSTAT=$(call GET "/api/state")
+expect "and the room seats them there"            '"slot":4'     "$HOSTAT"
+
+HOSTIP=$(printf '%s' "$HOSTAT" | grep -o '"host_ip":"[^"]*"' | head -1 | cut -d'"' -f4)
+MATEVIEW=$(callb GET "/api/state")
+MATEHOST=$(printf '%s' "$MATEVIEW" | grep -o '"host_ip":"[^"]*"' | head -1 | cut -d'"' -f4)
+if [ -n "$HOSTIP" ] && [ "$HOSTIP" = "$MATEHOST" ]; then
+  ok "and everybody is told the host's new address"
+else
+  bad "the host moved to $HOSTIP but the other player is still sent to $MATEHOST"
+fi
+
+# The seat the host got up from is an ordinary seat now, not a reserved one.
+FREED=$(callb POST /api/rooms/slot '{"slot":0}')
+expect "the seat the host left can be taken"      '"ok":true'    "$FREED"
+
+# The one seat the host still cannot have: the match runs on their machine.
+HOSTWATCH=$(call POST /api/rooms/spectate "{\"room_id\":\"$ROOM_ID\"}")
+refuse "the host cannot watch their own room"     '"ok":true'    "$HOSTWATCH"
 
 OFFEND=$(callb POST /api/rooms/slot '{"slot":10}')
 refuse "there is no eleventh seat"                '"ok":true'    "$OFFEND"
@@ -415,6 +436,10 @@ refuse "there is no eleventh seat"                '"ok":true'    "$OFFEND"
 # their playing seat with them when they go to watch: they get up first.
 STANDUP=$(callb POST /api/rooms/leave '{}')
 expect "a player gets up from their playing seat" '"ok":true'    "$STANDUP"
+# Joining, watching and rejoining all draw on the same bucket, and a refusal
+# spends a token exactly as an acceptance does. Let it refill, or the next
+# line fails as "going too fast" and reads like a broken feature.
+sleep 4
 WATCH=$(callb POST /api/rooms/spectate "{\"room_id\":\"$ROOM_ID\"}")
 expect "a player can take a seat to watch from"   '"ok":true'    "$WATCH"
 

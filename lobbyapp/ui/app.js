@@ -805,15 +805,20 @@ function watchColumn(r, seated, canKick) {
 // Which slot you sit in is which team you are on, so this is how a player
 // picks a side. The refusals mirror the coordinator's exactly, because a card
 // that invites a click and then shows an error is worse than one that does
-// not invite it: slot 0 is the host's for the room's whole life, the host
-// does not move out of it, and a locked room is a match already running.
+// not invite it.
+//
+// The host is a player here like anybody else (D64). They used to be refused
+// every seat on the screen, which meant the one person who had opened a room
+// to play Dire was the one person who could not sit there. The address the
+// room is reached at follows them now, so the ten playing seats are theirs to
+// choose from - including the one they started in, which is an ordinary seat
+// once they leave it.
 function canTakeSeat(index, spectator) {
   if (!state.room || state.room.status === "locked_in_game") return false;
-  // The host runs the match on their own machine. They cannot go and watch
-  // it from a seat, and slot 0 is theirs for the room's whole life.
-  if (state.is_host) return false;
-  if (spectator) return !inSeat(true);
-  if (index === 0) return false;
+  // The one seat still refused, and the only one: the match runs on the
+  // host's machine, so they cannot go and watch it from the gallery. The
+  // coordinator refuses this too - it is a rule, not a courtesy.
+  if (spectator) return !state.is_host && !inSeat(true);
   return inSeat(false);
 }
 

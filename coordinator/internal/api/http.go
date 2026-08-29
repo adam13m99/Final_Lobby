@@ -797,7 +797,7 @@ func statusFor(err error) int {
 		errors.Is(err, room.ErrNotMember):
 		return http.StatusNotFound
 	case errors.Is(err, room.ErrNotHost),
-		errors.Is(err, room.ErrHostSlot):
+		errors.Is(err, room.ErrHostCannotWatch):
 		return http.StatusForbidden
 	case errors.Is(err, room.ErrRoomLocked),
 		errors.Is(err, room.ErrKickBlocked),

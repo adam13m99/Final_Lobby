@@ -84,7 +84,11 @@ var (
 	ErrNoAdminSeat    = errors.New("room: no free admin seat")
 	ErrSlotTaken      = errors.New("room: that slot is taken")
 	ErrNoSuchSlot     = errors.New("room: there is no such slot")
-	ErrHostSlot       = errors.New("room: the host sits in the first slot")
+	// ErrHostCannotWatch guards the one seat the host still cannot take.
+	// They may sit anywhere among the ten playing slots (D64), but the match
+	// runs on their machine, so they cannot go and watch it from the
+	// gallery - the room would be hosted by somebody who is not playing.
+	ErrHostCannotWatch = errors.New("room: the host cannot watch their own room")
 	// ErrNotMemberOfRoom is returned when somebody is asked to take a role in
 	// a room they are not playing in.
 	ErrNotMemberOfRoom = errors.New("room: they are not playing in that room")
@@ -135,6 +139,17 @@ type Room struct {
 	Observers [ipam.ObserverSlots]string
 	Admins    [ipam.AdminSlots]string
 
+	// HostSlot is which playing slot the host's PC is sitting in, and it is
+	// the room's authority on the address every other client is told to
+	// connect to (D64). It used to be the constant zero, which is why the
+	// host was the one person in a room who could not pick a side.
+	//
+	// It is kept here rather than looked up from Slots because the host is
+	// not in Slots while the grace timer runs, and the room still has to be
+	// able to say where they were: a host who crashed and comes back has to
+	// come back to the same address.
+	HostSlot int
+
 	KickedUntil map[string]time.Time
 	// KickCount is how many times each player has been kicked from *this*
 	// room. It drives the escalating block in D39, and it has to outlive a
@@ -145,8 +160,9 @@ type Room struct {
 	HostGraceUntil time.Time
 }
 
-// NewRoom creates a room with the host seated in slot 0, which maps to the
-// deterministic host virtual IP that clients are told to connect to.
+// NewRoom creates a room with the host seated in the first slot. Where they
+// go afterwards is up to them (D64); HostSlot follows them, and the address
+// clients are told follows HostSlot.
 func NewRoom(id string, index int, hostID string, now time.Time) *Room {
 	r := &Room{
 		ID:          id,
@@ -201,11 +217,20 @@ func (r *Room) Join(who Applicant, now time.Time) (int, error) {
 		}
 	}
 
+	// A host who crashed comes back to the seat they left, not to the lowest
+	// free one. Their address is derived from it, and somebody else may well
+	// have taken the seat they used to be in while they were gone.
+	if isHostReturning && r.Slots[r.HostSlot] == "" {
+		r.Slots[r.HostSlot] = playerID
+		r.HostGraceUntil = time.Time{}
+		return r.HostSlot, nil
+	}
 	for i := range r.Slots {
 		if r.Slots[i] == "" {
 			r.Slots[i] = playerID
 			if isHostReturning {
 				r.HostGraceUntil = time.Time{}
+				r.HostSlot = i
 			}
 			return i, nil
 		}
@@ -220,6 +245,16 @@ func (r *Room) Join(who Applicant, now time.Time) (int, error) {
 // and griefing start. An admin is a different case - see JoinAdmin.
 func (r *Room) JoinObserver(who Applicant, now time.Time) (int, error) {
 	playerID := who.ID
+	// First, and before the seated-already check, so the answer names the real
+	// reason. Said here rather than only in the interface: the host may now sit
+	// anywhere among the playing slots (D64), and the button that used to be
+	// refused on the client for every seat is refused for this one alone - so
+	// the refusal has to exist on the server or it does not exist. It holds
+	// during the grace window too, when the host is in no seat at all and
+	// could otherwise come back to watch the match running on their own PC.
+	if playerID == r.HostID {
+		return 0, ErrHostCannotWatch
+	}
 	if err := r.admissible(playerID, now); err != nil {
 		return 0, err
 	}
@@ -321,11 +356,16 @@ func (r *Room) SlotOf(playerID string) (int, SeatKind, bool) {
 // a slot, and it is the one thing every player in a room wants to do that
 // previously required leaving and rejoining until the numbers came out right.
 //
-// The rules are the boring ones. A locked room is a match in progress, and a
-// player who changes team halfway through it is a player on the wrong team in
-// Dota. Slot 0 belongs to the host for the room's whole life, so nobody moves
-// into it and the host does not move out - the client, the relay and the room
-// list all read the host out of slot 0.
+// **The host moves like anybody else** (D64). They used to be nailed to slot
+// 0, because slot 0 was the address every client had been told to connect to
+// - so the one person who could not choose a side was the person who had
+// opened the room to play a particular one. The address now follows the host
+// rather than the other way round: HostSlot says where they are, and the
+// membership every client reads is derived from it.
+//
+// The rest of the rules are the boring ones. A locked room is a match in
+// progress, and a player who changes team halfway through it is a player on
+// the wrong team in Dota.
 func (r *Room) Move(playerID string, slot int) error {
 	if r.Status == StatusClosed {
 		return ErrRoomClosed
@@ -335,9 +375,6 @@ func (r *Room) Move(playerID string, slot int) error {
 	}
 	if slot < 0 || slot >= len(r.Slots) {
 		return ErrNoSuchSlot
-	}
-	if slot == 0 || playerID == r.HostID {
-		return ErrHostSlot
 	}
 	from, kind, seated := r.SlotOf(playerID)
 	if !seated || kind != SeatPlayer {
@@ -351,6 +388,9 @@ func (r *Room) Move(playerID string, slot int) error {
 	}
 	r.Slots[from] = ""
 	r.Slots[slot] = playerID
+	if playerID == r.HostID {
+		r.HostSlot = slot
+	}
 	return nil
 }
 
@@ -423,11 +463,11 @@ func (r *Room) Tick(now time.Time) {
 // What this saves is the room, the people in it, and the arrangement they
 // made to play together.
 //
-// Mechanically it is a swap. The host always occupies slot 0, because slot 0
-// is the address every client was told to connect to (ipam.HostIP). So the new
-// host takes slot 0 and whoever was sitting there takes theirs. Both change
-// address, so both need a fresh ticket - the caller is responsible for
-// revoking the old ones, which is why the swapped IDs come back.
+// Nobody changes seat. The address clients are told to connect to follows
+// the host (D64), so handing the room to the person in slot 6 makes slot 6
+// the host address - which means nobody's own virtual IP changes, and no
+// ticket has to be revoked. The swap this used to do also silently moved two
+// people between teams, which was never the point of transferring a room.
 func (r *Room) SetHost(newHostID string) (moved []string, err error) {
 	if r.Status == StatusClosed {
 		return nil, ErrRoomClosed
@@ -443,16 +483,10 @@ func (r *Room) SetHost(newHostID string) (moved []string, err error) {
 		return nil, ErrNotMemberOfRoom
 	}
 
-	previous := r.Slots[0]
-	r.Slots[0], r.Slots[slot] = newHostID, previous
 	r.HostID = newHostID
+	r.HostSlot = slot
 
 	// The room has a host again, so it is no longer counting down to closure.
 	r.HostGraceUntil = time.Time{}
-
-	moved = []string{newHostID}
-	if previous != "" && previous != newHostID {
-		moved = append(moved, previous)
-	}
-	return moved, nil
+	return nil, nil
 }

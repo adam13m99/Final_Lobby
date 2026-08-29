@@ -253,6 +253,12 @@ never everything that could be done.
 - **`canTakeSeat` mirrors the coordinator's refusals exactly.** A card that
   invites a click and then shows an error is worse than one that does not
   invite it.
+- **The host picks a side like anybody else** (D64). They used to be refused
+  every seat on the screen, which made the person who opened a room to play
+  Dire the only person who could not sit there. The one seat still refused is
+  a watching seat — the match runs on their machine — and the coordinator
+  refuses that too, because relaxing a client guard over an unguarded server
+  path is how this project's recurring bug happens in reverse.
 - **Five watching seats sit below the two teams** (D59) and are taken the
   same way. The admins' three seats are a separate range and are not drawn —
   `Member.Seat` distinguishes them, and dropping that field would put a

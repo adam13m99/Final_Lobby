@@ -1456,3 +1456,57 @@ because somebody was renamed. Anyone can read the answer out of the journal:
 
 `arman13m99` has held the role since 2026-08-28 23:24 server time. D47 is
 otherwise unchanged: there is still no self-service path to it.
+
+---
+
+## D64 — The address follows the host, so the host can pick a side
+
+**2026-08-29 (T25).** The owner asked that the host be able to switch positions
+in a room like everybody else. They were the only person who could not.
+
+**Why they could not.** Slot 0 was the host's for the room's whole life,
+because slot 0's virtual IP *was* the room's address: `ipam.HostIP(index)`
+returned `SlotIP(index, 0)`, every joiner was handed that constant, and Dota
+was launched with `+connect` pointing at it. Moving the host would have moved
+their address out from under nine people mid-lobby. So the one person who had
+opened a room in order to play Dire was the one person who could not sit in
+it — and could not be moved there by anyone either.
+
+**The fix is one sentence: the address is a property of who is hosting, not of
+which chair they are in.** `Room.HostSlot` says where the host sits, every
+membership derives `HostIP` from it, and `Move` maintains it. `ipam.HostIP` is
+deleted rather than left as a helper whose name states a rule the room no
+longer has.
+
+Everything else about a seat move already worked, for the nine other people in
+the room: the coordinator revokes the mover's ticket because their virtual IP
+came from their slot, and the app brings the tunnel back up as part of the
+move rather than leaving the player to work it out. The host now uses the same
+path. Nobody else's address changes when the host moves, so nobody else needs
+a new ticket — they re-read `host_ip` on the next poll, and a room cannot be
+locked and moved at the same time, so no match can be running when it happens.
+
+**Three things fell out of it.**
+
+**`SetHost` no longer swaps.** Transferring a room used to move the new host
+into slot 0 and whoever was there into the new host's seat, because slot 0 was
+the address. That silently moved two people between teams, which was never
+what transferring a room meant. Now the new host keeps their seat, `HostSlot`
+follows them, and no ticket is revoked at all.
+
+**A returning host reclaims the seat they left**, not the lowest free one.
+`Join` used to hand out the first empty slot, which was slot 0 for a host
+coming back within the grace window — and would have been the wrong slot the
+moment somebody else took it while they were away. That was a latent bug
+before this change: a joiner filling slot 0 during the grace window would have
+pointed the whole room at the wrong machine.
+
+**The host cannot watch their own room**, and that is now enforced on the
+server. It used to be true by accident: the client refused the host *every*
+seat, so the observer gallery was covered by the same blanket. Relaxing the
+playing seats left the gallery exposed, so `JoinObserver` refuses `HostID`
+outright — before the already-seated check, so it holds during the grace
+window too, and so the error names the real reason.
+
+Slot 0 is an ordinary Radiant seat now. Anybody may take it once the host has
+got up.

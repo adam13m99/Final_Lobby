@@ -263,3 +263,47 @@ func roomOf(t *testing.T, s *room.Store, id string) room.Room {
 	}
 	return r
 }
+
+// The point of D64, stated as the thing that would break if it were wrong: a
+// host who picks a side takes the room's address with them, and everybody
+// else is told where to connect without having to know that anything moved.
+func TestTheHostTakesTheRoomAddressWithThem(t *testing.T) {
+	s := room.NewStore()
+	_, hostM, _ := s.Create("h1", "A", t0)
+	mate, err := s.Join(hostM.RoomID, room.Anyone("p2"), t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Move(hostM.RoomID, "h1", 6); err != nil {
+		t.Fatalf("the host moving to Dire: %v", err)
+	}
+
+	moved, err := s.Membership(hostM.RoomID, "h1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if moved.Slot != 6 {
+		t.Fatalf("host slot = %d, want 6", moved.Slot)
+	}
+	if moved.VirtualIP == hostM.VirtualIP {
+		t.Fatalf("the host changed seat and kept address %s", moved.VirtualIP)
+	}
+	if moved.HostIP != moved.VirtualIP {
+		t.Errorf("the host is told to connect to %s while sitting at %s",
+			moved.HostIP, moved.VirtualIP)
+	}
+
+	// And the person who was already in the room, who did nothing at all.
+	again, err := s.Membership(hostM.RoomID, "p2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.HostIP != moved.VirtualIP {
+		t.Errorf("the other player is still pointed at %s, but the host is at %s",
+			again.HostIP, moved.VirtualIP)
+	}
+	if again.VirtualIP != mate.VirtualIP {
+		t.Errorf("somebody else's move changed this player's own address from %s to %s",
+			mate.VirtualIP, again.VirtualIP)
+	}
+}
