@@ -426,5 +426,9 @@ WIDE=1366 TALL=768 bash scripts/preview.sh small
 10. **Never draw a control for something that does not exist.** A toggle that
     does nothing teaches somebody the product lies, and they will not find out
     which half was true.
-11. **Never leave a change on this PC.** `./scripts/ship.sh` after the commit
+11. **Never write a settings field from a poll while somebody is typing in
+    it.** State arrives every couple of seconds; a field rewritten mid-word is
+    a field that cannot be edited. `#set-opts` is the pattern: write it only
+    when `document.activeElement` is something else.
+12. **Never leave a change on this PC.** `./scripts/ship.sh` after the commit
     (D62). The owner tests on the live product.

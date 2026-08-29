@@ -22,9 +22,10 @@ import (
 
 	"lobbybaz/netservice/internal/adapter"
 	"lobbybaz/netservice/internal/dota"
-	"lobbybaz/protocol/ipc"
 	"lobbybaz/netservice/internal/tunnel"
 	"lobbybaz/netservice/internal/watchdog"
+	"lobbybaz/protocol/ipc"
+	"lobbybaz/protocol/launch"
 )
 
 // adapterName is the interface the player sees in their network settings.
@@ -256,6 +257,17 @@ func (a *Agent) launch(req ipc.Request) ipc.Response {
 	// -condebug makes Dota write console.log, which is how readiness is
 	// detected.
 	args = append(args, "-condebug")
+
+	// The player's own options go on last, so that nothing they type can
+	// displace an argument LobbyBaz needs, and they are parsed here rather
+	// than trusted from the app: the app validates the same text when it is
+	// saved, but this is the process boundary and it does its own checking.
+	extra, err := launch.Options(req.Options)
+	if err != nil {
+		return ipc.Response{Err: err.Error()}
+	}
+	args = append(args, extra...)
+
 	if err := dota.ValidateArgs(args); err != nil {
 		return ipc.Response{Err: err.Error()}
 	}

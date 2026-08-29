@@ -362,6 +362,12 @@ are `status`, `connect`, `disconnect`, `launch`, `ping`.
   tunnel down when it is revoked. **It lives in the service, not the app**, so
   a closed or tampered-with interface cannot keep a revoked player connected.
 - `internal/dota` — finds Steam, finds Dota, launches it with the right flags.
+  **Its allowlist is two-sided (D65).** Console commands — the `+` kind — are
+  a closed list, because `+connect`, `+map`, `gamemode` and `+jointeam` are
+  how a seat becomes a slot in a match. Engine flags — the `-` kind — accept
+  anything `protocol/launch.IsPlayerFlag` accepts, because the player types
+  their own and no useful list of them exists. The player's text is parsed
+  here as well as in the app: this is the process boundary.
 - `internal/firewall` — the one rule the adapter needs.
 
 ## Running it
@@ -394,6 +400,10 @@ before it finishes.
 4. **Never make a goroutine per packet.**
 5. **Never add a reliable-ordered transport.**
 6. **Never trust a `player_id` in a body when a session is present.**
-7. **Never commit secrets.** `github_token_admin.txt` and
+7. **Never let a player's text reach a `+` argument.** `protocol/launch`
+   refuses those and `dota.ValidateArgs` refuses them again. A player who
+   could type `+connect` could point their own client somewhere else and then
+   report the room as broken (D65).
+8. **Never commit secrets.** `github_token_admin.txt` and
    `mobinhost_server_1.txt` are gitignored; the download key and API token
    live only on the server. Verify before every commit.

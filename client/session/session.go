@@ -24,6 +24,12 @@ type Config struct {
 	Nick        string `json:"nick"`
 	MMR         int    `json:"mmr,omitempty"`
 
+	// LaunchOptions is the player's own extra Dota 2 command line, typed in
+	// Settings. It belongs to this installation and never leaves it: it is
+	// about the machine's graphics and startup, not about who the player is,
+	// so the coordinator has no use for it and is not told.
+	LaunchOptions string `json:"launch_options,omitempty"`
+
 	// Session is the coordinator session this installation is signed in
 	// with, when the server has accounts (D37, D53). It is what makes the
 	// friends list and everything else account-scoped work, and it survives

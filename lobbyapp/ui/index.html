@@ -378,6 +378,21 @@
           <div class="pathbox" id="fact-dota"></div>
         </div>
         <p class="muted small" id="set-gamenote"></p>
+
+        <!-- The player's own launch options. LobbyBaz builds the arguments
+             that decide which match you join and on whose side; this is the
+             rest of the command line - the graphics and startup knobs people
+             already have in Steam. Engine flags only, and the service checks
+             them again before anything runs (D65). -->
+        <div class="field">
+          <label for="set-opts" data-t="settings.opts"></label>
+          <input id="set-opts" type="text" spellcheck="false" autocomplete="off"
+                 data-t-placeholder="settings.opts.eg" maxlength="200">
+        </div>
+        <div class="inline cardfoot">
+          <button class="primary" id="btn-saveopts" data-t="settings.opts.save"></button>
+          <span class="muted small" id="set-optsnote" data-t="settings.opts.note"></span>
+        </div>
       </div>
     </div>
 

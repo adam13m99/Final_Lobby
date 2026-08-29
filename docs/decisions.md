@@ -1510,3 +1510,54 @@ window too, and so the error names the real reason.
 
 Slot 0 is an ordinary Radiant seat now. Anybody may take it once the host has
 got up.
+
+---
+
+## D65 — a player may type their own launch options; the plus space stays ours
+
+**2026-08-29.** The owner was shown three proposals the redesign mock had
+drawn but the product did not have, and answered them one by one. This is the
+first: *"1- ... Want it? yes iw want it"*.
+
+Every Dota player has a line of launch options they carry between machines —
+`-novid` to skip the intro, `-high` for process priority, `-nod3d9ex`,
+`-language english`, a window size. LobbyBaz builds the command line itself,
+so before today that line had nowhere to go, and the answer "you cannot use
+your own settings here" is a reason to keep using something else.
+
+The risk is real and worth naming, because it decides the shape of the rule. A
+Dota command line has two halves:
+
+- **Console commands, beginning with `+`.** `+connect` names the server,
+  `+map` and `gamemode` choose the match, `+jointeam` chooses the side,
+  `+sv_lan` decides whether Valve is involved at all. These *are* LobbyBaz:
+  they are how a seat in a room becomes a slot in a game.
+- **Engine flags, beginning with `-`.** These turn knobs in the player's own
+  client. None of them names a server, a map or a team.
+
+**So the plus half is a closed list and the hyphen half is open.** A player's
+text is parsed by `protocol/launch`: every token must be a well-formed engine
+flag (one hyphen, then lowercase letters, digits or underscores, at most 24
+characters) or a plain value belonging to the flag before it. A `+` token is
+refused outright, with a message that says why rather than "invalid input". So
+is a first token that is not a flag, because then the player has typed
+something they did not mean. Two hundred characters, twenty-four words.
+
+**The rule lives in `protocol/` because both ends apply it.** The app checks
+the text when it is saved, so the mistake is answered beside the field the
+player is looking at rather than four clicks later when the match will not
+start. The service checks it again in `dota.ValidateArgs`, because that is the
+process boundary and it does not trust the app. Two copies of a rule like this
+drift, and the half that drifts is always the one nobody is testing.
+
+**The options go on the command line last**, after `-condebug`, so nothing a
+player types can displace an argument the room needs.
+
+**They are stored in the installation's own session file and never sent to the
+coordinator.** They describe a graphics card, not a person. The server has no
+use for them and is not told.
+
+`ValidateArgs` is weaker than it was for hyphen flags, deliberately: it now
+accepts any token `launch.IsPlayerFlag` accepts rather than a list of nine. No
+useful list of Dota engine flags exists to keep, and keeping a bad one would
+mean rejecting the working setting somebody has used for a decade.

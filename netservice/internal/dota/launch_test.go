@@ -217,3 +217,26 @@ func TestServerPortIsReadFromTheLogNotAssumed(t *testing.T) {
 		t.Fatalf("port = %d, want 27016 - the port must come from the log", port)
 	}
 }
+
+// The two halves of a command line are gated differently on purpose: a
+// player's own engine flags are open-ended, console commands are not. These
+// two tests are that rule, from the side that enforces it (D65).
+func TestAcceptsAPlayersOwnEngineFlags(t *testing.T) {
+	args := []string{"+name", "arman", "+sv_lan", "1", "-condebug",
+		"-novid", "-high", "-nod3d9ex", "-language", "english"}
+	if err := dota.ValidateArgs(args); err != nil {
+		t.Fatalf("ValidateArgs rejected ordinary player flags: %v", err)
+	}
+}
+
+func TestStillRejectsConsoleCommandsAmongPlayerFlags(t *testing.T) {
+	args := []string{"+name", "arman", "-novid", "+connect", "10.87.0.2:27015"}
+	// +connect is on the allowlist, because we build it ourselves.
+	if err := dota.ValidateArgs(args); err != nil {
+		t.Fatalf("ValidateArgs = %v, want nil", err)
+	}
+	args = []string{"+name", "arman", "-novid", "+exec", "evil.cfg"}
+	if err := dota.ValidateArgs(args); !errors.Is(err, dota.ErrBadArg) {
+		t.Fatalf("err = %v, want ErrBadArg for +exec beside a player flag", err)
+	}
+}

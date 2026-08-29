@@ -1419,6 +1419,12 @@ function renderSettings(s) {
     : s.dota_path ? "settings.game.found" : "settings.game.missing");
 
   $("fact-version").textContent = t("settings.version", { v: s.version || t("status.dash") });
+
+  // The field is only written from the server's copy when nobody is typing
+  // into it. A poll lands every couple of seconds, and a poll that rewrites a
+  // half-typed line is how a settings field ends up impossible to edit.
+  const opts = $("set-opts");
+  if (document.activeElement !== opts) opts.value = s.launch_options || "";
 }
 
 // ----------------------------------------------------------- diagnostics
@@ -2324,6 +2330,19 @@ $("btn-signout").onclick = () => $("p-signout").onclick();
 // It is the third door onto the same text when the terms have moved.
 $("btn-showterms").onclick = () =>
   openTerms(state.signed_in && state.terms_accepted === false ? "accept" : "read");
+
+// Launch options. The refusal is the useful half: the app parses the text by
+// the same rules the service does, so a typo is answered here, beside the
+// field, and not four clicks later when the match will not start.
+$("btn-saveopts").onclick = () => act(async () => {
+  await api("/api/launchoptions", { options: $("set-opts").value });
+  $("set-optsnote").textContent = t("settings.opts.saved");
+  $("set-optsnote").classList.add("done");
+});
+$("set-opts").oninput = () => {
+  $("set-optsnote").textContent = t("settings.opts.note");
+  $("set-optsnote").classList.remove("done");
+};
 
 // ----------------------------------------------------------------- poll
 

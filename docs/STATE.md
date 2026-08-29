@@ -252,6 +252,7 @@ there; this is the summary.
 | T23 every change reaches the server (D62) | **done** — `scripts/ship.sh`, and the finish ritual names it |
 | T24 head admin appointed (D63) | **done** — `arman13m99`, named in the unit file, granted 2026-08-28 |
 | T25 the host picks a side too (D64) | **done** — the room address follows the host instead of sitting in slot 0 |
+| T26 a player's own launch options (D65) | **done** — engine flags accepted, console commands refused at both ends |
 
 **The interface was redesigned on 2026-08-25** at the owner's request: the
 old one was flat, grey and mostly empty space. What changed, beyond colour
@@ -510,6 +511,21 @@ a room and a Watch button on a running match are not, and will not be.
 `bash scripts/preview.sh <name>` photographs all of it; `SHOTS` may be set to
 a JSON array of `[name, script]` pairs to photograph something else, and
 `WIDE`/`TALL` change the window size.
+
+## Roadmap — wanted, not built
+
+Things the owner has said yes to that are not being built now. Each is here
+because it was decided, not because it was suggested; nothing goes on this
+list without an answer from them.
+
+- **Voice chat.** Asked for on 2026-08-29, answered *"yes i want it on
+  roadmap, but not built instantly"*. Push-to-talk, an input level meter and a
+  device picker, as the redesign mock drew them. There is no audio in
+  LobbyBaz at all today, so this is a subsystem and not a screen: capture and
+  playback on Windows, an Opus codec, mixing, and a decision about whether
+  voice rides the existing room tunnel — where it would compete with the game
+  for the same domestic uplink — or a second path. It needs its own brainstorm
+  and its own spec before any of it is planned.
 
 ## Open questions
 

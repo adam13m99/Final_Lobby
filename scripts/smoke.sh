@@ -194,6 +194,30 @@ expect "the room is visible to a stranger"         'Smoke Room'    "$SYNC"
 
 
 say ""
+say "=== a player's own launch options ==="
+# The parser lives in protocol/launch and both ends use it. This proves the
+# app's half: the field accepts what Dota players actually type, refuses the
+# console commands LobbyBaz sets itself, and the answer survives a poll (D65).
+OPTS=$(call POST /api/launchoptions '{"options":"-novid -high -language english"}')
+expect "ordinary engine flags are accepted"        '"ok":true'     "$OPTS"
+
+STATE=$(call GET "/api/state")
+expect "and state carries them back"  '"launch_options":"-novid -high -language english"' "$STATE"
+
+BADOPT=$(call POST /api/launchoptions '{"options":"-novid +exec evil.cfg"}')
+refuse "a console command among them is refused"   '"ok":true'     "$BADOPT"
+expect "and says why, in words"                    'console command' "$BADOPT"
+
+NOTFLAG=$(call POST /api/launchoptions '{"options":"+connect 1.2.3.4:27015"}')
+refuse "so is one on its own"                      '"ok":true'     "$NOTFLAG"
+
+STATE=$(call GET "/api/state")
+expect "and neither overwrote the good one" '"launch_options":"-novid -high -language english"' "$STATE"
+
+EMPTYOPT=$(call POST /api/launchoptions '{"options":""}')
+expect "and they can be cleared again"             '"ok":true'     "$EMPTYOPT"
+
+say ""
 say "=== what the page actually draws ==="
 # Everything above this point proves the HTTP layer. None of it opens the
 # page, and a single stray brace in app.js gives the player a blank window

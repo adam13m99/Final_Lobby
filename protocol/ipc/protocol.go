@@ -37,6 +37,12 @@ type Request struct {
 	GameMode int    `json:"game_mode,omitempty"`
 	Team     string `json:"team,omitempty"`
 	HostIP   string `json:"host_ip,omitempty"`
+	// Options is the player's own extra Dota command line, exactly as they
+	// typed it into Settings. It travels as text rather than as a parsed
+	// list so that the service does its own parsing: the app checking it is
+	// a courtesy to the person typing, not a guarantee to the process.
+	// protocol/launch holds the one set of rules both ends apply.
+	Options string `json:"options,omitempty"`
 }
 
 // Supported operations.

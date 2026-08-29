@@ -15,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"lobbybaz/protocol/launch"
 )
 
 var (
@@ -160,6 +162,16 @@ func BuildClientArgs(nick string, hostIP netip.Addr, team string) ([]string, err
 // ValidateArgs re-checks a full argument list before it reaches the process.
 // The builders above already produce safe lists; this is the second gate, so
 // that a future caller assembling arguments by hand cannot slip past.
+//
+// The two halves of a Dota command line are gated differently, and the
+// difference is the whole point. Console commands - the "+" kind - are a
+// closed list, because that is where +connect, +map and +jointeam live and
+// those decide which match a player joins and on whose side. Engine flags -
+// the "-" kind - are open to anything protocol/launch.IsPlayerFlag will
+// accept, because a player is allowed to type their own (-novid, -high,
+// -nod3d9ex) and no useful list of them exists to keep. A flag of that shape
+// can turn a knob in the player's own client; it cannot name a server, a map
+// or a team.
 func ValidateArgs(args []string) error {
 	allowed := map[string]bool{
 		"+name": true, "+connect": true, "+sv_lan": true, "+map": true,
@@ -167,6 +179,9 @@ func ValidateArgs(args []string) error {
 		"-enableconsole": true, "-condebug": true,
 	}
 	for _, a := range args {
+		if strings.HasPrefix(a, "-") && launch.IsPlayerFlag(a) {
+			continue
+		}
 		if !strings.HasPrefix(a, "+") && !strings.HasPrefix(a, "-") && a != "gamemode" {
 			continue // a value, already checked with its key
 		}

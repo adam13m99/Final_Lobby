@@ -19,6 +19,7 @@ import (
 	"lobbybaz/client/lobby"
 	"lobbybaz/client/session"
 	"lobbybaz/protocol/ipc"
+	"lobbybaz/protocol/launch"
 )
 
 // chatKeep is how many messages the app holds for the page to draw. The
@@ -117,6 +118,7 @@ func (s *server) routes() http.Handler {
 
 	mux.HandleFunc("GET /api/state", s.guard(s.state))
 	mux.HandleFunc("POST /api/profile", s.guard(s.saveProfile))
+	mux.HandleFunc("POST /api/launchoptions", s.guard(s.saveLaunchOptions))
 	mux.HandleFunc("POST /api/chat", s.guard(s.postChat))
 	mux.HandleFunc("POST /api/rooms/create", s.guard(s.createRoom))
 	mux.HandleFunc("POST /api/rooms/join", s.guard(s.joinRoom))
@@ -284,6 +286,8 @@ func (s *server) state(w http.ResponseWriter, r *http.Request) {
 		"is_host":   cfg.IsHost,
 		"spectator": cfg.IsSpectator,
 		"host_ip":   cfg.HostIP,
+
+		"launch_options": cfg.LaunchOptions,
 	}
 	if cfg.VirtualIP != "" {
 		out["virtual_ip"] = cfg.VirtualIP
@@ -472,6 +476,31 @@ func (s *server) saveProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "profile": p})
+}
+
+// saveLaunchOptions stores the player's own extra Dota command line.
+//
+// The text is parsed here so the mistake is caught while they are looking at
+// the field, and stored raw rather than as a parsed list, because the service
+// parses it again for itself before anything reaches a process. This side is
+// a courtesy; the far side is the gate (D65).
+func (s *server) saveLaunchOptions(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Options string `json:"options"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	opts := strings.TrimSpace(body.Options)
+	if _, err := launch.Options(opts); err != nil {
+		fail(w, err.Error())
+		return
+	}
+	if err := s.update_(func(c *session.Config) { c.LaunchOptions = opts }); err != nil {
+		fail(w, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "launch_options": opts})
 }
 
 // --- chat ---------------------------------------------------------------
@@ -891,7 +920,8 @@ func (s *server) play(w http.ResponseWriter, r *http.Request) {
 		body.Team = "good"
 	}
 
-	req := ipc.Request{Op: ipc.OpLaunch, Nick: cfg.Nick, GameMode: body.Mode, Team: body.Team}
+	req := ipc.Request{Op: ipc.OpLaunch, Nick: cfg.Nick, GameMode: body.Mode, Team: body.Team,
+		Options: cfg.LaunchOptions}
 	if cfg.IsHost {
 		req.Role = "host"
 	} else {
