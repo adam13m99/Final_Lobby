@@ -757,11 +757,11 @@ func (s *Server) moveSlot(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, statusFor(err), err.Error())
 		return
 	}
-	// A player's virtual IP is derived from their slot, so the ticket they are
-	// holding now names an address that is no longer theirs - and the relay's
-	// anti-spoof check would drop everything they sent. Revoking here forces
-	// the client to ask for a ticket that matches where they now sit.
-	s.tickets.RevokePlayerRoom(body.PlayerID, id)
+	// Nothing is revoked here any more (D74). A player's address belongs to
+	// them for as long as they are in the room, so the ticket they are holding
+	// still names the address they still have, and the tunnel they are on
+	// stays up. This used to revoke, which meant picking a side dropped you
+	// off the room's network and rebuilt it from the handshake up.
 	s.log.Info("player changed slot", "room", id, "player", body.PlayerID, "slot", *body.Slot)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "slot": *body.Slot})
 }

@@ -139,6 +139,24 @@ type Room struct {
 	Observers [ipam.ObserverSlots]string
 	Admins    [ipam.AdminSlots]string
 
+	// Addr is which of the room's ten player addresses belongs to whom
+	// (D74). It is a second, independent map from the seating above: Slots
+	// says which team somebody is on, Addr says what their machine is called
+	// on the room's network, and the two have nothing to do with each other.
+	//
+	// They used to be the same array, and that is why changing seat dropped
+	// a player off the network. Their address was derived from their seat, so
+	// picking a side invalidated the ticket they were holding, which revoked
+	// their tunnel, which had to be built again from the handshake up - a
+	// visible disconnect, for a gesture that is about which team you play on
+	// and has nothing to do with routing.
+	//
+	// An address is taken when somebody sits down and released when they get
+	// up. It survives every seat move in between, and it survives the host's
+	// grace window, so a host who crashed comes back to the address every
+	// other client is already sending to.
+	Addr [ipam.PlayerSlots]string
+
 	// HostSlot is which playing slot the host's PC is sitting in, and it is
 	// the room's authority on the address every other client is told to
 	// connect to (D64). It used to be the constant zero, which is why the
@@ -208,7 +226,49 @@ func NewRoom(id string, index int, hostID string, now time.Time) *Room {
 		KickCount:   make(map[string]int),
 	}
 	r.Slots[0] = hostID
+	r.Addr[0] = hostID
 	return r
+}
+
+// takeAddress gives a player one of the room's ten addresses and returns its
+// index. A player who already holds one keeps it: this is called on every
+// path that seats somebody, and seating is not the same event as arriving.
+func (r *Room) takeAddress(playerID string) (int, bool) {
+	for i, id := range r.Addr {
+		if id == playerID {
+			return i, true
+		}
+	}
+	for i, id := range r.Addr {
+		if id == "" {
+			r.Addr[i] = playerID
+			return i, true
+		}
+	}
+	return 0, false
+}
+
+// dropAddress releases whatever address a player held.
+func (r *Room) dropAddress(playerID string) {
+	for i, id := range r.Addr {
+		if id == playerID {
+			r.Addr[i] = ""
+		}
+	}
+}
+
+// AddressOf reports which of the room's player addresses is this player's.
+//
+// Only the ten playing addresses live here. An observer's and a moderator's
+// come from ranges of their own, indexed by the seat they took, and neither
+// of those seats can move - so neither needs an allocation that outlives it.
+func (r *Room) AddressOf(playerID string) (int, bool) {
+	for i, id := range r.Addr {
+		if id == playerID {
+			return i, true
+		}
+	}
+	return 0, false
 }
 
 // admissible runs the checks that every kind of seat shares.
@@ -255,12 +315,14 @@ func (r *Room) Join(who Applicant, now time.Time) (int, error) {
 	// have taken the seat they used to be in while they were gone.
 	if isHostReturning && r.Slots[r.HostSlot] == "" {
 		r.Slots[r.HostSlot] = playerID
+		r.takeAddress(playerID)
 		r.HostGraceUntil = time.Time{}
 		return r.HostSlot, nil
 	}
 	for i := range r.Slots {
 		if r.Slots[i] == "" {
 			r.Slots[i] = playerID
+			r.takeAddress(playerID)
 			if isHostReturning {
 				r.HostGraceUntil = time.Time{}
 				r.HostSlot = i
@@ -428,6 +490,9 @@ func (r *Room) Move(playerID string, slot int) error {
 	if playerID == r.HostID {
 		r.HostSlot = slot
 	}
+	// Addr is deliberately untouched (D74). Changing team is not a change of
+	// address, so the ticket this player is holding stays correct and their
+	// tunnel stays up.
 	return nil
 }
 
@@ -445,6 +510,11 @@ func (r *Room) Leave(playerID string, now time.Time) {
 			}
 		}
 	}
+	// Getting up is the one thing that releases an address (D74). A seat move
+	// does not, and neither does the host's grace window: a host who crashed
+	// has to come back to the address every other client is already sending
+	// to, and this is what keeps it theirs while they are gone.
+	r.dropAddress(playerID)
 	if playerID == r.HostID {
 		r.HostGraceUntil = now.Add(HostGracePeriod)
 	}

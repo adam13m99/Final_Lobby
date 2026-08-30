@@ -54,6 +54,23 @@ deploy_coordinator() {
   echo "==> building coordinator"
   ./scripts/build.sh coordinator
 
+  echo "==> preparing host"
+  # The unit lists these under ReadWritePaths, and systemd refuses to start a
+  # service whose ReadWritePaths names a directory that is not there. Creating
+  # them here rather than by hand is what makes a rebuilt server come back on
+  # its own.
+  ssh_run bash -s <<'REMOTE'
+set -euo pipefail
+id finallobby >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin finallobby
+mkdir -p /opt/finallobby /etc/finallobby /var/lib/finallobby/db /var/lib/finallobby/backups
+chmod 750 /etc/finallobby
+chown root:finallobby /etc/finallobby
+chown finallobby:finallobby /var/lib/finallobby/db /var/lib/finallobby/backups
+# The copies hold every password hash there is. Nobody but the service and
+# root has any business reading them.
+chmod 750 /var/lib/finallobby/backups
+REMOTE
+
   echo "==> uploading"
   upload_verified bin/coordinator /opt/finallobby/coordinator.new
   scp_up deploy/coordinator.service /etc/systemd/system/coordinator.service

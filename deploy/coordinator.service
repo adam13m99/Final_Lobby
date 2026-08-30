@@ -29,6 +29,7 @@ ExecStart=/opt/finallobby/coordinator \
     -dist-dir /var/lib/finallobby/dist \
     -download-key-file /etc/finallobby/download.key \
     -db /var/lib/finallobby/db/lobby.db \
+    -backup-dir /var/lib/finallobby/backups \
     -terms-file /etc/finallobby/terms-en.md \
     -head-admin arman13m99
 
@@ -57,6 +58,11 @@ ReadOnlyPaths=/var/lib/finallobby
 # a subpath, which is how the installer directory stays read-only while the
 # database does not.
 ReadWritePaths=/var/lib/finallobby/db
+# Hourly copies of the accounts database, twenty-four of them kept (D76).
+# Taken with VACUUM INTO rather than cp: the database runs in WAL mode, so a
+# file copied while the coordinator is writing opens cleanly and is wrong,
+# which is worse than having no copy at all.
+ReadWritePaths=/var/lib/finallobby/backups
 
 LimitNOFILE=65535
 

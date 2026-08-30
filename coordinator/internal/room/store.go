@@ -130,7 +130,7 @@ func (s *Store) Create(hostID, name string, now time.Time) (*Room, Membership, e
 	s.rooms[id] = r
 	s.indexes[index] = id
 
-	m, err := membershipFor(r, 0, true)
+	m, err := membershipFor(r, hostID)
 	if err != nil {
 		return nil, Membership{}, err
 	}
@@ -155,11 +155,10 @@ func (s *Store) Join(roomID string, who Applicant, now time.Time) (Membership, e
 	if !ok {
 		return Membership{}, ErrNotFound
 	}
-	slot, err := r.Join(who, now)
-	if err != nil {
+	if _, err := r.Join(who, now); err != nil {
 		return Membership{}, err
 	}
-	return membershipFor(r, slot, who.ID == r.HostID)
+	return membershipFor(r, who.ID)
 }
 
 // Membership returns what an already-seated player needs in order to
@@ -189,7 +188,7 @@ func (s *Store) Membership(roomID, playerID string) (Membership, error) {
 	case SeatAdmin:
 		return adminMembershipFor(r, slot)
 	}
-	return membershipFor(r, slot, playerID == r.HostID)
+	return membershipFor(r, playerID)
 }
 
 // JoinObserver seats somebody who wants to watch without playing.
@@ -394,8 +393,16 @@ func nonPlayingMembership(r *Room, seat int, kind SeatKind) (Membership, error) 
 }
 
 // membershipFor derives the addressing a seated player needs.
-func membershipFor(r *Room, slot int, isHost bool) (Membership, error) {
-	vip, err := ipam.SlotIP(r.Index, slot)
+//
+// The address comes from what they hold in Addr, not from where they are
+// sitting (D74). Slot is still reported, because the interface draws a seat
+// number from it, but nothing about the network depends on it any more.
+func membershipFor(r *Room, playerID string) (Membership, error) {
+	index, ok := r.AddressOf(playerID)
+	if !ok {
+		return Membership{}, ErrNotMember
+	}
+	vip, err := ipam.SlotIP(r.Index, index)
 	if err != nil {
 		return Membership{}, err
 	}
@@ -407,25 +414,34 @@ func membershipFor(r *Room, slot int, isHost bool) (Membership, error) {
 	if err != nil {
 		return Membership{}, err
 	}
+	slot, _, _ := r.SlotOf(playerID)
 	return Membership{
 		RoomID:    r.ID,
 		Slot:      slot,
 		VirtualIP: vip,
 		HostIP:    host,
 		Subnet:    subnet,
-		IsHost:    isHost,
+		IsHost:    playerID == r.HostID,
 		Kind:      SeatPlayer,
 	}, nil
 }
 
 // hostAddr is the address every client in a room is told to connect to.
 //
-// It is the host's own virtual IP, derived from the seat the host is sitting
-// in - not a fixed slot-0 address (D64). This is the single change that lets
-// the host pick a side: everything else about a seat move already worked for
-// the nine other people in the room.
+// It is the host's own address, and it belongs to the host rather than to a
+// seat (D74). It was derived from the seat the host was sitting in (D64,
+// which is what first let a host pick a side); making it theirs outright is
+// the same idea carried the rest of the way, and it means a host changing
+// team no longer changes the address nine other people are connecting to.
 func hostAddr(r *Room) (netip.Addr, error) {
-	return ipam.SlotIP(r.Index, r.HostSlot)
+	index, ok := r.AddressOf(r.HostID)
+	if !ok {
+		// A room whose host holds no address cannot be connected to, and
+		// saying so is better than handing out an address that is somebody
+		// else's or nobody's.
+		return netip.Addr{}, ErrNotMember
+	}
+	return ipam.SlotIP(r.Index, index)
 }
 
 // newRoomID returns an identifier no room has held before.

@@ -22,6 +22,10 @@ cd /c/Users/Mcc/Desktop/Final_Lobby
 TAG="${1:-shot}"
 SP="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUT="$SP/shots/$TAG"; mkdir -p "$OUT"
+# Screenshots are build output and they add up - fifteen megabytes of them had
+# accumulated before anybody looked. Keep the eight most recent runs and let
+# the rest go; nobody has ever wanted the ninth.
+ls -1dt "$SP"/shots/*/ 2>/dev/null | tail -n +9 | xargs -r rm -rf
 CHROME="/c/Program Files/Google/Chrome/Application/chrome.exe"
 export WIDE="${WIDE:-1440}" TALL="${TALL:-820}"
 

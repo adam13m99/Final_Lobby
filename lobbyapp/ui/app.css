@@ -728,7 +728,10 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
    was three bars sitting on a different baseline, so the row read as two
    things that had come apart. How many are lit is the measurement; the
    colour is the verdict. */
-.bars { display: flex; align-items: center; gap: 2px; height: 12px; line-height: 1; }
+/* Bottom-aligned, not centred. The five bars step 4-6-8-10-12px, and a
+   meter whose bars are centred has no baseline to read them against - it
+   reads as five marks of different sizes rather than as a rising scale. */
+.bars { display: flex; align-items: flex-end; gap: 2px; height: 12px; line-height: 1; }
 .bars i { width: 3px; border-radius: 1px; background: rgba(233,233,237,.14); }
 .bars i.on { background: currentColor; }
 .bars i:nth-child(1) { height: 4px; }

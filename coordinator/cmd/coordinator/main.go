@@ -10,6 +10,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"flag"
 	"fmt"
@@ -37,6 +38,10 @@ func main() {
 	relayAddr := flag.String("relay-addr", "87.107.110.199:443", "relay address given to clients")
 	relayPubFile := flag.String("relay-pub", "/etc/lobbybaz/relay.pub", "file holding the relay public key")
 	tickEvery := flag.Duration("tick", 10*time.Second, "how often room timers advance")
+	// Losing the accounts database loses every account, password hash, friend
+	// and moderation record there has ever been, and until D76 nothing
+	// anywhere kept a copy of it.
+	backupDir := flag.String("backup-dir", "", "directory for hourly database copies (empty = no backups, and it says so at startup)")
 	authFile := flag.String("auth-token-file", "", "file holding the shared bearer token for the player API (empty = open)")
 	distDir := flag.String("dist-dir", "", "directory holding the published installer and version.json (empty = serve no downloads)")
 	dlKeyFile := flag.String("download-key-file", "", "file holding the unguessable path segment the download is served under")
@@ -102,6 +107,9 @@ func main() {
 	}
 
 	var (
+		// Held out here because the backup loop needs it and the accounts
+		// block below is where it is opened.
+		liveDB   *sql.DB
 		accounts *account.Store
 		friends  *social.Store
 		mod      *moderation.Store
@@ -115,6 +123,7 @@ func main() {
 			os.Exit(1)
 		}
 		defer db.Close()
+		liveDB = db
 		version, _ := store.Version(db)
 		accounts = account.New(db)
 		friends = social.New(db)
@@ -202,8 +211,14 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	go runTimers(ctx, rooms, tickets, board, *tickEvery, log)
+	go runTimers(ctx, rooms, tickets, board, players, *tickEvery, log)
 	go flushPresence(ctx, players, accounts, log)
+	if liveDB != nil && *backupDir != "" {
+		go runBackups(ctx, liveDB, *backupDir, log)
+	} else if liveDB != nil {
+		log.Warn("no -backup-dir: nothing is copying the accounts database, " +
+			"and losing it loses every account, password and friend there has ever been")
+	}
 
 	httpSrv := &http.Server{
 		Addr:              *listen,
@@ -231,7 +246,13 @@ func main() {
 
 // runTimers advances room state and clears expired tickets. Rooms close on a
 // timer, so something has to be turning the handle.
-func runTimers(ctx context.Context, rooms *room.Store, tickets *ticket.Store, board *chat.Board, every time.Duration, log *slog.Logger) {
+// PlayerIdleWindow is how long somebody has to have been silent before the
+// registry forgets them. Long enough that a player who alt-tabbed into a match
+// for a while is still known when they come back, short enough that a busy
+// evening does not leave a month of names behind it.
+const PlayerIdleWindow = 2 * time.Hour
+
+func runTimers(ctx context.Context, rooms *room.Store, tickets *ticket.Store, board *chat.Board, players *player.Registry, every time.Duration, log *slog.Logger) {
 	t := time.NewTicker(every)
 	defer t.Stop()
 	for {
@@ -250,6 +271,48 @@ func runTimers(ctx context.Context, rooms *room.Store, tickets *ticket.Store, bo
 			board.Drop(id)
 		}
 		tickets.Purge(now)
+
+		// The registry is the one thing in here that would otherwise only
+		// ever grow. Anybody holding a seat is kept whatever their last-seen
+		// time says; see Registry.Sweep.
+		seated := map[string]bool{}
+		for _, rm := range rooms.List() {
+			for _, id := range rm.Occupants() {
+				seated[id] = true
+			}
+		}
+		if gone := players.Sweep(seated, now.Add(-PlayerIdleWindow)); gone > 0 {
+			log.Info("forgot idle players", "count", gone)
+		}
+	}
+}
+
+// runBackups keeps a rolling set of copies of the accounts database.
+//
+// The first copy is taken a minute after start rather than an hour, so that a
+// server which has just been rebuilt has a backup before it has a night.
+func runBackups(ctx context.Context, db *sql.DB, dir string, log *slog.Logger) {
+	first := time.NewTimer(time.Minute)
+	defer first.Stop()
+	select {
+	case <-ctx.Done():
+		return
+	case <-first.C:
+	}
+
+	for {
+		if name, err := store.Backup(db, dir, time.Now()); err != nil {
+			log.Error("database backup failed", "dir", dir, "err", err)
+		} else {
+			log.Info("database backed up", "file", name)
+		}
+		t := time.NewTimer(store.BackupEvery)
+		select {
+		case <-ctx.Done():
+			t.Stop()
+			return
+		case <-t.C:
+		}
 	}
 }
 

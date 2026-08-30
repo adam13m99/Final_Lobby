@@ -34,6 +34,42 @@ if [ "${1:-}" = "--check" ]; then
   echo
 fi
 
+# Rooms live in the coordinator's memory and nowhere else (D12). Restarting it
+# is therefore not a transparent operation: every open room disappears and
+# everybody sitting in one is dropped back to the lobby mid-match. That is a
+# fine trade at four in the morning and a bad one on a Friday evening, and the
+# only way to tell the difference is to ask before restarting.
+warn_about_live_rooms() {
+  local server_file="mobinhost_server_1.txt" host rooms
+  [ -f "$server_file" ] || return 0
+  host=$(grep -o 'ssh [^ ]*' "$server_file" | awk '{print $2}')
+  host="${host#*@}"
+  [ -n "$host" ] || return 0
+  rooms=$(curl -s --max-time 6 "http://$host:7001/healthz" | grep -o '"rooms":[0-9]*' | tr -dc '0-9')
+  [ -n "$rooms" ] || { echo "  (could not reach the live coordinator to count rooms)"; return 0; }
+  if [ "$rooms" -gt 0 ]; then
+    echo
+    echo "  !! $rooms room(s) are open on the live server right now."
+    echo "  !! Shipping restarts the coordinator, which closes all of them and"
+    echo "  !! drops everybody in them back to the lobby. Rooms are in memory."
+    if [ -t 0 ]; then
+      read -r -p "  Ship anyway? [y/N] " answer
+      case "$answer" in [yY]*) ;; *) echo "  nothing shipped"; exit 1 ;; esac
+    else
+      echo "  !! No terminal to ask at, so this is going ahead. Ctrl-C now if"
+      echo "  !! that is wrong."
+      sleep 5
+    fi
+    echo
+  else
+    echo "  no rooms open on the live server; a restart costs nobody anything"
+  fi
+}
+
+echo "=== live server ==="
+warn_about_live_rooms
+
+echo
 echo "=== server: coordinator, terms, relay ==="
 ./scripts/deploy.sh all
 

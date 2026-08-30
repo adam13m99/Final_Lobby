@@ -435,11 +435,26 @@ say "=== picking a side ==="
 REJOIN=$(callb POST /api/rooms/join "{\"room_id\":\"$ROOM_ID\"}")
 expect "the second player is back in the room"    '"ok":true'    "$REJOIN"
 
+# The address a player is given belongs to them for as long as they are in
+# the room, not to the seat they are sitting in (D74). This is the assertion
+# that keeps changing team from dropping somebody off the room's network:
+# their ticket names their address, and a seat move must leave it alone.
+BEFORE=$(callb GET "/api/state")
+BEFOREIP=$(printf '%s' "$BEFORE" | grep -o '"virtual_ip":"[^"]*"' | head -1 | cut -d'"' -f4)
+
 MOVED=$(callb POST /api/rooms/slot '{"slot":7}')
 expect "a player can move to a free seat"         '"ok":true'    "$MOVED"
 
 SEATED=$(call GET "/api/state")
 expect "and the room says they are sitting there" "\"slot\":7" "$SEATED"
+
+AFTER=$(callb GET "/api/state")
+AFTERIP=$(printf '%s' "$AFTER" | grep -o '"virtual_ip":"[^"]*"' | head -1 | cut -d'"' -f4)
+if [ -n "$BEFOREIP" ] && [ "$BEFOREIP" = "$AFTERIP" ]; then
+  ok "and picking a side did not change their address"
+else
+  bad "changing seat moved the address from $BEFOREIP to $AFTERIP - the tunnel would drop"
+fi
 
 # The host picks a side like anybody else (D64), and the address the room is
 # reached at follows them. This is the assertion that matters: after the move,

@@ -574,13 +574,20 @@ function reconcileRooms(box, shown) {
     // joining one disables the button on all the others.
     const sig = JSON.stringify(
       [r, r.id === state.room_id, !!state.room_id, state.player_id], steady);
-    let node = have.get(r.id);
-    if (node && node.dataset.sig === sig) {
-      paintRoomPing(node, r);
-    } else {
+    const old = have.get(r.id);
+    let node = old;
+    if (!old || old.dataset.sig !== sig) {
       node = roomCard(r);
       node.dataset.room = r.id;
       node.dataset.sig = sig;
+      // The row this one replaces has to leave the document, not just this
+      // map. Deleting it from the map alone is what put a second copy of the
+      // owner s own room in the lobby the moment they created one: the new
+      // node was inserted, the old one was no longer anybody s to remove, and
+      // every further change to that row left another orphan behind it.
+      if (old) box.replaceChild(node, old);
+    } else {
+      paintRoomPing(node, r);
     }
     have.delete(r.id);
     want.push(node);

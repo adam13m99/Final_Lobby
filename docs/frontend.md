@@ -433,8 +433,10 @@ invited and then refused (D41).
 | `bash scripts/live.sh` | **The one to use.** A whole LobbyBaz on a fixed address, in its own window, that reloads itself within two seconds of any edit to the page, the stylesheet, the scripts or the strings. Go changes rebuild and restart at the same address. Leave it open for days. |
 | `bash scripts/try.sh` | The same sandbox, opened once, deleted on Ctrl-C. |
 | `bash scripts/preview.sh <name>` | The same sandbox photographed. One PNG per screen into `scripts/shots/<name>/`. |
+| `bash scripts/uicheck.sh` | Drives the live page over CDP through repeated polls to prove the renderer does not duplicate, rebuild or lose things. **The rung that catches the bugs the owner reports.** |
 | `bash scripts/chatcheck.sh` | Drives the live page over CDP to prove the dock opens on an incoming message. |
 | `bash scripts/termscheck.sh` | Drives the live page over CDP to prove the terms gate opens, refuses, and then allows. |
+| `bash scripts/verify.sh` | All of the gradeable ones above, plus `check.sh` and `smoke.sh`, in one command with one verdict. |
 
 All of them are loopback-only, on a throwaway database, with `APPDATA`
 redirected so your own signed-in session is untouched. None contacts the live
@@ -454,14 +456,18 @@ WIDE=1366 TALL=768 bash scripts/preview.sh small
 1. `bash scripts/live.sh`, open the address, leave it open.
 2. Edit. The window reloads itself.
 3. **Look at it.** At 1440 and at 1366.
-4. `bash scripts/check.sh` — the sixteen interface tests run here.
-5. `bash scripts/smoke.sh` if you touched `server.go` or anything it calls.
-6. `bash scripts/chatcheck.sh` if you touched the dock;
-   `bash scripts/termscheck.sh` if you touched the terms or the door.
-7. `./scripts/ship.sh` after the commit, so the owner can look at it (D62).
-7. `scripts/preview.sh` and look at the pictures.
-8. `STATE.md`, a decision entry if the reasoning is worth keeping, one commit
+4. **Watch it change.** Leave it open for a minute and look again. Rows that
+   multiply, cards that flicker, a field that drops what you were typing —
+   none of those exist in the first render and all of them exist in the
+   second. This is the step that gets skipped, and skipping it is how every
+   interface bug the owner has reported reached them.
+5. `bash scripts/verify.sh` — everything a machine can grade, one verdict.
+   `bash scripts/verify.sh fast` mid-change if the full run is too slow; the
+   sixteen interface tests are in that one.
+6. `scripts/preview.sh` and look at the pictures.
+7. `STATE.md`, a decision entry if the reasoning is worth keeping, one commit
    naming the task, `./scripts/git-sync.sh push`.
+8. `./scripts/ship.sh`, so the owner can look at it (D62).
 
 ## Where to be careful
 
@@ -492,6 +498,15 @@ WIDE=1366 TALL=768 bash scripts/preview.sh small
     dangerous one: **the signature must name every input the panel draws
     from**, including the ones that are not in its argument. A signature that
     misses one is a panel that silently stops updating.
+
+    The same rule one level down, for the rows inside a list: reconcile by
+    key, replace only the rows whose signature moved, and never append without
+    first taking the old row out of the map you are reconciling against —
+    forgetting that is what put the owner's room in the lobby five times
+    (D75). A number that moves on its own is painted into the node that is
+    already there and kept out of the signature entirely, which is what
+    `LIVE_KEYS` is for (D73). `bash scripts/uicheck.sh` is what proves all of
+    this, and it is the only rung that can.
 13. **Never write a media query above the rule it narrows**, and never write
     the same declaration twice. Same specificity means the later one wins, so
     the first is either dead or is silently deciding something four hundred

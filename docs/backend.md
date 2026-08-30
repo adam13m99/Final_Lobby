@@ -154,19 +154,29 @@ room a **/27**: 32 addresses, of which `.1` is the relay, `.2–.11` are the ten
 player slots, `.12–.16` five observers, `.17–.19` three admin seats, and the
 rest spare. 2048 rooms fit, forty times the 500-player launch target.
 
-**A player's virtual IP is derived from their slot index.** This is why moving
-seats revokes the ticket (D57): after a move the address the old ticket names
-is not theirs, and anti-spoof would drop everything they sent. The coordinator
-revokes on a successful move and the app reconnects in the same action.
+**An address belongs to the player, not to the seat** (D74). `Room.Addr` is
+an array of player ids indexed by address; a player takes a free index when
+they join, keeps it for as long as they are in the room whatever seat they are
+sitting in, and gives it back when they leave. `Room.AddressOf(playerID)` is
+the only way to ask.
 
-**The room's address follows the host, not the other way round** (D64).
-`Room.HostSlot` is the seat the host is sitting in; every membership derives
-its `HostIP` from it, and `Move` maintains it. The host therefore picks a side
+This is a deliberate reversal. Until 2026-08-30 the address was derived from
+the slot index, so changing seats changed a player's IP, which invalidated the
+ticket naming it, which meant the coordinator revoked on every move (D57) and
+the app tore the tunnel down and rebuilt it — up to twenty-five seconds of
+being disconnected because somebody wanted to play Dire. Nothing about the
+tunnel actually depends on the seat: `ticket.Claims` carries `PlayerID`,
+`RoomID` and `VirtualIP` and has never carried a slot. Moving seats is now a
+change to a list on the server and nothing else, and `Move` deliberately does
+not touch `Addr`.
+
+**The host's address is theirs the same way** (D64, restated under D74). Every
+membership's `HostIP` comes from `AddressOf(HostID)`, so the host picks a side
 like anybody else, slot 0 is an ordinary Radiant seat once they get up, and a
-host who crashed comes back to the seat they left rather than the lowest free
-one. Until 2026-08-29 the host was nailed to slot 0 because slot 0's address
-*was* the room's address, which made the person who opened a room to play Dire
-the only person who could not sit there.
+host who crashed comes back holding the address every client is already
+sending to. Until 2026-08-29 the host was nailed to slot 0 because slot 0's
+address *was* the room's address, which made the person who opened a room to
+play Dire the only person who could not sit there.
 
 The one seat the host cannot take is a watching seat: the match runs on their
 machine, and `JoinObserver` refuses `HostID` before anything else.
@@ -302,6 +312,22 @@ new entry at the end, or a new list appended after the others.
 The live database is at `/var/lib/finallobby/db/lobby.db`, currently at
 schema 6.
 
+**It is copied hourly and twenty-four copies are kept**, in
+`/var/lib/finallobby/backups`, by `runBackups` in `main.go` (D76). Losing that
+one file loses every account there has ever been — usernames, the password
+hashes nobody can recover, the friend graph, the moderation record and who
+accepted which version of the terms — and until 2026-08-30 nothing anywhere
+held a second copy of it. The copy is taken with `VACUUM INTO` rather than
+`cp`, because the database runs in WAL mode and a file copied while the
+coordinator is writing opens cleanly and is wrong, which is worse than having
+no copy at all. The first copy is taken a minute after start rather than an
+hour, so a rebuilt server has one before it has a night. Starting without
+`-backup-dir` is allowed and logs a warning that says what is at stake.
+
+Rooms, by contrast, are in memory and are not backed up and never will be.
+They are worth about a minute each and a restart is the only thing that ends
+them; see the restart cost under **Running it**.
+
 ### The polling endpoint
 
 `POST /v1/sync` is the client's heartbeat and its only polling call. It
@@ -332,6 +358,12 @@ whether anybody is playing is how an install gets abandoned.
 - A relay measurement is **dropped rather than shown** once older than the
   presence window. Zero means *no reading*, never *instant*, and the two must
   never render the same.
+- The registry **forgets anybody silent for two hours** who is not sitting in
+  a room, swept on the same timer that expires rooms and purges tickets. It
+  was otherwise the one structure in the coordinator that only ever grew, in a
+  process meant to run for months. Anybody holding a seat is kept whatever
+  their last-seen time says — a host in their grace window has been quiet on
+  purpose, and forgetting them blanks their name on nine other screens.
 
 ### Serving the download
 
@@ -374,8 +406,10 @@ are `status`, `connect`, `disconnect`, `launch`, `ping`.
 
 | Script | Does |
 |---|---|
+| `scripts/verify.sh [fast]` | **Start here.** Every rung a machine can grade, cheapest first, one verdict. `fast` is the unit rung alone. |
 | `scripts/check.sh` | Every module builds, vets, tests; the front end parses. **Ground truth.** |
 | `scripts/smoke.sh` | A real coordinator on a throwaway database and two real apps walked through the whole path. |
+| `scripts/uicheck.sh` | The rendered page driven through repeated polls: nothing duplicated, nothing rebuilt, nothing lost (D75). |
 | `scripts/ship.sh` | **Both of the next two, in order.** Everything changed reaches the live server (D62). |
 | `scripts/deploy.sh relay\|coordinator\|status\|logs` | Build and install on the server. `coordinator` also ships `docs/terms-en.md`. |
 | `scripts/publish.sh` | Build the installer, upload it, print the link. |
@@ -384,9 +418,16 @@ are `status`, `connect`, `disconnect`, `launch`, `ping`.
 
 Deploying is idempotent and safe to repeat: uploads are checksum-verified on
 the far end (an upload can fail silently when the target is locked by a
-running process — D21), the relay key is generated only when absent, and
+running process — D21), the relay key is generated only when absent, the unix
+user and every directory the unit needs are created if missing, and
 `publish.sh` says out loud that nginx, CoreDNS and the relay are still up
 before it finishes.
+
+It is not, however, free. **Rooms live in the coordinator's memory and
+nowhere else**, so restarting it closes every open room and drops everybody in
+one back to the lobby mid-match. `ship.sh` asks the live server how many rooms
+are open before it starts and says so; on a quiet server that line reads "no
+rooms open" and you can stop reading.
 
 ## The room watches its host (D69, D70)
 
@@ -433,6 +474,12 @@ the store on the next tick, before anybody has read why it ended.
    whether they are online or in a match; both arrive through `SeeHost`, from
    the registry, on a tick. A rule that depends on either belongs beside those
    two, not in the handler that happens to have noticed (D69, D70).
-9. **Never commit secrets.** `github_token_admin.txt` and
+9. **Never derive an address from a seat.** A virtual IP belongs to the
+   player for as long as they are in the room; `Move` must not touch `Addr`,
+   and nothing that changes a seat may revoke a ticket. The moment those two
+   are coupled, every seat change becomes a reconnection (D74).
+10. **Never let a restart be casual.** Rooms are in memory. Deploying the
+   coordinator closes every open one; `ship.sh` counts them first and says so.
+11. **Never commit secrets.** `github_token_admin.txt` and
    `mobinhost_server_1.txt` are gitignored; the download key and API token
    live only on the server. Verify before every commit.

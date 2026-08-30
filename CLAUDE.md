@@ -31,24 +31,38 @@ exist because something already went wrong.
 Before writing code, every session:
 
 1. Read `docs/STATE.md`.
-2. Run `bash scripts/check.sh`. **Trust its output over any summary**,
-   including one describing this conversation. A summary is prose that can be
-   misread; the tests are ground truth. It is unit level: it proves every
-   module builds, passes its own tests and parses. Run `bash scripts/smoke.sh`
-   as well after touching accounts, the coordinator API or the app's own HTTP
-   layer — it starts a real coordinator on a throwaway database and walks a
-   real app through browsing, reading the terms, signing up, hosting a room
-   and signing back in. Both bind loopback only and never touch the live
-   server.
+2. Run `bash scripts/verify.sh fast` (seconds) to know where you stand.
+   **Trust its output over any summary**, including one describing this
+   conversation. A summary is prose that can be misread; the tests are ground
+   truth.
 3. `git log --oneline -15` to see what actually landed.
 4. Read `docs/backend.md` or `docs/frontend.md`, whichever half the task is
    in. Both end with a short "where to be careful" list; that list is the
    cheapest thing to read in the whole repository.
 
-Finishing a task means: tests pass, `STATE.md` updated, one commit naming the
-task number, pushed via `./scripts/git-sync.sh push`, **and shipped with
-`./scripts/ship.sh`** so the live server and the published installer match the
-working tree.
+## The two commands
+
+Everything else is detail. If you remember nothing else about this repository,
+remember these:
+
+- **`bash scripts/verify.sh`** — the whole harness, cheapest rung first, one
+  verdict at the end. `fast` runs the unit rung only. It keeps going after a
+  failure so one run tells you everything that is wrong. Every rung binds
+  loopback and uses a throwaway database; none can reach the live server.
+- **`./scripts/ship.sh`** — the server, the terms text, the relay, and the app
+  republished as an installer that installed copies upgrade themselves to.
+
+The rungs inside `verify.sh` — `check`, `smoke`, `uicheck`, `chatcheck`,
+`termscheck` — can each be run alone while you work, and the header of
+`scripts/verify.sh` says in one line what each proves and why it exists. Three
+things stay outside it because no machine can grade them: `preview.sh` and
+`try.sh`, which produce pictures and a window for a person to look at, and
+`live.sh`, which talks to the real server.
+
+Finishing a task means: `bash scripts/verify.sh` green, `STATE.md` updated,
+one commit naming the task number, pushed via `./scripts/git-sync.sh push`,
+**and shipped with `./scripts/ship.sh`** so the live server and the published
+installer match the working tree.
 
 **Ship every change.** The owner tests on the live product, not on this PC, so
 a change that only exists here cannot be looked at by the person who asked for

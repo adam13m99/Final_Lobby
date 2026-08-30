@@ -1,6 +1,6 @@
 # Project state
 
-Updated when a task completes. `bash scripts/check.sh` is the ground truth;
+Updated when a task completes. `bash scripts/verify.sh` is the ground truth;
 this file is a convenience index, not an authority.
 
 **New here?** `docs/backend.md` explains the server — relay, coordinator,
@@ -58,13 +58,22 @@ curl -s -H "Authorization: Bearer $TOKEN" http://87.107.110.199:7001/v1/diag
 
 ## How to know it works
 
+**Start here: `bash scripts/verify.sh`.** It runs every rung below that a
+machine can grade, cheapest first, keeps going after a failure so one run
+tells you everything that is wrong, and prints one verdict. `bash
+scripts/verify.sh fast` is the unit rung alone, for the middle of a change.
+The individual commands stay listed because each is worth running alone while
+you are working on the thing it covers.
+
 | Command | What it proves | Cost |
 |---|---|---|
+| `bash scripts/verify.sh` | all of the below that can be graded automatically, in one command with one verdict | ~4m |
 | `bash scripts/check.sh` | every module builds, vets, passes its own tests; the front-end JS and string files parse; no secret is tracked; the Rust shell compiles | seconds |
 | `./scripts/try.sh` | nothing — it runs the product. A coordinator and an app on this PC, a lobby seeded with four players and three rooms, opened in the browser. Ctrl-C deletes everything it made | ~40s |
 | `bash scripts/termscheck.sh` | that the terms cannot be accepted without being scrolled to the end, and can be once they have (D61). A one-shot render cannot see a gate that lives between a scroll position and a disabled attribute | ~50s |
 | `bash scripts/preview.sh <name>` | nothing — it photographs. Boots a real coordinator and app on throwaway data, seeds four players and three rooms with different doors, and drives headless Chrome through every screen into `scripts/shots/<name>/` | ~40s |
 | `bash scripts/live.sh` | nothing — it **is** the product, running, at one fixed address, updating itself. Front-end edits appear in the open window within two seconds; Go edits are rebuilt and the app restarted at the same address. Open it once and leave it | ~60s to start, then stays up |
+| `bash scripts/uicheck.sh` | that the interface survives **change**: that three rooms draw three rows and not eight, that a poll returning identical data leaves the rows it already drew alone, that a ping moving repaints a number instead of rebuilding the card under the player's cursor, and that every dialog closes with Escape (D75) | ~50s |
 | `bash scripts/chatcheck.sh` | that a private message arriving **opens the chat dock by itself and gives the sender a tab** — driven live over the DevTools Protocol, because the dock reacts to a change between two polls and a single snapshot can never show it | ~50s |
 | `bash scripts/smoke.sh` | a real coordinator with accounts switched on and **two** real apps: browsing without an account, the terms, signing up, hosting a room, signing out and back in, a wrong password refused, the friend graph and a private message between the two, then a head admin appointed across a restart who sanctions, lifts, labels, closes and announces — and the page rendered in headless Chrome as both a player and a moderator | ~60s |
 
@@ -72,6 +81,14 @@ curl -s -H "Authorization: Bearer $TOKEN" http://87.107.110.199:7001/v1/diag
 `smoke.sh` proves the page renders with a quiet console; neither can tell you
 the room list is ugly or that half the window is empty. `preview.sh` is the
 answer to that, and it is how the interface was redesigned on 2026-08-25.
+
+**Nothing watched the renderer over time until 2026-08-30, and that is where
+every interface bug the owner has reported actually lived.** Rooms duplicating
+in the lobby, a card rebuilt under the cursor, a text field losing focus
+mid-word: none of them are visible in a single render, and all of them are
+visible on the second poll. `uicheck.sh` is that rung. It was written against
+the duplicate-row bug, and then verified by putting the bug back and watching
+it fail — a check nobody has seen fail is not yet a check (D75).
 
 **Some behaviour only exists over time.** The chat dock opens itself when a
 message turns up in a tab nobody is reading — a change between one poll and
@@ -259,6 +276,7 @@ there; this is the summary.
 | T30 five findings from the owner's live test (D69, D70, D71) | **done** — the room follows its host, the page stops redrawing itself, chat a fifth taller |
 | T31 the owner's stylesheet pass (D72) | **done** — 17 defects, Escape closes a dialog, rows reachable from the keyboard; write-up in `docs/2026-08-30-ui-fixes.md` |
 | T32 the exactness pass (D73) | **done** — live pings out of the render signatures, the lobby reconciles per row, the error strip can be acted on and put away |
+| T33 production readiness: clean, fix, harden (D74, D75, D76) | **done** — the three bugs the owner reported, `scripts/verify.sh` as the one command, `scripts/uicheck.sh` as the rung that watches the renderer over time, hourly database backups, an idle sweep, and the design handoffs filed out of the way |
 
 **The interface was redesigned on 2026-08-25** at the owner's request: the
 old one was flat, grey and mostly empty space. What changed, beyond colour
@@ -341,10 +359,18 @@ constant is what makes an existing acceptance stale.
 address off its first line and points a webview at it — a window rather than a
 browser tab, a tray icon, and notifications that arrive while the window is
 hidden. Everything the product does stays in the Go client; D55 says why.
-Build it with `./scripts/build-desktop.sh`. It is **not** wired into
-`publish.sh` on purpose: that installer is the only distribution channel and it
-works, and replacing it with one nobody has installed would risk the working
-thing for the unproven one.
+**The installer ships it** (D67). `./scripts/build.sh installer` builds the
+shell with cargo alongside everything else and packs it in, a missing cargo
+fails the build rather than skipping, and the desktop shortcut names
+`lobbybaz.exe`.
+
+This paragraph used to say the opposite - that the shell was deliberately not
+wired into `publish.sh`, so as not to risk a working installer for an unproven
+one. That was true when it was written and wrong a week later, and nothing
+re-read it: for that week the owner double-clicked LobbyBaz, got a command
+window and a browser tab, and every piece of feedback they gave was about a
+browser tab. **A "deferred on purpose" note needs re-reading the moment the
+thing it defers becomes the thing being tested.**
 
 **Accounts are now reachable from the app**, which is what was missing. The
 gate has three shapes and picks one from `GET /healthz`: a typed name on a

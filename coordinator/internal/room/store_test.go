@@ -270,9 +270,12 @@ func roomOf(t *testing.T, s *room.Store, id string) room.Room {
 	return r
 }
 
-// The point of D64, stated as the thing that would break if it were wrong: a
-// host who picks a side takes the room's address with them, and everybody
-// else is told where to connect without having to know that anything moved.
+// The point of D64 as amended by D74: a host may pick a side, and the address
+// every other client is connecting to does not move when they do.
+//
+// D64 got the first half by making the room's address follow the host's seat.
+// D74 gets both halves by making it follow the host: a seat is which team you
+// are on, and it has nothing to do with what your machine is called.
 func TestTheHostTakesTheRoomAddressWithThem(t *testing.T) {
 	s := room.NewStore()
 	_, hostM, _ := s.Create("h1", "A", t0)
@@ -291,8 +294,10 @@ func TestTheHostTakesTheRoomAddressWithThem(t *testing.T) {
 	if moved.Slot != 6 {
 		t.Fatalf("host slot = %d, want 6", moved.Slot)
 	}
-	if moved.VirtualIP == hostM.VirtualIP {
-		t.Fatalf("the host changed seat and kept address %s", moved.VirtualIP)
+	if moved.VirtualIP != hostM.VirtualIP {
+		t.Fatalf("the host changed seat and their address moved from %s to %s;"+
+			" every client in the room was already connecting to the first one",
+			hostM.VirtualIP, moved.VirtualIP)
 	}
 	if moved.HostIP != moved.VirtualIP {
 		t.Errorf("the host is told to connect to %s while sitting at %s",
@@ -441,5 +446,128 @@ func TestReopeningOverridesTheAutomaticLock(t *testing.T) {
 	// Seats still do not move: the match is running either way.
 	if err := s.Move(m.RoomID, "p2", 9); !errors.Is(err, room.ErrRoomLocked) {
 		t.Fatalf("moved seat mid-match in a reopened room: %v", err)
+	}
+}
+
+
+// --- an address belongs to the player, not to the seat (D74) -------------
+
+// The owner's report: changing seat disconnected them from the room's network
+// and connected them again. It did, and this is why - their address was
+// derived from the seat they were sitting in, so picking a side made the
+// ticket they were holding name somebody else's address.
+func TestChangingSeatDoesNotChangeYourAddress(t *testing.T) {
+	s := room.NewStore()
+	_, host, _ := s.Create("h1", "A", t0)
+	before, err := s.Join(host.RoomID, room.Anyone("p2"), t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, seat := range []int{7, 9, 2, 5} {
+		if err := s.Move(host.RoomID, "p2", seat); err != nil {
+			t.Fatalf("moving to seat %d: %v", seat, err)
+		}
+		after, err := s.Membership(host.RoomID, "p2")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if after.VirtualIP != before.VirtualIP {
+			t.Fatalf("seat %d moved the address from %s to %s",
+				seat, before.VirtualIP, after.VirtualIP)
+		}
+		if after.Slot != seat {
+			t.Fatalf("seat = %d, want %d", after.Slot, seat)
+		}
+		if after.HostIP != host.VirtualIP {
+			t.Fatalf("the host address moved to %s when somebody else changed team",
+				after.HostIP)
+		}
+	}
+}
+
+// Two people in a room never share an address, however they move around it,
+// and an address is released when the person holding it gets up.
+func TestAddressesAreUniqueAndReleasedOnLeaving(t *testing.T) {
+	s := room.NewStore()
+	_, host, _ := s.Create("h1", "A", t0)
+
+	seen := map[string]string{host.VirtualIP.String(): "h1"}
+	ids := []string{"p2", "p3", "p4"}
+	for _, id := range ids {
+		m, err := s.Join(host.RoomID, room.Anyone(id), t0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if who, clash := seen[m.VirtualIP.String()]; clash {
+			t.Fatalf("%s was given %s, which is %s's", id, m.VirtualIP, who)
+		}
+		seen[m.VirtualIP.String()] = id
+	}
+
+	// Everybody swaps sides, and nobody's address moves or collides.
+	for i, id := range ids {
+		if err := s.Move(host.RoomID, id, 5+i); err != nil {
+			t.Fatal(err)
+		}
+	}
+	addrs := map[string]bool{}
+	for _, id := range append([]string{"h1"}, ids...) {
+		m, err := s.Membership(host.RoomID, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if addrs[m.VirtualIP.String()] {
+			t.Fatalf("%s shares address %s with somebody else", id, m.VirtualIP)
+		}
+		addrs[m.VirtualIP.String()] = true
+	}
+
+	// Getting up is what releases it, and the next person in takes it back.
+	gone, err := s.Membership(host.RoomID, "p2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Leave(host.RoomID, "p2", t0); err != nil {
+		t.Fatal(err)
+	}
+	back, err := s.Join(host.RoomID, room.Anyone("p5"), t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if back.VirtualIP != gone.VirtualIP {
+		t.Fatalf("the freed address %s was not reused; p5 got %s",
+			gone.VirtualIP, back.VirtualIP)
+	}
+}
+
+// A host who crashed has to come back to the address nine other clients are
+// already sending to. The grace window is exactly the period in which their
+// address must not be given to anybody else.
+func TestAHostKeepsTheirAddressThroughTheGraceWindow(t *testing.T) {
+	s := room.NewStore()
+	_, host, _ := s.Create("h1", "A", t0)
+	if _, err := s.Join(host.RoomID, room.Anyone("p2"), t0); err != nil {
+		t.Fatal(err)
+	}
+
+	s.WatchHosts(func(string) room.HostFacts { return room.HostFacts{} })
+	s.Tick(t0.Add(time.Second))
+
+	mate, err := s.Membership(host.RoomID, "p2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mate.HostIP != host.VirtualIP {
+		t.Fatalf("the room's address moved to %s while its host was away", mate.HostIP)
+	}
+
+	// Somebody else joining during the grace must not be handed it.
+	other, err := s.Join(host.RoomID, room.Anyone("p3"), t0.Add(2*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if other.VirtualIP == host.VirtualIP {
+		t.Fatalf("a new player was given the absent host's address %s", other.VirtualIP)
 	}
 }

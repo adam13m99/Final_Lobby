@@ -329,7 +329,9 @@ Go client is the only code here that has actually carried a Dota match, and
 what a browser page genuinely cannot do is exactly the small thing the shell
 adds.
 
-Build it with `./scripts/build-desktop.sh`. It is **not** wired into
+Build it with `./scripts/build.sh desktop`. Since D67 the installer ships
+it; this plan predates that, and the sentence below is left as written so the
+history reads honestly. It is **not** wired into
 `publish.sh` yet, and that is deliberate: publish.sh is the owner's only
 distribution channel and the installer it makes is known to work. Swapping it
 for one nobody has installed on a real machine risks the thing that works to

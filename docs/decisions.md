@@ -2004,3 +2004,153 @@ case, because it is caught by the same rule that catches the other three.
 Both were checked against a deliberately wrong selector afterwards, and both
 still fail on one. **A guard that has been widened and not re-tested is a guard
 that has been removed.**
+
+## D74 - a virtual address belongs to the player, not to the seat
+
+**2026-08-30.** The owner, on the live build: *"when i change a seat, it
+disconnects and connects to network, and this method is not smooth and UX
+friendly."*
+
+They are describing a tunnel teardown, and it was not a bug in the sense of
+something written wrong. It was the direct and correct consequence of a design
+choice, taken in D57 and left alone since, that nobody had looked at again.
+
+**What it was.** A player's virtual IP was `roomBase + 2 + slotIndex`. The
+address was a function of the seat. So `Move` genuinely did change a player's
+address, which genuinely did invalidate the ticket naming the old one, which is
+why D57 revoked on every successful move: anti-spoof compares the inner source
+IP against the session's assigned address and would otherwise drop everything
+that player sent. The app then had to bring the tunnel back up, synchronously,
+inside the click handler - up to twenty-five seconds of being disconnected
+because somebody wanted to play Dire instead of Radiant.
+
+**What was wrong with it.** Nothing about the tunnel depends on the seat.
+`ticket.Claims` carries `PlayerID`, `RoomID` and `VirtualIP`, and has never
+carried a slot. The seat is a fact about who is on which team; the address is a
+fact about which machine to send packets to. Deriving one from the other was
+convenient arithmetic and nothing more, and it welded a cosmetic action to a
+network action.
+
+**What it is now.** `Room.Addr` is an array of player ids indexed by address
+offset. A player takes the lowest free index when they join, keeps it for as
+long as they are in the room whatever seat they sit in, and releases it when
+they leave. `AddressOf(playerID)` is the only way to ask; `SlotOf` answers the
+unrelated question. `Move` touches neither `Addr` nor any ticket, and the
+`RevokePlayerRoom` call in `moveSlot` and the `tunnelUp` in the app's
+`takeSlot` are both gone. Changing seats is now a write to a list on the
+server, one sync tick, and nothing else.
+
+The host is not special here. Their address is theirs by the same rule, so D64
+survives intact - the room's `HostIP` is `AddressOf(HostID)` rather than a
+function of `HostSlot` - and a host who crashes reconnects holding the address
+every client in the room is already sending to.
+
+**The invariant to hold onto, and the tests that hold it.** *An address is
+stable for the lifetime of a membership.* Four tests in `room/store_test.go`
+state it directly, including one that watches a host keep their address through
+the whole grace window, and `smoke.sh` reads a player's `virtual_ip` before and
+after a real seat move over the real API and refuses to pass if the two differ.
+The oldest of those tests, `TestTheHostTakesTheRoomAddressWithThem`, had to be
+rewritten: it asserted the old behaviour, and a test that asserts what you have
+decided to stop doing is not evidence, it is inertia.
+
+## D75 - the reconciler that appended, and the rung that would have caught it
+
+**2026-08-30.** The owner: *"after creating a room my room kept duplicating the
+lobby."* Reproduced immediately - three rooms in the server's answer, five rows
+on the screen, growing by one every poll.
+
+**The bug.** D73 replaced the lobby's wholesale redraw with a per-row
+reconciler: keep a map of the rows already drawn, match incoming rooms by id,
+rebuild only the rows whose signature moved. The map is drained as it goes and
+whatever is left in it at the end is removed. The drain was missing on one
+path. A row that was found and reused was never deleted from the map, so it was
+still there at the end, so it was removed - and then the room was appended
+again on the next poll, and the poll after that. The room the player had just
+created was the one at the front of the list, which is why it was the one that
+multiplied.
+
+The fix is four lines. What is worth writing down is that this class of bug had
+now reached the owner three times: the chat glitching while they typed (D71),
+the panels rebuilt by a ping that moves on its own (D73), and this. Three
+reports, three different symptoms, one shape - **the renderer is correct on the
+first draw and wrong on the second** - and every rung of the harness looked at
+the first draw.
+
+**So there is now a rung that looks at the second.** `scripts/uicheck.sh` boots
+the same throwaway sandbox as the rest of the ladder, drives the real page over
+the DevTools Protocol, and pushes fabricated state through the renderer
+repeatedly. It asserts eight things: that a lobby of three rooms draws three
+rows through five signature changes and not eight; that a poll returning
+identical data leaves the existing rows physically untouched (each row is
+branded before the poll and the brand must still be there after); that a ping
+moving repaints a number rather than replacing the card; the same three for the
+room's fourteen seat cards; that the friends rail survives a no-op poll; and
+that every dialog closes with Escape. A ninth check reads the console and fails
+on anything in it.
+
+**It was verified by putting the bugs back.** All three, one at a time. It
+reported "8 rows in the document for 3 rooms", then "the row was thrown away
+and rebuilt by a poll that changed nothing", then "a number that moves by
+itself rebuilt the whole row". A check nobody has watched fail is not yet a
+check - the same lesson as the end of D73, learned again on the same day, which
+is how it earned an entry of its own.
+
+An earlier attempt put this assertion in `smoke.sh` instead, counting rows in a
+single render. It passed on the broken code. It was deleted rather than kept,
+because a green check that cannot go red is worse than no check: it is a claim.
+
+**Where it sits.** `scripts/verify.sh` is now the one command - check, smoke,
+uicheck, chatcheck, termscheck, cheapest first, one verdict, and it keeps going
+after a failure so a single run says everything that is wrong. `verify.sh fast`
+is the unit rung alone for the middle of a change. `preview.sh`, `try.sh` and
+`live.sh` stay outside it: two of them produce something only a person can
+grade, and the third talks to the live server.
+
+## D76 - the accounts database is copied hourly; the registry forgets people
+
+**2026-08-30.** Two findings from reading the coordinator as a thing that has
+to run unattended for months rather than as a thing that has to pass its tests.
+
+**There was no backup of anything.** `/var/lib/finallobby/db/lobby.db` holds
+every account there has ever been: usernames, Argon2id hashes that nobody can
+recover, the friend graph, the moderation record, and who accepted which
+version of the terms. Nothing anywhere held a second copy of it. A corrupt
+file, a bad migration or a fat-fingered `rm` and the product restarts from zero
+accounts with no way to tell anybody why.
+
+`store.Backup` writes one with `VACUUM INTO`, hourly, keeping twenty-four.
+Deliberately not `cp`: the database runs in WAL mode, so the file on disk is
+only part of the truth at any instant, and a copy taken while the coordinator
+is writing **opens cleanly and is wrong** - the worst kind of backup, because
+it looks like one. `VACUUM INTO` asks SQLite for a consistent copy, needs
+nothing installed on the server, and writes a file that is already compacted.
+The first copy is taken a minute after start rather than an hour, so a rebuilt
+server has one before it has a night. The test opens a copy and compares its
+schema version to the live one, because a file of nonzero size is not evidence.
+
+Running without `-backup-dir` is still allowed - it has to be, for the sandbox
+and every test - and logs a warning that says what is at stake rather than the
+name of a missing flag.
+
+**The registry only ever grew.** `player.Registry` gains an entry for everybody
+who connects and had no way to lose one. Over a month that is every player who
+has ever opened the app, held in memory, in a process designed to run for
+months. Nothing reads a player who has gone home: presence, the friends rail
+and last-seen times all come from the accounts table, which is on disk and is
+the durable copy. `Registry.Sweep` forgets anybody silent for two hours, on the
+timer that already expires rooms and purges tickets.
+
+**Except anybody sitting in a room**, whatever their last-seen time says. A
+player who has been quiet for an hour and is still holding a seat is a host in
+their grace window, or somebody with Dota in the foreground and the app behind
+it. Forgetting them blanks their name on nine other screens. That exception is
+the whole reason `Sweep` takes a `keep` set rather than just a timestamp.
+
+**And one thing about deploying, found while doing the above.** The unit now
+names `/var/lib/finallobby/backups` under `ReadWritePaths`, and systemd refuses
+to start a service whose `ReadWritePaths` points at a directory that is not
+there. `deploy.sh` created directories on the relay path only, so a rebuilt
+server would have come back with a coordinator that would not start.
+`deploy_coordinator` now prepares its own host - the unix user and every
+directory the unit names - the same way `deploy_relay` always has.

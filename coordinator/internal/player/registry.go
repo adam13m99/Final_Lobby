@@ -216,6 +216,34 @@ func (r *Registry) Forget(id string) {
 	delete(r.players, id)
 }
 
+// Sweep forgets everybody last seen before the given time, except those the
+// caller says to keep. It returns how many it forgot.
+//
+// Without this the registry is the one structure in the coordinator that only
+// ever grows: every player who has ever connected stays in it for as long as
+// the process runs, and the process is meant to run for months. Nothing reads
+// a player who has gone home - presence, the friends rail and last-seen times
+// all come from the accounts table, which is on disk and is the durable copy.
+//
+// `keep` is who must not be forgotten whatever their last-seen time says:
+// anybody sitting in a room. A player whose machine has been quiet for an hour
+// but who is still holding a seat is a host in their grace window or somebody
+// with the game in the foreground, and forgetting them would blank their name
+// on nine other screens.
+func (r *Registry) Sweep(keep map[string]bool, before time.Time) int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	gone := 0
+	for id, p := range r.players {
+		if keep[id] || !p.LastSeen.Before(before) {
+			continue
+		}
+		delete(r.players, id)
+		gone++
+	}
+	return gone
+}
+
 // Get returns one player.
 func (r *Registry) Get(id string) (Player, bool) {
 	r.mu.Lock()

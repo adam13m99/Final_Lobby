@@ -806,20 +806,11 @@ func (s *server) takeSlot(w http.ResponseWriter, r *http.Request) {
 		fail(w, err.Error())
 		return
 	}
-	if tunnelUp(r.Context()) {
-		ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
-		defer cancel()
-		if err := s.bringUpTunnel(ctx); err != nil {
-			s.mu.Lock()
-			s.connectErr = err.Error()
-			s.mu.Unlock()
-			fail(w, err.Error())
-			return
-		}
-		s.mu.Lock()
-		s.connectErr = ""
-		s.mu.Unlock()
-	}
+	// Nothing else happens. This used to tear the tunnel down and build it
+	// again, synchronously, for up to twenty-five seconds - because the
+	// player's address was derived from their seat and moving seat made their
+	// ticket wrong. An address belongs to the player now (D74), so changing
+	// team is a change of team: the network underneath it does not notice.
 	ok(w)
 }
 
