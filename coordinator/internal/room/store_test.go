@@ -2,6 +2,7 @@ package room_test
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -283,7 +284,7 @@ func TestTheHostTakesTheRoomAddressWithThem(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Move(hostM.RoomID, "h1", 6); err != nil {
+	if err := s.Move(hostM.RoomID, "h1", 6, false); err != nil {
 		t.Fatalf("the host moving to Dire: %v", err)
 	}
 
@@ -403,13 +404,13 @@ func TestAHostInAMatchLocksTheRoom(t *testing.T) {
 		return room.HostFacts{Online: true, InGame: playing}
 	})
 	s.Tick(t0.Add(time.Second))
-	if err := s.Move(m.RoomID, "p2", 7); err != nil {
+	if err := s.Move(m.RoomID, "p2", 7, false); err != nil {
 		t.Fatalf("a seat move was refused before the match started: %v", err)
 	}
 
 	playing = true
 	s.Tick(t0.Add(2 * time.Second))
-	if err := s.Move(m.RoomID, "p2", 8); !errors.Is(err, room.ErrRoomLocked) {
+	if err := s.Move(m.RoomID, "p2", 8, false); !errors.Is(err, room.ErrRoomLocked) {
 		t.Fatalf("moved seat during the host's match: %v", err)
 	}
 	if _, err := s.Join(m.RoomID, room.Anyone("p3"), t0.Add(3*time.Second)); !errors.Is(err, room.ErrRoomLocked) {
@@ -420,7 +421,7 @@ func TestAHostInAMatchLocksTheRoom(t *testing.T) {
 	// (D40): the ten who just played are the ten who want to play again.
 	playing = false
 	s.Tick(t0.Add(time.Minute))
-	if err := s.Move(m.RoomID, "p2", 8); err != nil {
+	if err := s.Move(m.RoomID, "p2", 8, false); err != nil {
 		t.Fatalf("still locked after the match ended: %v", err)
 	}
 }
@@ -443,7 +444,7 @@ func TestReopeningOverridesTheAutomaticLock(t *testing.T) {
 		t.Fatalf("the host reopened the room and nobody could join: %v", err)
 	}
 	// Seats still do not move: the match is running either way.
-	if err := s.Move(m.RoomID, "p2", 9); !errors.Is(err, room.ErrRoomLocked) {
+	if err := s.Move(m.RoomID, "p2", 9, false); !errors.Is(err, room.ErrRoomLocked) {
 		t.Fatalf("moved seat mid-match in a reopened room: %v", err)
 	}
 }
@@ -463,7 +464,7 @@ func TestChangingSeatDoesNotChangeYourAddress(t *testing.T) {
 	}
 
 	for _, seat := range []int{7, 9, 2, 5} {
-		if err := s.Move(host.RoomID, "p2", seat); err != nil {
+		if err := s.Move(host.RoomID, "p2", seat, false); err != nil {
 			t.Fatalf("moving to seat %d: %v", seat, err)
 		}
 		after, err := s.Membership(host.RoomID, "p2")
@@ -505,7 +506,7 @@ func TestAddressesAreUniqueAndReleasedOnLeaving(t *testing.T) {
 
 	// Everybody swaps sides, and nobody's address moves or collides.
 	for i, id := range ids {
-		if err := s.Move(host.RoomID, id, 5+i); err != nil {
+		if err := s.Move(host.RoomID, id, 5+i, false); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -567,5 +568,155 @@ func TestAHostKeepsTheirAddressThroughTheGraceWindow(t *testing.T) {
 	}
 	if other.VirtualIP == host.VirtualIP {
 		t.Fatalf("a new player was given the absent host's address %s", other.VirtualIP)
+	}
+}
+
+// --- the gallery is a seat like any other (D79) --------------------------
+
+// The owner's request: "all players including the host can switch positions
+// to Watchers/observers as well."
+//
+// The rule this has to keep is D74's, and it is the one that is easy to lose
+// here: an address belongs to the person for as long as they are in the room.
+// Watchers used to be addressed from a range of their own, indexed by the
+// seat - so moving into the gallery would have changed somebody's address,
+// invalidated the ticket naming it, and dropped the tunnel. That is exactly
+// the bug the owner reported two days earlier, and it would have come back
+// wearing a different hat.
+func TestGoingToWatchDoesNotChangeYourAddress(t *testing.T) {
+	s := room.NewStore()
+	r, _, _ := s.Create("h1", "test", t0)
+	m, err := s.Join(r.ID, room.Anyone("p2"), t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := m.VirtualIP
+
+	if err := s.Move(r.ID, "p2", 1, true); err != nil {
+		t.Fatalf("a player could not go and watch: %v", err)
+	}
+	after, err := s.Membership(r.ID, "p2")
+	if err != nil {
+		t.Fatalf("a watcher has no membership: %v", err)
+	}
+	if after.VirtualIP != before {
+		t.Fatalf("going to watch moved the address from %v to %v - the tunnel would drop",
+			before, after.VirtualIP)
+	}
+	if !after.IsSpectator() {
+		t.Fatal("a member sitting in the gallery is not reported as watching")
+	}
+
+	// And back to a playing seat, still the same address.
+	if err := s.Move(r.ID, "p2", 6, false); err != nil {
+		t.Fatalf("a watcher could not sit down and play: %v", err)
+	}
+	back, err := s.Membership(r.ID, "p2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if back.VirtualIP != before {
+		t.Fatalf("coming back to play moved the address from %v to %v", before, back.VirtualIP)
+	}
+	if back.IsSpectator() || back.Slot != 6 {
+		t.Fatalf("expected to be playing in seat 6, got spectator=%v slot=%d",
+			back.IsSpectator(), back.Slot)
+	}
+}
+
+// The host's own address is what every other client in the room is sending
+// to, so this is the one that ends a match rather than inconveniencing one
+// person.
+func TestAHostWhoGoesToWatchKeepsTheRoomsAddress(t *testing.T) {
+	s := room.NewStore()
+	r, hostM, _ := s.Create("h1", "test", t0)
+	mate, err := s.Join(r.ID, room.Anyone("p2"), t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mate.HostIP != hostM.VirtualIP {
+		t.Fatalf("the room's host address is %v, the host holds %v", mate.HostIP, hostM.VirtualIP)
+	}
+
+	if err := s.Move(r.ID, "h1", 0, true); err != nil {
+		t.Fatalf("the host could not go and watch their own room: %v", err)
+	}
+	after, err := s.Membership(r.ID, "p2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.HostIP != hostM.VirtualIP {
+		t.Fatalf("the host went to watch and the room's address moved from %v to %v - "+
+			"every client is now connecting to nobody", hostM.VirtualIP, after.HostIP)
+	}
+}
+
+// Watchers hold addresses out of the same pool as players, so a full room
+// plus a full gallery has to fit in it. Fourteen people, fourteen addresses,
+// no two the same.
+func TestAFullRoomAndAFullGalleryAllGetAddresses(t *testing.T) {
+	s := room.NewStore()
+	r, host, _ := s.Create("h1", "test", t0)
+
+	seen := map[string]string{host.VirtualIP.String(): "h1"}
+	add := func(id string, m room.Membership, err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatalf("%s could not be seated: %v", id, err)
+		}
+		if !m.VirtualIP.IsValid() {
+			t.Fatalf("%s was seated with no address", id)
+		}
+		if other, clash := seen[m.VirtualIP.String()]; clash {
+			t.Fatalf("%s and %s were both given %v", id, other, m.VirtualIP)
+		}
+		seen[m.VirtualIP.String()] = id
+	}
+
+	for i := 2; i <= 10; i++ { // nine more players fills the ten slots
+		id := fmt.Sprintf("p%d", i)
+		m, err := s.Join(r.ID, room.Anyone(id), t0)
+		add(id, m, err)
+	}
+	for i := 1; i <= 4; i++ { // and four watchers
+		id := fmt.Sprintf("w%d", i)
+		m, err := s.JoinObserver(r.ID, room.Anyone(id), t0)
+		add(id, m, err)
+	}
+	if len(seen) != 14 {
+		t.Fatalf("seated %d people with distinct addresses, want 14", len(seen))
+	}
+}
+
+// A host whose PC died while they were watching comes back to watching. The
+// grace window must not quietly put them on a team.
+func TestAWatchingHostComesBackToWatching(t *testing.T) {
+	rm := newRoom(t)
+	if err := rm.Move("host-1", 2, true); err != nil {
+		t.Fatal(err)
+	}
+	rm.Leave("host-1", t0)
+	rm.HostGraceUntil = t0.Add(time.Minute)
+
+	if _, err := rm.Join(room.Anyone("host-1"), t0); err != nil {
+		t.Fatalf("the host could not come back: %v", err)
+	}
+	slot, kind, seated := rm.SlotOf("host-1")
+	if !seated || kind != room.SeatObserver || slot != 2 {
+		t.Fatalf("the host came back to %v seat %d, want observer seat 2", kind, slot)
+	}
+}
+
+// A moderator's seat is reserved outside both areas so that a full match plus
+// a full gallery can never keep them out. Letting them vacate it to play
+// would hand that reservation back to the room.
+func TestAModeratorCannotSitDownAndPlay(t *testing.T) {
+	s := room.NewStore()
+	r, _, _ := s.Create("h1", "test", t0)
+	if _, err := s.JoinAdmin(r.ID, "mod", t0); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Move(r.ID, "mod", 5, false); err == nil {
+		t.Fatal("a moderator gave up the reserved seat to take a playing one")
 	}
 }

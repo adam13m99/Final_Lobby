@@ -1072,28 +1072,28 @@ function teamColumn(side, titleKey, first, seated, watching, canKick) {
 // that invites a click and then shows an error is worse than one that does
 // not invite it.
 //
-// The host is a player here like anybody else (D64). They used to be refused
-// every seat on the screen, which meant the one person who had opened a room
-// to play Dire was the one person who could not sit there. The address the
-// room is reached at follows them now, so the ten playing seats are theirs to
-// choose from - including the one they started in, which is an ordinary seat
-// once they leave it.
-function canTakeSeat(index, spectator) {
+// The host is a player here like anybody else (D64), and since D79 every seat
+// on the screen is open to everybody in the room, the gallery included. Both
+// of those were rules the host alone was refused by, and both of them meant
+// the person who had opened the room was the one person who could not sit
+// where they wanted in it.
+//
+// So for anybody in the room, every empty seat is takeable until the match
+// starts. Somebody not in the room yet can still only arrive in the gallery:
+// there is no door that seats an arrival in a chosen playing slot, and
+// offering one that quietly puts them somewhere else is worse than not
+// offering it.
+function canTakeSeat(spectator) {
   if (!state.room || state.room.status === "locked_in_game") return false;
-  // The one seat still refused, and the only one: the match runs on the
-  // host's machine, so they cannot go and watch it from the gallery. The
-  // coordinator refuses this too - it is a rule, not a courtesy.
-  if (spectator) return !state.is_host && !inSeat(true);
-  return inSeat(false);
+  return !!seated() || !!spectator;
 }
 
-// inSeat: am I sitting in this room, and on which kind of seat? A player
-// moving between playing slots is a move; a player who is watching has to
-// leave the room and come back in to play, because the coordinator seats the
-// two kinds through different doors.
-function inSeat(spectator) {
+// seated: am I in this room at all, and where? Returns the member record, so
+// a caller can tell a move from an arrival and a playing seat from a watching
+// one - the two arrive through different doors on the coordinator.
+function seated() {
   return ((state.room && state.room.members) || [])
-    .some((m) => m.player_id === state.player_id && !!m.spectator === spectator);
+    .find((m) => m.player_id === state.player_id);
 }
 
 function slotCard(index, member, canKick, spectator) {
@@ -1117,13 +1117,16 @@ function slotCard(index, member, canKick, spectator) {
     // affordance is the row lighting up under the pointer; eight rows that
     // each read "Sit here" is the instruction printed eight times.
     body.appendChild(el("div", "slot-name muted", t("room.slot.empty")));
-    if (canTakeSeat(index, spectator)) {
+    if (canTakeSeat(spectator)) {
       card.classList.add("takeable");
       pressable(card);
       card.title = t(spectator ? "room.watch.take.note" : "room.slot.take.note");
-      card.onclick = () => act(() => (spectator
-        ? api("/api/rooms/spectate", { room_id: state.room_id })
-        : api("/api/rooms/slot", { slot: index })));
+      // Already in the room: this is a move, and a move keeps the address, so
+      // nothing about the network notices (D74, D79). Not in it yet: this is
+      // an arrival, and arrivals come through their own doors.
+      card.onclick = () => act(() => (seated()
+        ? api("/api/rooms/slot", { slot: index, watching: !!spectator })
+        : api("/api/rooms/spectate", { room_id: state.room_id })));
     }
     return card;
   }

@@ -37,6 +37,19 @@ const (
 	// SeatsPerRoom is what a room holds in total.
 	SeatsPerRoom = PlayerSlots + ObserverSlots + AdminSlots
 
+	// MemberSlots is how many addresses a room hands out to the people seated
+	// in it: a full match plus a full gallery.
+	//
+	// An address belongs to the person for as long as they are in the room,
+	// whatever seat they are sitting in - D74 said that of the ten playing
+	// slots, and D79 says it of the watching seats too, because otherwise
+	// moving to the gallery changes your address and drops your tunnel, which
+	// is the exact bug D74 existed to remove. So there is one pool covering
+	// both, and it has to be big enough for everybody who can be seated at
+	// once. Moderators are not in it: their seat is reserved, outside both
+	// areas, and a moderator never moves between kinds.
+	MemberSlots = PlayerSlots + ObserverSlots
+
 	// subnetBits is the prefix length of one room's block.
 	subnetBits = 27
 	// addressesPerRoom must stay 1<<(32-subnetBits).
@@ -79,6 +92,21 @@ func SlotIP(roomIndex, slot int) (netip.Addr, error) {
 		return netip.Addr{}, fmt.Errorf("%w: player slot %d", ErrSlotRange, slot)
 	}
 	return offsetFrom(roomIndex, playerBaseOffset+slot)
+}
+
+// MemberIP returns the address held by one member of a room, player or
+// watcher.
+//
+// Indices 0-9 land where SlotIP puts a player and 10-13 where ObserverIP puts
+// a watcher: the two ranges were already adjacent, which is what makes one
+// pool across both possible without moving a single address. Those two
+// functions remain, because the addressing they describe has not changed and
+// the tests that pin the layout are written in their terms.
+func MemberIP(roomIndex, index int) (netip.Addr, error) {
+	if index < 0 || index >= MemberSlots {
+		return netip.Addr{}, fmt.Errorf("%w: member slot %d", ErrSlotRange, index)
+	}
+	return offsetFrom(roomIndex, playerBaseOffset+index)
 }
 
 // ObserverIP returns the address for someone watching without playing.

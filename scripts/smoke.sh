@@ -530,9 +530,68 @@ fi
 FREED=$(callb POST /api/rooms/slot '{"slot":0}')
 expect "the seat the host left can be taken"      '"ok":true'    "$FREED"
 
-# The one seat the host still cannot have: the match runs on their machine.
-HOSTWATCH=$(call POST /api/rooms/spectate "{\"room_id\":\"$ROOM_ID\"}")
-refuse "the host cannot watch their own room"     '"ok":true'    "$HOSTWATCH"
+say ""
+say "=== going to watch, and coming back ==="
+# The owner's request: everybody in a room, the host included, may move into
+# a watching seat and back out of it (D79). It used to be a one-way door
+# through a different entrance - watching meant leaving the room and rejoining
+# - and the host was refused it outright.
+#
+# The rule underneath is D74's, and it is the one that would be quietly lost
+# here: an address belongs to the person for as long as they are in the room.
+# Watchers used to be addressed out of a range of their own, indexed by the
+# seat, so moving into the gallery would have changed somebody's address and
+# dropped their tunnel - the exact bug the owner reported two days earlier.
+WATCHIP_BEFORE=$(printf '%s' "$(callb GET /api/state)" | grep -o '"virtual_ip":"[^"]*"' | head -1 | cut -d'"' -f4)
+
+TOWATCH=$(callb POST /api/rooms/slot '{"slot":1,"watching":true}')
+expect "a player can move to a watching seat"     '"ok":true'    "$TOWATCH"
+
+WATCHING=$(callb GET "/api/state")
+WATCHIP_AFTER=$(printf '%s' "$WATCHING" | grep -o '"virtual_ip":"[^"]*"' | head -1 | cut -d'"' -f4)
+if [ -n "$WATCHIP_BEFORE" ] && [ "$WATCHIP_BEFORE" = "$WATCHIP_AFTER" ]; then
+  ok "and going to watch did not change their address"
+else
+  bad "going to watch moved the address from $WATCHIP_BEFORE to $WATCHIP_AFTER - the tunnel would drop"
+fi
+
+# The seat they left is an ordinary free seat again, and the room says who is
+# watching. Read from the other player's view: this is what nine other screens
+# are drawing from.
+ROOMVIEW=$(call GET "/api/state")
+expect "and the room shows them watching"         '"spectator":true' "$ROOMVIEW"
+
+BACK=$(callb POST /api/rooms/slot '{"slot":3,"watching":false}')
+expect "and they can come back and play"          '"ok":true'    "$BACK"
+
+BACKST=$(callb GET "/api/state")
+BACKIP=$(printf '%s' "$BACKST" | grep -o '"virtual_ip":"[^"]*"' | head -1 | cut -d'"' -f4)
+if [ "$WATCHIP_BEFORE" = "$BACKIP" ]; then
+  ok "and coming back did not change it either"
+else
+  bad "coming back to play moved the address from $WATCHIP_BEFORE to $BACKIP"
+fi
+
+# The host too. This is the one the owner asked for by name, and the one that
+# was refused on the server rather than only in the interface.
+HOSTIP_BEFORE=$(printf '%s' "$(call GET /api/state)" | grep -o '"host_ip":"[^"]*"' | head -1 | cut -d'"' -f4)
+
+HOSTWATCH=$(call POST /api/rooms/slot '{"slot":0,"watching":true}')
+expect "the host can go and watch their own room" '"ok":true'    "$HOSTWATCH"
+
+# And the address every other client in the room is connecting to has not
+# moved. This is the assertion that matters: get it wrong and the host is
+# watching a match nobody can reach.
+MATE=$(callb GET "/api/state")
+HOSTIP_AFTER=$(printf '%s' "$MATE" | grep -o '"host_ip":"[^"]*"' | head -1 | cut -d'"' -f4)
+if [ -n "$HOSTIP_BEFORE" ] && [ "$HOSTIP_BEFORE" = "$HOSTIP_AFTER" ]; then
+  ok "and the room is still reached at the same address"
+else
+  bad "the host went to watch and the room's address moved from $HOSTIP_BEFORE to $HOSTIP_AFTER"
+fi
+
+HOSTBACK=$(call POST /api/rooms/slot '{"slot":0,"watching":false}')
+expect "and the host can sit back down"           '"ok":true'    "$HOSTBACK"
 
 OFFEND=$(callb POST /api/rooms/slot '{"slot":10}')
 refuse "there is no eleventh seat"                '"ok":true'    "$OFFEND"
@@ -540,8 +599,11 @@ refuse "there is no eleventh seat"                '"ok":true'    "$OFFEND"
 # Five seats below the two teams, for people who want to watch rather than
 # play (D59). They were a strip of text with no way to become one.
 #
-# Watching and playing are two doors into the same room, so a player takes
-# their playing seat with them when they go to watch: they get up first.
+# Watching and playing are two doors into the same room for somebody arriving.
+# For somebody already in it they are two seats, and moving between them is an
+# ordinary move (D79) - the section above this one. This one is still worth
+# keeping: it is the arrival, and it is how a person who is not in the room
+# gets into the gallery at all.
 STANDUP=$(callb POST /api/rooms/leave '{}')
 expect "a player gets up from their playing seat" '"ok":true'    "$STANDUP"
 # Joining, watching and rejoining all draw on the same bucket, and a refusal
@@ -553,7 +615,7 @@ expect "a player can take a seat to watch from"   '"ok":true'    "$WATCH"
 
 WATCHING=$(callb GET "/api/state")
 expect "and the room seats them as an observer"   '"spectator":true' "$WATCHING"
-expect "in the observers' own range"              '"seat":"observer"' "$WATCHING"
+expect "and marks the seat as a watching one"     '"seat":"observer"' "$WATCHING"
 
 # Their own distance from the relay, reported on their heartbeat and read
 # back beside their seat (D59). Nobody else can measure it for them.

@@ -2332,3 +2332,98 @@ was interrupted after 14,647,808 of 33,600,000 bytes: unexpected EOF*.
 That is the second time in two days that a check had to be watched failing
 before it could be believed (D75), and the second time the first version of it
 was a claim rather than a check.
+
+## D79 - the gallery is a seat like any other, and the actions moved into the facts
+
+**2026-08-31.** Four things from the owner, one of them much larger than it
+looks:
+
+> all players including the host can switch positions to Watchers/observers as
+> well
+> remove the text "Radiant vs Dire · 10 seats · 4 watching"
+> move Invite / Room settings / Create Game to the same box as the [facts]
+> with correct alignments
+
+### The gallery
+
+Two rules were in the way, and both were the host's alone. `JoinObserver`
+refused `r.HostID` outright, on the grounds that the match runs on the host's
+machine so they cannot go and watch it. And watching was not a seat you could
+*move* to at all: it was a different door. A player who wanted to watch had to
+leave the room and come back in through `JoinObserver`, and a watcher who
+wanted to play had to leave again.
+
+Both are now gone. `Move` takes a `watching` flag and treats the four seats in
+the gallery as destinations like the ten on the boards. Anybody seated may go
+either way, the host included. The host's PC goes on running the listen server
+whether or not they are playing in the match on it, which is an ordinary thing
+to want - somebody hosting for nine friends and sitting it out.
+
+A moderator still cannot. Their seat is reserved outside both areas, and the
+whole point of the reservation is that a full match plus a full gallery can
+never keep them out; letting them vacate it to sit down and play would hand it
+back to the room.
+
+### The part that was not asked for and had to happen anyway
+
+**A watcher's address used to be derived from their seat.** Players drew from
+`Room.Addr`, a pool that follows the person (D74); watchers were addressed by
+`ipam.ObserverIP(roomIndex, seat)` out of a range of their own at `.12-.15`.
+
+So a naive implementation of what the owner asked for would have changed
+somebody's virtual IP the moment they moved into the gallery - invalidating
+the ticket that names it, and dropping their tunnel. **That is precisely the
+bug the owner reported two days ago and D74 exists to remove.** It would have
+come back wearing a different hat, on a feature request that says nothing
+about addressing.
+
+So the pool covers both. `ipam.MemberSlots` is fourteen - a full match plus a
+full gallery - and `ipam.MemberIP` indexes `.2` upward across what used to be
+two ranges. Nothing moved: the player and observer ranges were already
+adjacent, which is the only reason one pool across both was possible without
+renumbering a single address. Moderators keep `.17-.19` and `AdminIP`;
+`SlotIP` and `ObserverIP` remain, because the layout they describe has not
+changed and the tests that pin it are written in their terms.
+
+`Store.Membership` now sends watchers through `membershipFor` like players, and
+`membershipFor` reports the seat kind it actually finds rather than the
+hardcoded `SeatPlayer` it used to return - which was true while only players
+came through it and became a lie the moment watchers did.
+
+The invariant, restated so it covers everything: **an address belongs to the
+person for as long as they are in the room, whatever seat they are sitting
+in.** `TestGoingToWatchDoesNotChangeYourAddress` states it, and was checked
+against the old observer addressing: it fails with *going to watch moved the
+address from 10.87.0.3 to 10.87.0.13 - the tunnel would drop*.
+`smoke.sh` walks the same path over the real API, for a player and for the
+host, and the host's is the one that matters most - the address every other
+client in the room is sending to must not move because the host went to watch.
+
+One more piece of bookkeeping: `HostWatching` records which array `HostSlot`
+indexes. A host whose PC dies while they are watching comes back to watching;
+without it the grace window would quietly put them on a team.
+
+### The band
+
+The room's three actions were in the title row and the five facts were below a
+rule, with the width between them empty. They are on one recessed panel now,
+facts leading and actions at the trailing edge, centred against the cells.
+
+The thing that starts a match is now beside the cell that says why it will
+not, which is the argument for the move rather than the tidiness. `#roomstats`
+is emptied and refilled on every redraw, so the buttons are its sibling and
+never its children - putting them inside would have deleted them twice a
+second.
+
+`room.foot` - "Radiant vs Dire · 10 seats · 4 watching" - is deleted. It
+described the screen it was printed on: two boards, ten seats and four
+watching seats, all of them visible directly above it.
+
+### One thing the owner may want to decide later
+
+Ten playing seats and a host who may be in none of them means a room can now
+sit at nine players plus a watching host and look full to nobody. Nothing
+breaks - the match runs on their PC either way - but "Players 9/10" with the
+host in the gallery is a state that did not exist before, and whether the
+lobby should say something about it is a product question, not a technical
+one.

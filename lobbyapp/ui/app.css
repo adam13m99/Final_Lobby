@@ -804,13 +804,6 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .tier1 button { height: 30px; flex: none; }
-/* Exactly one glow on this screen, on the one action, and no pulse. Open and
-   Join in the lobby used to be as loud as the thing that starts a match. */
-.tier1 .go {
-  height: 32px; padding: 0 18px; font-size: 12.5px;
-  box-shadow: 0 0 0 1px var(--accent-ring), 0 0 12px var(--accent-soft);
-}
-.tier1 .go:disabled { box-shadow: 0 0 0 1px var(--line2); }
 /* The guide toggle. Italic, round and small: it is the one control here that
    is about the screen rather than about the room. */
 .guidebtn {
@@ -829,16 +822,41 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
   background: linear-gradient(to inline-end, transparent, var(--line2), transparent);
 }
 
-/* The five facts, on a recessed panel so they read as instrument panel
-   rather than as more of the header. Each cell is label over value, and the
-   hairlines between them fade top and bottom for the same reason the rule
-   above does. */
-.stats {
+/* The five facts and the three actions, on one recessed panel so they read as
+   an instrument panel rather than as more of the header. Each cell is label
+   over value, and the hairlines between them fade top and bottom for the same
+   reason the rule above does.
+
+   The actions used to live up in the title row, which left the width beside
+   the facts empty and put the thing that starts a match a long way from the
+   cell that says why it will not (D79). They sit at the trailing edge now,
+   centred against the cells rather than against their labels. */
+.statsrow {
   position: relative; z-index: 1;
-  display: flex; align-items: center; flex-wrap: wrap; row-gap: 8px;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   padding: 9px 12px; border-radius: var(--r-sm);
   background: var(--sunk); box-shadow: inset 0 0 0 1px var(--hair);
 }
+.stats {
+  display: flex; align-items: center; flex-wrap: wrap; row-gap: 8px;
+  flex: 1 1 auto; min-width: 0;
+}
+/* Trailing edge, and never wrapped between: three buttons on two lines read
+   as two groups. */
+.bandacts {
+  display: flex; align-items: center; gap: 8px;
+  flex: 0 0 auto; margin-inline-start: auto;
+}
+.bandacts button { height: 30px; flex: none; }
+/* Exactly one glow on this screen, on the one action, and no pulse. Open and
+   Join in the lobby used to be as loud as the thing that starts a match. */
+.bandacts .go {
+  height: 32px; padding: 0 18px; font-size: 12.5px;
+  box-shadow: 0 0 0 1px var(--accent-ring), 0 0 12px var(--accent-soft);
+}
+.bandacts .go:disabled { box-shadow: 0 0 0 1px var(--line2); }
+/* The last cell before the buttons must not push its rule against them. */
+.stats .stat:last-child { padding-inline-end: 0; }
 .stat { flex: 0 1 auto; min-width: 0; padding-inline-end: 18px; }
 .stat .k {
   font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase;

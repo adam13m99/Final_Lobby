@@ -286,7 +286,7 @@ func TestAPlayerCanMoveToAFreeSlot(t *testing.T) {
 	if _, err := r.Join(room.Anyone("p2"), t0); err != nil {
 		t.Fatal(err)
 	}
-	if err := r.Move("p2", 7); err != nil {
+	if err := r.Move("p2", 7, false); err != nil {
 		t.Fatal(err)
 	}
 	if r.Slots[1] != "" {
@@ -301,7 +301,7 @@ func TestMovingOntoSomebodyElseIsRefused(t *testing.T) {
 	r := newRoom(t)
 	r.Join(room.Anyone("p2"), t0)
 	r.Join(room.Anyone("p3"), t0)
-	if err := r.Move("p2", 2); !errors.Is(err, room.ErrSlotTaken) {
+	if err := r.Move("p2", 2, false); !errors.Is(err, room.ErrSlotTaken) {
 		t.Fatalf("err = %v, want ErrSlotTaken", err)
 	}
 }
@@ -314,7 +314,7 @@ func TestTheHostMovesLikeAnybodyElse(t *testing.T) {
 	if _, err := r.Join(room.Anyone("p2"), t0); err != nil {
 		t.Fatal(err)
 	}
-	if err := r.Move("host-1", 7); err != nil {
+	if err := r.Move("host-1", 7, false); err != nil {
 		t.Fatalf("the host moving to Dire: %v", err)
 	}
 	if r.Slots[7] != "host-1" {
@@ -327,7 +327,7 @@ func TestTheHostMovesLikeAnybodyElse(t *testing.T) {
 		t.Errorf("HostSlot = %d, want 7 - the address every client is told", r.HostSlot)
 	}
 	// And the seat they left is an ordinary seat now, not a reserved one.
-	if err := r.Move("p2", 0); err != nil {
+	if err := r.Move("p2", 0, false); err != nil {
 		t.Fatalf("taking the seat the host left: %v", err)
 	}
 	if r.HostSlot != 7 {
@@ -335,11 +335,34 @@ func TestTheHostMovesLikeAnybodyElse(t *testing.T) {
 	}
 }
 
-// The one seat the host still cannot take. The match runs on their machine.
-func TestTheHostCannotWatchTheirOwnRoom(t *testing.T) {
+// The host may sit in the gallery (D79). Hosting a game you are not playing
+// in is an ordinary thing to want, and the listen server runs on their PC
+// either way.
+//
+// The way there is Move, not a second Join: JoinObserver is the door for
+// somebody arriving, and the host is already inside.
+func TestTheHostMayGoAndWatch(t *testing.T) {
 	r := newRoom(t)
-	if _, err := r.JoinObserver(room.Anyone("host-1"), t0); !errors.Is(err, room.ErrHostCannotWatch) {
-		t.Fatalf("err = %v, want ErrHostCannotWatch", err)
+	if err := r.Move("host-1", 0, true); err != nil {
+		t.Fatalf("the host could not go and watch their own room: %v", err)
+	}
+	slot, kind, seated := r.SlotOf("host-1")
+	if !seated || kind != room.SeatObserver || slot != 0 {
+		t.Fatalf("host is at %v/%d (seated=%v), want observer seat 0", kind, slot, seated)
+	}
+	// The playing slot they left is an ordinary free seat now.
+	if _, err := r.Join(room.Anyone("p2"), t0); err != nil {
+		t.Fatal(err)
+	}
+	if slot, _, _ := r.SlotOf("p2"); slot != 0 {
+		t.Fatalf("the seat the host vacated was not offered to anybody: p2 is in %d", slot)
+	}
+	// And back again.
+	if err := r.Move("host-1", 4, false); err != nil {
+		t.Fatalf("the host could not come back to a playing seat: %v", err)
+	}
+	if slot, kind, _ := r.SlotOf("host-1"); kind != room.SeatPlayer || slot != 4 {
+		t.Fatalf("host is at %v/%d, want player seat 4", kind, slot)
 	}
 }
 
@@ -348,7 +371,7 @@ func TestTheHostCannotWatchTheirOwnRoom(t *testing.T) {
 // else may have taken the seat they started in.
 func TestAReturningHostReclaimsTheirOwnSeat(t *testing.T) {
 	r := newRoom(t)
-	if err := r.Move("host-1", 6); err != nil {
+	if err := r.Move("host-1", 6, false); err != nil {
 		t.Fatal(err)
 	}
 	r.Join(room.Anyone("p2"), t0)
@@ -376,7 +399,7 @@ func TestSeatsDoNotChangeDuringAMatch(t *testing.T) {
 	if err := r.SetStatus("host-1", room.StatusLocked, t0); err != nil {
 		t.Fatal(err)
 	}
-	if err := r.Move("p2", 6); !errors.Is(err, room.ErrRoomLocked) {
+	if err := r.Move("p2", 6, false); !errors.Is(err, room.ErrRoomLocked) {
 		t.Fatalf("err = %v, want ErrRoomLocked", err)
 	}
 }
@@ -384,14 +407,14 @@ func TestSeatsDoNotChangeDuringAMatch(t *testing.T) {
 func TestMovingOutOfRangeIsRefused(t *testing.T) {
 	r := newRoom(t)
 	r.Join(room.Anyone("p2"), t0)
-	if err := r.Move("p2", 10); !errors.Is(err, room.ErrNoSuchSlot) {
+	if err := r.Move("p2", 10, false); !errors.Is(err, room.ErrNoSuchSlot) {
 		t.Fatalf("err = %v, want ErrNoSuchSlot", err)
 	}
 }
 
 func TestSomebodyNotInTheRoomCannotTakeASeat(t *testing.T) {
 	r := newRoom(t)
-	if err := r.Move("stranger", 5); !errors.Is(err, room.ErrNotMemberOfRoom) {
+	if err := r.Move("stranger", 5, false); !errors.Is(err, room.ErrNotMemberOfRoom) {
 		t.Fatalf("err = %v, want ErrNotMemberOfRoom", err)
 	}
 }

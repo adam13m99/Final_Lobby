@@ -252,17 +252,28 @@
       <button class="guidebtn" id="btn-guide" data-t-title="room.guide.what">
         <span aria-hidden="true">i</span>
       </button>
-      <button id="btn-invite" data-t="room.invite"></button>
-      <button class="hostonly" id="btn-roomsettings" data-t="room.settings"></button>
-      <!-- One action, and which one it is depends on whether this is your
-           room. It brings the tunnel up and opens Dota in a single gesture,
-           the way GameRanger does; the network cell below says how far it
-           got if it does not finish. -->
-      <button class="primary go" id="btn-step"></button>
     </div>
 
     <span class="bandrule" aria-hidden="true"></span>
-    <div class="stats" id="roomstats"></div>
+
+    <!-- The facts and the actions on one instrument panel. They were two
+         bands: the buttons up in the title row, the facts below the rule,
+         with the width between them empty. The three things somebody does to
+         a room and the five things they check about it belong at the same
+         eye level (D79). #roomstats is emptied and refilled on every redraw,
+         so the buttons are its sibling and not its children. -->
+    <div class="statsrow">
+      <div class="stats" id="roomstats"></div>
+      <div class="bandacts">
+        <button id="btn-invite" data-t="room.invite"></button>
+        <button class="hostonly" id="btn-roomsettings" data-t="room.settings"></button>
+        <!-- One action, and which one it is depends on whether this is your
+             room. It brings the tunnel up and opens Dota in a single gesture,
+             the way GameRanger does; the network cell beside it says how far
+             it got if it does not finish. -->
+        <button class="primary go" id="btn-step"></button>
+      </div>
+    </div>
   </div>
 
   <!-- The three steps, as one line, behind the (i). They used to be three
@@ -289,7 +300,6 @@
          space for it. It is somebody's free text shown to strangers: it is
          set as text, never as markup. -->
     <span class="sum desc" id="room-desc"></span>
-    <span class="sum" data-t="room.foot"></span>
     <div class="head-gap"></div>
     <button class="danger" id="btn-leave" data-t="room.leave"></button>
   </div>

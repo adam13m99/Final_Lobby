@@ -191,10 +191,12 @@ func TestCannotHoldTwoSeatsAtOnce(t *testing.T) {
 	if _, err := s.JoinAdmin(r.ID, "p2", when()); err != ErrAlreadyJoined {
 		t.Fatalf("a seated player took an admin seat as well: %v", err)
 	}
-	// The host is refused the gallery outright rather than for being seated
-	// (D64), which is a stronger rule: it holds while they are away too.
-	if _, err := s.JoinObserver(r.ID, Anyone("host"), when()); err != ErrHostCannotWatch {
-		t.Fatalf("the host took an observer seat: %v", err)
+	// The host is refused for being seated, like anybody else. They used to
+	// be refused the gallery outright; the owner reversed that (D79), so what
+	// stops them here is the one rule that stops everybody - one seat each.
+	// The way in is Move, which vacates the seat they are leaving.
+	if _, err := s.JoinObserver(r.ID, Anyone("host"), when()); err != ErrAlreadyJoined {
+		t.Fatalf("the host took a second seat: %v", err)
 	}
 	if _, err := s.JoinAdmin(r.ID, "host", when()); err != ErrAlreadyJoined {
 		t.Fatalf("playing host took an admin seat: %v", err)

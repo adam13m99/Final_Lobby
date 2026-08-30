@@ -753,6 +753,10 @@ func (s *Server) moveSlot(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		PlayerID string `json:"player_id"`
 		Slot     *int   `json:"slot"`
+		// Watching picks which set of seats Slot indexes. Absent means the
+		// playing slots, so every client written before the gallery became a
+		// destination (D79) keeps working unchanged.
+		Watching bool `json:"watching"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -764,7 +768,7 @@ func (s *Server) moveSlot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := r.PathValue("id")
-	if err := s.rooms.Move(id, body.PlayerID, *body.Slot); err != nil {
+	if err := s.rooms.Move(id, body.PlayerID, *body.Slot, body.Watching); err != nil {
 		writeErr(w, statusFor(err), err.Error())
 		return
 	}
@@ -773,8 +777,10 @@ func (s *Server) moveSlot(w http.ResponseWriter, r *http.Request) {
 	// still names the address they still have, and the tunnel they are on
 	// stays up. This used to revoke, which meant picking a side dropped you
 	// off the room's network and rebuilt it from the handshake up.
-	s.log.Info("player changed slot", "room", id, "player", body.PlayerID, "slot", *body.Slot)
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "slot": *body.Slot})
+	s.log.Info("player changed seat", "room", id, "player", body.PlayerID,
+		"seat", *body.Slot, "watching", body.Watching)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok": true, "slot": *body.Slot, "watching": body.Watching})
 }
 
 func (s *Server) setStatus(w http.ResponseWriter, r *http.Request) {
@@ -855,8 +861,7 @@ func statusFor(err error) int {
 	case errors.Is(err, room.ErrNotFound),
 		errors.Is(err, room.ErrNotMember):
 		return http.StatusNotFound
-	case errors.Is(err, room.ErrNotHost),
-		errors.Is(err, room.ErrHostCannotWatch):
+	case errors.Is(err, room.ErrNotHost):
 		return http.StatusForbidden
 	case errors.Is(err, room.ErrRoomLocked),
 		errors.Is(err, room.ErrKickBlocked),

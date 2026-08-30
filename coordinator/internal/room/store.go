@@ -182,12 +182,13 @@ func (s *Store) Membership(roomID, playerID string) (Membership, error) {
 	if !seated {
 		return Membership{}, ErrNotMember
 	}
-	switch kind {
-	case SeatObserver:
-		return observerMembershipFor(r, slot)
-	case SeatAdmin:
+	_ = slot
+	if kind == SeatAdmin {
 		return adminMembershipFor(r, slot)
 	}
+	// A watcher goes through the same door as a player (D79): their address
+	// is the one they hold, not one derived from the seat they are in, which
+	// is what lets them move between the two without reconnecting.
 	return membershipFor(r, playerID)
 }
 
@@ -200,11 +201,10 @@ func (s *Store) JoinObserver(roomID string, who Applicant, now time.Time) (Membe
 	if !ok {
 		return Membership{}, ErrNotFound
 	}
-	seat, err := r.JoinObserver(who, now)
-	if err != nil {
+	if _, err := r.JoinObserver(who, now); err != nil {
 		return Membership{}, err
 	}
-	return observerMembershipFor(r, seat)
+	return membershipFor(r, who.ID)
 }
 
 // JoinAdmin seats a moderator in the reserved area outside the gallery.
@@ -252,14 +252,14 @@ func (s *Store) Leave(roomID, playerID string, now time.Time) (bool, error) {
 
 // Move changes which playing slot a player sits in, which is how a player
 // changes team.
-func (s *Store) Move(roomID, playerID string, slot int) error {
+func (s *Store) Move(roomID, playerID string, seat int, watching bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	r, ok := s.rooms[roomID]
 	if !ok {
 		return ErrNotFound
 	}
-	return r.Move(playerID, slot)
+	return r.Move(playerID, seat, watching)
 }
 
 // Kick removes a player and bars them, host only.
@@ -355,22 +355,16 @@ func (s *Store) Tick(now time.Time) []string {
 	return closed
 }
 
-// observerMembershipFor derives the addressing for a watcher's seat.
-func observerMembershipFor(r *Room, seat int) (Membership, error) {
-	return nonPlayingMembership(r, seat, SeatObserver)
-}
-
 // adminMembershipFor derives the addressing for a moderator's seat.
 func adminMembershipFor(r *Room, seat int) (Membership, error) {
 	return nonPlayingMembership(r, seat, SeatAdmin)
 }
 
+// nonPlayingMembership derives the addressing for a seat outside the member
+// pool. Only a moderator's is left: a watcher draws an address like a player
+// now, so that moving between the two does not change it (D79).
 func nonPlayingMembership(r *Room, seat int, kind SeatKind) (Membership, error) {
-	addr := ipam.ObserverIP
-	if kind == SeatAdmin {
-		addr = ipam.AdminIP
-	}
-	vip, err := addr(r.Index, seat)
+	vip, err := ipam.AdminIP(r.Index, seat)
 	if err != nil {
 		return Membership{}, err
 	}
@@ -402,7 +396,7 @@ func membershipFor(r *Room, playerID string) (Membership, error) {
 	if !ok {
 		return Membership{}, ErrNotMember
 	}
-	vip, err := ipam.SlotIP(r.Index, index)
+	vip, err := ipam.MemberIP(r.Index, index)
 	if err != nil {
 		return Membership{}, err
 	}
@@ -414,7 +408,11 @@ func membershipFor(r *Room, playerID string) (Membership, error) {
 	if err != nil {
 		return Membership{}, err
 	}
-	slot, _, _ := r.SlotOf(playerID)
+	// The kind is read rather than assumed. It used to be hardcoded to
+	// SeatPlayer, which was true while only players came through here and
+	// became a lie the moment watchers did (D79) - and IsSpectator is what
+	// the app draws a seat from.
+	slot, kind, _ := r.SlotOf(playerID)
 	return Membership{
 		RoomID:    r.ID,
 		Slot:      slot,
@@ -422,7 +420,7 @@ func membershipFor(r *Room, playerID string) (Membership, error) {
 		HostIP:    host,
 		Subnet:    subnet,
 		IsHost:    playerID == r.HostID,
-		Kind:      SeatPlayer,
+		Kind:      kind,
 	}, nil
 }
 

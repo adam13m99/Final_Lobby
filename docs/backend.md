@@ -170,6 +170,17 @@ tunnel actually depends on the seat: `ticket.Claims` carries `PlayerID`,
 change to a list on the server and nothing else, and `Move` deliberately does
 not touch `Addr`.
 
+**A watcher holds one from the same pool** (D79). The gallery is a seat you
+move to, not a different door you leave and re-enter through, and anybody
+seated may go either way - the host included. Watchers used to be addressed
+from a range of their own indexed by the seat, which would have meant that
+moving into the gallery changed your address and dropped your tunnel, so the
+pool now covers a full match plus a full gallery: `ipam.MemberSlots` is
+fourteen and `ipam.MemberIP` indexes `.2` upward across what used to be two
+ranges. Nothing moved - they were already adjacent. Moderators keep `.17-.19`
+and a seat they cannot leave, because a full room must never be able to lock
+them out.
+
 **The host's address is theirs the same way** (D64, restated under D74). Every
 membership's `HostIP` comes from `AddressOf(HostID)`, so the host picks a side
 like anybody else, slot 0 is an ordinary Radiant seat once they get up, and a
@@ -503,9 +514,10 @@ the store on the next tick, before anybody has read why it ended.
    the registry, on a tick. A rule that depends on either belongs beside those
    two, not in the handler that happens to have noticed (D69, D70).
 9. **Never derive an address from a seat.** A virtual IP belongs to the
-   player for as long as they are in the room; `Move` must not touch `Addr`,
-   and nothing that changes a seat may revoke a ticket. The moment those two
-   are coupled, every seat change becomes a reconnection (D74).
+   person for as long as they are in the room - whichever seat, playing or
+   watching (D74, D79). `Move` must not touch `Addr`, and nothing that changes
+   a seat may revoke a ticket. The moment those two are coupled, every seat
+   change becomes a reconnection.
 10. **Never let a restart be casual.** Rooms are in memory. Deploying the
    coordinator closes every open one; `ship.sh` counts them first and says so.
 11. **Never let a response big enough to take seconds inherit `WriteTimeout`.**

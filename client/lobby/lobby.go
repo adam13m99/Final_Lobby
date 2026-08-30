@@ -330,11 +330,15 @@ func (c *Client) Kick(roomID, playerID, targetID string) error {
 		map[string]string{"player_id": playerID, "target_id": targetID}, nil)
 }
 
-// MoveSlot puts a seated player in a different playing slot, which is how
-// they change team: slots 0-4 are Radiant and 5-9 are Dire.
-func (c *Client) MoveSlot(roomID, playerID string, slot int) error {
+// MoveSlot puts a seated member in a different seat.
+//
+// With watching false the seat is a playing slot, which is how somebody
+// changes team: 0-4 are Radiant and 5-9 are Dire. With it true the seat is
+// one of the four in the gallery, which anybody may move to and back from,
+// the host included (D79).
+func (c *Client) MoveSlot(roomID, playerID string, slot int, watching bool) error {
 	return c.do("POST", "/v1/rooms/"+roomID+"/slot",
-		map[string]any{"player_id": playerID, "slot": slot}, nil)
+		map[string]any{"player_id": playerID, "slot": slot, "watching": watching}, nil)
 }
 
 func (c *Client) SetStatus(roomID, playerID, status string) error {

@@ -890,6 +890,9 @@ func (s *server) kick(w http.ResponseWriter, r *http.Request) {
 func (s *server) takeSlot(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Slot int `json:"slot"`
+		// Which board the seat is on: the ten playing slots, or the four in
+		// the gallery. Moving between the two is an ordinary move (D79).
+		Watching bool `json:"watching"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -899,7 +902,7 @@ func (s *server) takeSlot(w http.ResponseWriter, r *http.Request) {
 		fail(w, "Join a room first.")
 		return
 	}
-	if err := s.api().MoveSlot(cfg.RoomID, cfg.PlayerID, body.Slot); err != nil {
+	if err := s.api().MoveSlot(cfg.RoomID, cfg.PlayerID, body.Slot, body.Watching); err != nil {
 		fail(w, err.Error())
 		return
 	}

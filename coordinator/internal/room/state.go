@@ -84,11 +84,6 @@ var (
 	ErrNoAdminSeat    = errors.New("room: no free admin seat")
 	ErrSlotTaken      = errors.New("room: that slot is taken")
 	ErrNoSuchSlot     = errors.New("room: there is no such slot")
-	// ErrHostCannotWatch guards the one seat the host still cannot take.
-	// They may sit anywhere among the ten playing slots (D64), but the match
-	// runs on their machine, so they cannot go and watch it from the
-	// gallery - the room would be hosted by somebody who is not playing.
-	ErrHostCannotWatch = errors.New("room: the host cannot watch their own room")
 	// ErrNotMemberOfRoom is returned when somebody is asked to take a role in
 	// a room they are not playing in.
 	ErrNotMemberOfRoom = errors.New("room: they are not playing in that room")
@@ -155,7 +150,7 @@ type Room struct {
 	// up. It survives every seat move in between, and it survives the host's
 	// grace window, so a host who crashed comes back to the address every
 	// other client is already sending to.
-	Addr [ipam.PlayerSlots]string
+	Addr [ipam.MemberSlots]string
 
 	// HostSlot is which playing slot the host's PC is sitting in, and it is
 	// the room's authority on the address every other client is told to
@@ -167,6 +162,12 @@ type Room struct {
 	// able to say where they were: a host who crashed and comes back has to
 	// come back to the same address.
 	HostSlot int
+
+	// HostWatching says which array HostSlot indexes: the playing slots, or
+	// the gallery. A host may sit in the gallery now (D79), and a host who
+	// crashes while watching has to come back to watching - otherwise the
+	// grace window quietly moves them onto a team.
+	HostWatching bool
 
 	KickedUntil map[string]time.Time
 	// KickCount is how many times each player has been kicked from *this*
@@ -230,9 +231,14 @@ func NewRoom(id string, index int, hostID string, now time.Time) *Room {
 	return r
 }
 
-// takeAddress gives a player one of the room's ten addresses and returns its
-// index. A player who already holds one keeps it: this is called on every
-// path that seats somebody, and seating is not the same event as arriving.
+// takeAddress gives somebody one of the room's addresses and returns its
+// index. Anybody who already holds one keeps it: this is called on every path
+// that seats somebody, and seating is not the same event as arriving.
+//
+// Players and watchers draw from the same pool (D79). That is what lets
+// somebody move between a playing seat and the gallery without their address
+// changing under them, which is what lets them do it without their tunnel
+// coming down.
 func (r *Room) takeAddress(playerID string) (int, bool) {
 	for i, id := range r.Addr {
 		if id == playerID {
@@ -257,11 +263,11 @@ func (r *Room) dropAddress(playerID string) {
 	}
 }
 
-// AddressOf reports which of the room's player addresses is this player's.
+// AddressOf reports which of the room's member addresses is this person's.
 //
-// Only the ten playing addresses live here. An observer's and a moderator's
-// come from ranges of their own, indexed by the seat they took, and neither
-// of those seats can move - so neither needs an allocation that outlives it.
+// Every seated player and every watcher is in here. A moderator is not: their
+// seat is reserved outside both areas, they never move between kinds, and
+// their address is indexed by the seat itself.
 func (r *Room) AddressOf(playerID string) (int, bool) {
 	for i, id := range r.Addr {
 		if id == playerID {
@@ -311,13 +317,26 @@ func (r *Room) Join(who Applicant, now time.Time) (int, error) {
 	}
 
 	// A host who crashed comes back to the seat they left, not to the lowest
-	// free one. Their address is derived from it, and somebody else may well
-	// have taken the seat they used to be in while they were gone.
-	if isHostReturning && r.Slots[r.HostSlot] == "" {
-		r.Slots[r.HostSlot] = playerID
-		r.takeAddress(playerID)
-		r.HostGraceUntil = time.Time{}
-		return r.HostSlot, nil
+	// free one - and not to a different kind of seat either. Somebody who was
+	// watching their own room when their PC died comes back to the gallery
+	// (D79); coming back onto a team would be the app deciding they are
+	// playing.
+	//
+	// The seat may be gone: it is emptied when they drop, and the room goes on
+	// without them. Then they take whatever is free, below.
+	if isHostReturning {
+		if r.HostWatching && r.HostSlot < len(r.Observers) && r.Observers[r.HostSlot] == "" {
+			r.Observers[r.HostSlot] = playerID
+			r.takeAddress(playerID)
+			r.HostGraceUntil = time.Time{}
+			return r.HostSlot, nil
+		}
+		if !r.HostWatching && r.Slots[r.HostSlot] == "" {
+			r.Slots[r.HostSlot] = playerID
+			r.takeAddress(playerID)
+			r.HostGraceUntil = time.Time{}
+			return r.HostSlot, nil
+		}
 	}
 	for i := range r.Slots {
 		if r.Slots[i] == "" {
@@ -326,6 +345,7 @@ func (r *Room) Join(who Applicant, now time.Time) (int, error) {
 			if isHostReturning {
 				r.HostGraceUntil = time.Time{}
 				r.HostSlot = i
+				r.HostWatching = false
 			}
 			return i, nil
 		}
@@ -340,16 +360,11 @@ func (r *Room) Join(who Applicant, now time.Time) (int, error) {
 // and griefing start. An admin is a different case - see JoinAdmin.
 func (r *Room) JoinObserver(who Applicant, now time.Time) (int, error) {
 	playerID := who.ID
-	// First, and before the seated-already check, so the answer names the real
-	// reason. Said here rather than only in the interface: the host may now sit
-	// anywhere among the playing slots (D64), and the button that used to be
-	// refused on the client for every seat is refused for this one alone - so
-	// the refusal has to exist on the server or it does not exist. It holds
-	// during the grace window too, when the host is in no seat at all and
-	// could otherwise come back to watch the match running on their own PC.
-	if playerID == r.HostID {
-		return 0, ErrHostCannotWatch
-	}
+	// The host used to be refused here outright, on the grounds that the match
+	// runs on their machine so they cannot go and watch it from the gallery.
+	// The owner reversed that on 2026-08-31 (D79): a host hosting a game they
+	// are not playing in is an ordinary thing to want, and their PC goes on
+	// running the listen server either way.
 	if err := r.admissible(playerID, now); err != nil {
 		return 0, err
 	}
@@ -364,6 +379,9 @@ func (r *Room) JoinObserver(who Applicant, now time.Time) (int, error) {
 	for i := range r.Observers {
 		if r.Observers[i] == "" {
 			r.Observers[i] = playerID
+			// A watcher draws from the same address pool as a player (D79),
+			// so that moving between the two never changes their address.
+			r.takeAddress(playerID)
 			return i, nil
 		}
 	}
@@ -444,24 +462,32 @@ func (r *Room) SlotOf(playerID string) (int, SeatKind, bool) {
 	return 0, SeatPlayer, false
 }
 
-// Move puts a seated player in a different playing slot.
+// Move puts a seated member in a different seat, playing or watching.
 //
-// Which slot you are in is which team you are on: 0-4 are Radiant and 5-9 are
-// Dire, exactly as the game divides them. Picking a side is therefore picking
-// a slot, and it is the one thing every player in a room wants to do that
-// previously required leaving and rejoining until the numbers came out right.
+// Which playing slot you are in is which team you are on: 0-4 are Radiant and
+// 5-9 are Dire, exactly as the game divides them. Picking a side is therefore
+// picking a slot, and it is the one thing every player in a room wants to do
+// that previously required leaving and rejoining until the numbers came out
+// right.
 //
 // **The host moves like anybody else** (D64). They used to be nailed to slot
 // 0, because slot 0 was the address every client had been told to connect to
 // - so the one person who could not choose a side was the person who had
-// opened the room to play a particular one. The address now follows the host
-// rather than the other way round: HostSlot says where they are, and the
-// membership every client reads is derived from it.
+// opened the room to play a particular one. The address now belongs to the
+// person rather than the seat (D74), so HostSlot only records where they are
+// sitting, and hostAddr does not consult it at all.
+//
+// **The gallery is a destination like any other** (D79). Anybody seated may
+// move into a watching seat and back out again, the host included. It used to
+// be a one-way door through a different entrance: watching meant leaving the
+// room and rejoining through JoinObserver, and the host was refused outright
+// on the grounds that the match runs on their machine. Neither survived
+// contact with what people actually do with a lobby.
 //
 // The rest of the rules are the boring ones. A locked room is a match in
-// progress, and a player who changes team halfway through it is a player on
-// the wrong team in Dota.
-func (r *Room) Move(playerID string, slot int) error {
+// progress, and somebody who changes team - or wanders off to watch - halfway
+// through it is somebody in the wrong place in Dota.
+func (r *Room) Move(playerID string, seat int, watching bool) error {
 	if r.Status == StatusClosed {
 		return ErrRoomClosed
 	}
@@ -472,27 +498,49 @@ func (r *Room) Move(playerID string, slot int) error {
 	if r.Status == StatusLocked || r.HostInGame {
 		return ErrRoomLocked
 	}
-	if slot < 0 || slot >= len(r.Slots) {
+
+	to := r.Slots[:]
+	if watching {
+		to = r.Observers[:]
+	}
+	if seat < 0 || seat >= len(to) {
 		return ErrNoSuchSlot
 	}
+
 	from, kind, seated := r.SlotOf(playerID)
-	if !seated || kind != SeatPlayer {
+	if !seated {
 		return ErrNotMemberOfRoom
 	}
-	if from == slot {
+	// A moderator's seat is reserved outside both areas and is the whole
+	// point of the reservation: a full match plus a full gallery must never
+	// be able to keep a moderator out. Letting them vacate it to sit down and
+	// play would hand that seat back to the room.
+	if kind == SeatAdmin {
+		return ErrNotMemberOfRoom
+	}
+
+	wasWatching := kind == SeatObserver
+	if wasWatching == watching && from == seat {
 		return nil
 	}
-	if r.Slots[slot] != "" {
+	if to[seat] != "" {
 		return ErrSlotTaken
 	}
-	r.Slots[from] = ""
-	r.Slots[slot] = playerID
-	if playerID == r.HostID {
-		r.HostSlot = slot
+
+	if wasWatching {
+		r.Observers[from] = ""
+	} else {
+		r.Slots[from] = ""
 	}
-	// Addr is deliberately untouched (D74). Changing team is not a change of
-	// address, so the ticket this player is holding stays correct and their
-	// tunnel stays up.
+	to[seat] = playerID
+
+	if playerID == r.HostID {
+		r.HostSlot = seat
+		r.HostWatching = watching
+	}
+	// Addr is deliberately untouched (D74, D79). Changing seat is not a change
+	// of address - not between teams and not into the gallery - so the ticket
+	// this person is holding stays correct and their tunnel stays up.
 	return nil
 }
 
