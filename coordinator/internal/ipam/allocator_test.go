@@ -57,7 +57,10 @@ func TestSeatRangesDoNotOverlap(t *testing.T) {
 		first, last string
 	}{
 		{"players", "10.87.0.2", "10.87.0.11"},
-		{"observers", "10.87.0.12", "10.87.0.16"},
+		// Four observers since D68. Admins stay where they were: the gap at
+		// .16 is deliberate, so that dropping a seat from the gallery did
+		// not move a moderator's address.
+		{"observers", "10.87.0.12", "10.87.0.15"},
 		{"admins", "10.87.0.17", "10.87.0.19"},
 	}
 	get := map[string]func(int, int) (netip.Addr, error){

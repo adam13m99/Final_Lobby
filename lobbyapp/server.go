@@ -130,7 +130,14 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /api/rooms/slot", s.guard(s.takeSlot))
 	mux.HandleFunc("POST /api/connect", s.guard(s.connect))
 	mux.HandleFunc("POST /api/disconnect", s.guard(s.disconnect))
+	// The room screen calls /api/playnow, which does both halves (D68).
+	// /api/play opens Dota without touching the tunnel and is kept
+	// deliberately: it is the only way to relaunch the game for a player who
+	// is already on the room's network and closed it, and it is what the
+	// two-PC test drives when the two steps have to be told apart. It has no
+	// caller in app.js on purpose - do not delete it as dead.
 	mux.HandleFunc("POST /api/play", s.guard(s.play))
+	mux.HandleFunc("POST /api/playnow", s.guard(s.playNow))
 	mux.HandleFunc("POST /api/diagnose", s.guard(s.diagnose))
 	mux.HandleFunc("POST /api/update", s.guard(s.applyUpdate))
 	mux.HandleFunc("POST /api/rooms/describe", s.guard(s.describeRoom))
@@ -932,19 +939,120 @@ func (s *server) play(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
-	cfg := s.snapshot()
-	if cfg.RoomID == "" {
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	role, err := s.launchDota(ctx, body.Mode, body.Team)
+	if err != nil {
+		fail(w, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "role": role})
+}
+
+// playNow is the room screen's one button: get on the room's network, then
+// open Dota (D68).
+//
+// These were two deliberate clicks, and the second was the one people forgot.
+// Chaining them here rather than in the page is what makes it safe: the
+// tunnel reports "connecting" the moment the service accepts it, and the
+// Noise handshake finishes some time after that. A page that fired both calls
+// back to back would hand Dota a host address this PC could not yet route to,
+// and the failure would look like a broken room rather than a race.
+func (s *server) playNow(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Mode int    `json:"mode"`
+		Team string `json:"team"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	if s.snapshot().RoomID == "" {
 		fail(w, "Join a room first.")
 		return
 	}
-	if body.Mode == 0 {
-		body.Mode = 1
-	}
-	if body.Team == "" {
-		body.Team = "good"
+
+	ctx, cancel := context.WithTimeout(r.Context(), 45*time.Second)
+	defer cancel()
+
+	if !tunnelUp(ctx) {
+		if err := s.bringUpTunnel(ctx); err != nil {
+			s.mu.Lock()
+			s.connectErr = err.Error()
+			s.mu.Unlock()
+			fail(w, err.Error())
+			return
+		}
+		s.mu.Lock()
+		s.connectErr = ""
+		s.mu.Unlock()
+		if err := waitForTunnel(ctx); err != nil {
+			fail(w, err.Error())
+			return
+		}
 	}
 
-	req := ipc.Request{Op: ipc.OpLaunch, Nick: cfg.Nick, GameMode: body.Mode, Team: body.Team,
+	role, err := s.launchDota(ctx, body.Mode, body.Team)
+	if err != nil {
+		fail(w, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "role": role})
+}
+
+// waitForTunnel blocks until the handshake finishes, or says why it did not.
+//
+// The wait is bounded and the message names the two things that actually
+// cause it - the relay being unreachable from this network, and a ticket the
+// relay refused - because a silent refusal is exactly what turned the D36
+// ticket bug into an hour of investigation.
+func waitForTunnel(ctx context.Context) error {
+	deadline := time.Now().Add(25 * time.Second)
+	for {
+		resp, err := statusOnce(ctx)
+		if err == nil {
+			if resp.Connected {
+				return nil
+			}
+			if resp.Err != "" {
+				return errors.New(resp.Err)
+			}
+		}
+		if time.Now().After(deadline) {
+			return errors.New("Could not get onto the room's network. " +
+				"The relay did not answer, or it refused this ticket. " +
+				"Try Join again from the network line above.")
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(400 * time.Millisecond):
+		}
+	}
+}
+
+func statusOnce(parent context.Context) (ipc.Response, error) {
+	ctx, cancel := context.WithTimeout(parent, 3*time.Second)
+	defer cancel()
+	return ipc.Call(ctx, ipc.Request{Op: ipc.OpStatus})
+}
+
+// launchDota asks the service for a validated command line and starts it.
+//
+// The service will not start the process itself: it runs as LocalSystem in
+// session 0, which has no desktop and no GPU. It validates, we start.
+func (s *server) launchDota(ctx context.Context, mode int, team string) (string, error) {
+	cfg := s.snapshot()
+	if cfg.RoomID == "" {
+		return "", errors.New("Join a room first.")
+	}
+	if mode == 0 {
+		mode = 1
+	}
+	if team == "" {
+		team = "good"
+	}
+
+	req := ipc.Request{Op: ipc.OpLaunch, Nick: cfg.Nick, GameMode: mode, Team: team,
 		Options: cfg.LaunchOptions}
 	if cfg.IsHost {
 		req.Role = "host"
@@ -953,28 +1061,21 @@ func (s *server) play(w http.ResponseWriter, r *http.Request) {
 		req.HostIP = cfg.HostIP
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-	defer cancel()
 	resp, err := ipc.Call(ctx, req)
 	if err != nil {
-		fail(w, err.Error())
-		return
+		return "", err
 	}
 	if resp.Err != "" {
-		fail(w, resp.Err)
-		return
+		return "", errors.New(resp.Err)
 	}
 
-	// The service validated the command; we start it, because a service runs
-	// in session 0 where there is no desktop and no GPU.
 	cmd := exec.Command(resp.DotaPath, resp.Args...)
 	cmd.Dir = filepath.Dir(resp.DotaPath)
 	if err := cmd.Start(); err != nil {
-		fail(w, "Could not start Dota 2: "+err.Error())
-		return
+		return "", errors.New("Could not start Dota 2: " + err.Error())
 	}
 	_ = cmd.Process.Release()
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "role": req.Role})
+	return req.Role, nil
 }
 
 // --- update -------------------------------------------------------------

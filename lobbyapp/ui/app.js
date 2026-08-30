@@ -15,7 +15,10 @@ const POLL_MS = 2000;
 // Five seats for people who want to watch rather than play. The coordinator
 // allocates the same five (ipam.ObserverSlots); the admins' three are a
 // separate range and are not drawn here.
-const WATCH_SLOTS = 5;
+// Four watching seats, two on each board (D68). Five could not be split
+// evenly between two sides, and the coordinator hands out four.
+const WATCH_SLOTS = 4;
+const OBS_PER_SIDE = WATCH_SLOTS / 2;
 
 let state = {};
 let screen = "lobby";
@@ -189,12 +192,24 @@ function initials(name) {
 function hueOf(id) {
   let h = 0;
   const s = String(id || "");
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360;
-  return h;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 290;
+  // The greens are reserved. Your own face is a fixed green so that you can
+  // be found in a list of ten without reading a name, and that only works if
+  // nobody else's hash can land on one.
+  return h < 100 ? h : h + 70;
 }
 
 function avatar(name, id, cls) {
   const e = el("div", "avatar" + (cls ? " " + cls : ""), initials(name));
+  // Your own face is always the same green, whoever you are (D68). Everybody
+  // else keeps their id's colour, so the same person is recognisable across
+  // screens; what this buys is the other half - finding yourself in a list of
+  // ten without reading a single name.
+  if (id && id === state.player_id) {
+    e.className += " me";
+    e.title = name || "";
+    return e;
+  }
   const h = hueOf(id);
   // Held to one band of lightness and saturation so every face sits at the
   // same weight against the panel and none of them shouts.
@@ -209,8 +224,6 @@ function avatar(name, id, cls) {
 function render() {
   const s = state;
 
-  pill("p-service", s.service, t(s.service ? "status.service.up" : "status.service.down"));
-  $("p-online").textContent = t("status.online", { n: s.online ?? 0 });
   const mf = $("meface");
   if (mf.dataset.who !== (s.player_id || "") + "/" + (s.nick || "")) {
     mf.dataset.who = (s.player_id || "") + "/" + (s.nick || "");
@@ -259,21 +272,20 @@ function render() {
   renderMod(s);
 }
 
-function pill(id, ok, text) {
-  const e = $(id);
-  e.textContent = text;
-  e.className = "pill " + (ok === "wait" ? "wait" : ok ? "ok" : "bad");
-}
-
-// The toolbar's connection light (D42.5). Being in a room and being on its
-// network are different states, and this is the permanent reminder of which
-// one you are in.
+// The rail's two lights (D42.5, moved there by D68). Being in a room and
+// being on its network are different states, and this is the permanent
+// reminder of which one you are in. The service light above it answers the
+// other half: whether this PC can join a room network at all.
 function renderConnection(s) {
-  let cls = "bad", key = "status.tunnel.off";
+  const svc = $("rs-service");
+  svc.className = "rs" + (s.service ? " up" : " down");
+  $("servicetext").textContent = t(s.service ? "rail.service.up" : "rail.service.down");
+
+  let cls = "bad", key = "rail.tunnel.off";
   if (s.connected) {
-    cls = "ok"; key = "status.tunnel.on";
+    cls = "ok"; key = "rail.tunnel.on";
   } else if (s.tunnel === "connecting") {
-    cls = "wait"; key = "status.tunnel.connecting";
+    cls = "wait"; key = "rail.tunnel.wait";
   }
   $("conndot").className = "dot " + cls;
   $("conntext").textContent = t(key);
@@ -441,8 +453,9 @@ function renderRooms(rooms) {
 // three numbers a player chooses on. The whole row opens the room; only the
 // button in the last column joins it.
 function roomCard(r) {
-  const card = el("div", "room");
-  card.onclick = () => (r.id === state.room_id ? show("room") : joinRoom(r));
+  const mine = r.id === state.room_id;
+  const card = el("div", "room" + (mine ? " here" : ""));
+  card.onclick = () => (mine ? show("room") : joinRoom(r));
 
   const who = el("div", "room-who");
   who.appendChild(avatar(r.host_nick, r.host_id));
@@ -458,8 +471,11 @@ function roomCard(r) {
   if (r.needs_password) bits.push(t("lobby.door.password"));
   if (r.privacy === "friends") bits.push(t("lobby.door.friends"));
   if (r.privacy === "invite") bits.push(t("lobby.door.invite"));
-  if (r.id === state.room_id) bits.push(t("lobby.youarehere"));
   meta.appendChild(el("span", "rest", bits.join(" · ")));
+  // "You are here" is not one more fact on the list: it is the answer to the
+  // only question that separates this row from the others, so it is said in
+  // the accent and last, where the eye stops.
+  if (mine) meta.appendChild(el("span", "here", t("lobby.youarehere")));
   about.appendChild(meta);
   who.appendChild(about);
   card.appendChild(who);
@@ -517,8 +533,12 @@ function pingCell(r) {
   const grade = !ms ? "" : ms < 60 ? "good" : ms < 140 ? "fair" : "poor";
   const cell = el("div", "room-ping rcol-hide " + grade);
   cell.title = ms ? t("lobby.ping.explain") : t("lobby.ping.none");
+  // Five bars, not three. Three cannot show "fair" as anything but "not
+  // good", and the meter is the only part of the row read without looking
+  // straight at it.
   const bars = el("span", "bars");
-  for (let i = 0; i < 3; i++) bars.appendChild(el("i"));
+  const lit = !ms ? 0 : ms < 40 ? 5 : ms < 60 ? 4 : ms < 100 ? 3 : ms < 140 ? 2 : 1;
+  for (let i = 0; i < 5; i++) bars.appendChild(el("i", i < lit ? "on" : ""));
   cell.appendChild(bars);
   cell.appendChild(document.createTextNode(
     ms ? t("lobby.ping.value", { n: ms }) : t("lobby.ping.unknown")));
@@ -581,14 +601,10 @@ function renderRoom(r) {
   $("room-face").appendChild(avatar(r.host_nick, r.host_id));
   $("room-name").textContent = r.name;
 
-  // One line of everything else about the room, in the order somebody asks
-  // for it: who is running it, how good the people in it are, how full it is.
-  const bits = [t("room.meta.host", { host: r.host_nick })];
-  if (r.avg_mmr) bits.push(t("room.meta.mmr", { mmr: r.avg_mmr }));
-  if (r.min_mmr) bits.push(t("lobby.mmr.plus", { n: r.min_mmr }));
-  bits.push(t("room.meta.seats", { seats: r.seats }));
-  if (r.description) bits.push(r.description);
-  $("room-sub").textContent = bits.join(" · ");
+  // Who is hosting, how full it is and what the addresses are all moved into
+  // the stat strip below the rule (D68). What is left is the host's own
+  // sentence, which has no number to sit beside and goes in the footer.
+  $("room-desc").textContent = r.description || "";
 
   const badge = $("room-status");
   badge.className = statusClass(r.status);
@@ -604,102 +620,150 @@ function renderRoom(r) {
   const seated = {};
   for (const m of r.members || []) if (!m.spectator) seated[m.slot] = m;
 
-  // Slots 0-4 are Radiant and 5-9 are Dire, which is how the game itself
-  // divides them. Drawing all ten in one list hid the only structural fact
-  // about a room: which five you would be joining.
-  const box = $("slots");
-  box.textContent = "";
-  box.appendChild(teamColumn("radiant", "room.team.radiant", 0, seated, iAmHost));
-  box.appendChild(teamColumn("dire", "room.team.dire", 5, seated, iAmHost));
-
-  // The five seats below the two teams (D59). Observers are numbered in
-  // their own range, so an observer in seat 0 and the host in slot 0 are not
-  // the same seat and must not share a key.
+  // Observers are numbered in their own range, so an observer in seat 0 and
+  // the host in slot 0 are not the same seat and must not share a key.
   const watching = {};
   for (const m of r.members || []) if (m.spectator && m.seat !== "admin") watching[m.slot] = m;
-  $("watch").textContent = "";
-  $("watch").appendChild(watchColumn(r, watching, iAmHost));
 
-  const net = [];
-  if (state.virtual_ip) net.push(t("net.you", { ip: state.virtual_ip }));
-  if (state.host_ip) net.push(t("net.host", { ip: state.host_ip }));
-  if (state.relay_ms) net.push(t("net.relay", { n: state.relay_ms }));
-  $("netinfo").textContent = net.join(" · ");
+  // Slots 0-4 are Radiant and 5-9 are Dire, which is how the game itself
+  // divides them. Drawing all ten in one list hid the only structural fact
+  // about a room: which five you would be joining. The watching seats belong
+  // to a side too now (D68): the first two to Radiant, the last two to Dire.
+  const box = $("slots");
+  box.textContent = "";
+  box.appendChild(teamColumn("radiant", "room.team.radiant", 0, seated, watching, iAmHost));
+  box.appendChild(teamColumn("dire", "room.team.dire", 5, seated, watching, iAmHost));
 
-  drawStepper(r);
+  drawStats(r);
+  drawAction(r);
   drawNetBanner();
 }
 
-// drawStepper is the whole of getting from a seat to a game, as three steps
-// with one button under them.
+// drawStats is the band's second tier: the five facts somebody checks when a
+// match will not start, labelled, in the order they check them.
 //
-// It replaced a row of buttons that were sometimes disabled. The commonest
-// failure in the two-PC test was two players sitting in a room, neither of
-// them on its network, with nothing on the screen saying which of the three
-// things had not happened. A numbered list cannot be misread that way, and
-// the button always says the next thing to do rather than everything that
-// could be done.
-function drawStepper(r) {
-  const mine = (r.members || []).find((m) => m.player_id === state.player_id);
-  const seated = !!mine;
-  const side = mine && !mine.spectator
-    ? t(mine.slot < 5 ? "room.team.radiant" : "room.team.dire") : "";
+// They were one run-on line at the very bottom of the screen. That is the
+// last place a person looks and the first thing they need, and the line said
+// "10.87.0.7 · 10.87.0.2 · 37 ms" with nothing saying which was which.
+function drawStats(r) {
+  const box = $("roomstats");
+  box.textContent = "";
 
-  step("seat", seated, false, seated && !mine.spectator
-    ? t("step.seat.at", { side: side, slot: mine.slot + 1 })
-    : t("step.seat.watching"));
-  step("net", !!state.connected, seated && !state.connected,
-    state.connected && state.virtual_ip
-      ? t("net.you", { ip: state.virtual_ip }) + " · " + t("net.host", { ip: state.host_ip || "?" })
-      : t("step.net.not"));
-  // Getting off the room's network without leaving the room. It is the first
-  // thing to try when a game will not connect, and until now the only way to
-  // do it was to leave the room and come back.
-  drawStepOff();
-  step("game", !!state.dota_running, !!state.connected && !state.dota_running,
-    t("step.game.detail"));
+  const cell = (labelKey, fill) => {
+    if (box.children.length) box.appendChild(el("span", "statrule"));
+    const c = el("div", "stat");
+    c.appendChild(el("div", "k", t(labelKey)));
+    const v = el("div", "v");
+    fill(v);
+    c.appendChild(v);
+    box.appendChild(c);
+  };
 
+  cell("room.stat.host", (v) => { v.textContent = r.host_nick; });
+  cell("room.stat.players", (v) => {
+    v.appendChild(el("span", "", String(r.seats || 0)));
+    v.appendChild(el("span", "faint", t("room.stat.of10")));
+  });
+  cell("room.stat.you", (v) => {
+    v.textContent = state.virtual_ip || t("status.dash");
+  });
+  cell("room.stat.hostaddr", (v) => {
+    v.textContent = state.host_ip || t("status.dash");
+  });
+
+  // The one cell that is also a control. Getting on and off a room's network
+  // is the first thing to try when Dota cannot find the host, and this is
+  // where somebody is already looking when that happens.
+  cell("room.stat.net", (v) => {
+    const on = !!state.connected;
+    const wait = !on && state.tunnel === "connecting";
+    v.appendChild(el("span", "netdot " + (on ? "ok" : wait ? "wait" : "off")));
+    v.appendChild(el("span", on ? "netword ok" : "netword",
+      t(on ? "room.net.on" : wait ? "room.net.wait" : "room.net.off")));
+    if (on && state.relay_ms) {
+      v.appendChild(el("span", "mspill", t("checks.ms", { n: state.relay_ms })));
+    }
+    // A host never leaves their own room's network: their machine is the
+    // game, and dropping it ends the match for everybody in it.
+    if (on && !state.is_host) {
+      const off = el("button", "netlink", t("room.net.leave"));
+      off.title = t("room.net.leave.note");
+      off.onclick = () => act(() => api("/api/disconnect", {}));
+      v.appendChild(off);
+    } else if (!on && !wait) {
+      const go = el("button", "netlink", t("room.net.join"));
+      go.onclick = () => act(() => api("/api/connect", {}));
+      v.appendChild(go);
+    }
+  });
+}
+
+// drawAction is the room's single button (D68).
+//
+// It mirrors GameRanger: Create Game when the room is yours, Join Game when
+// it is not, in the same place either way. One click brings the tunnel up and
+// opens Dota, because those were two deliberate clicks and the second one was
+// the one people forgot.
+//
+// The three steps it replaced are not gone - they are the guide behind the
+// (i), and the network cell in the band above says which of them this PC has
+// actually done. That was the thing the stepper was for: the commonest
+// failure in the two-PC test was two players in a room, neither on its
+// network, with nothing on screen saying so.
+function drawAction(r) {
   const b = $("btn-step");
-  if (!state.connected) {
-    b.textContent = t(state.is_host ? "step.go.host" : "step.go.connect");
-    b.disabled = false;
-    b.onclick = () => act(() => api("/api/connect", {}));
-  } else if (!state.dota_running) {
-    b.textContent = t("step.go.launch");
-    b.disabled = false;
-    b.onclick = () => act(() => api("/api/play", { mode: Number($("mode").value), team: myTeam() }));
-  } else {
-    b.textContent = t("step.go.running");
-    b.disabled = true;
-    b.onclick = null;
+  const mine = (r.members || []).find((m) => m.player_id === state.player_id);
+  const watching = mine && mine.spectator;
+
+  let key = state.is_host ? "room.go.create" : "room.go.join";
+  let why = "";
+  let off = false;
+
+  if (state.dota_running) {
+    key = "room.go.running"; off = true;
+  } else if (!mine) {
+    key = state.is_host ? "room.go.create" : "room.go.join";
+    off = true; why = t("room.go.needseat");
+  } else if (watching) {
+    off = true; why = t("room.go.watching");
+  } else if (r.status === "locked_in_game" && !state.connected) {
+    off = true; why = t("room.go.locked");
+  }
+
+  b.textContent = t(key);
+  b.disabled = off;
+  b.title = why;
+  b.onclick = off ? null : () => act(() => api("/api/playnow", {
+    mode: Number($("mode").value), team: myTeam(),
+  }));
+}
+
+// The guide strip: the same three steps, one line, closed by default and
+// remembered per installation. A returning player has learned the flow; a
+// band of instructions they cannot dismiss is the app talking over them.
+function drawGuide() {
+  const on = guideOpen();
+  $("guide").classList.toggle("hidden", !on);
+  $("btn-guide").classList.toggle("on", on);
+}
+
+function guideOpen() {
+  try {
+    return window.localStorage.getItem("guide") === "open";
+  } catch (e) {
+    // A browser with site data switched off, or a private window. The guide
+    // simply does not remember; nothing else about the room depends on it.
+    return false;
   }
 }
 
-// The way back off the network, on the step that put you on it. A host is
-// not offered it: their machine is the game, and dropping it off the room's
-// network ends the match for everybody in it - that is what Leave room is
-// for, and it says so.
-function drawStepOff() {
-  const step = $("step-net");
-  const had = step.querySelector(".stepoff");
-  if (had) had.remove();
-  if (!state.connected || state.is_host) return;
-  const b = el("button", "stepoff tiny", t("step.net.off"));
-  b.title = t("step.net.off.note");
-  b.onclick = () => act(() => api("/api/disconnect", {}));
-  step.appendChild(b);
+function setGuide(on) {
+  try {
+    window.localStorage.setItem("guide", on ? "open" : "shut");
+  } catch (e) { /* see guideOpen */ }
+  drawGuide();
 }
 
-// A step is done, happening now, or still ahead. The detail line under it is
-// the evidence for whichever of those it is.
-function step(name, done, now, detail) {
-  const e = $("step-" + name);
-  e.className = "step" + (done ? " done" : now ? " now" : "");
-  const nth = name === "seat" ? "1" : name === "net" ? "2" : "3";
-  $("step-" + name + "-mark").textContent = done ? "✓" : nth;
-  const d = $("step-" + name + "-detail");
-  if (d) d.textContent = detail;
-}
 
 // drawDoor fills the host's door controls from the room.
 //
@@ -756,49 +820,45 @@ function drawNetBanner() {
 }
 
 // teamColumn draws one side: a heading in that side's colour, how many of
-// its five seats are taken, and the seats themselves.
-function teamColumn(side, titleKey, first, seated, canKick) {
+// its five seats are taken, the seats themselves, and the two watching seats
+// that belong to this side (D68).
+//
+// The watching seats used to be a panel of their own across the full width.
+// Putting them on a board says the thing that is actually true of them: an
+// observer sits with a team, and the two boards are then the whole room.
+function teamColumn(side, titleKey, first, seated, watching, canKick) {
   const col = el("div", "team " + side);
   const head = el("div", "team-head");
   head.appendChild(el("span", "swatch"));
   head.appendChild(el("span", "", t(titleKey)));
+
   let taken = 0;
   for (let i = first; i < first + 5; i++) if (seated[i]) taken++;
-  head.appendChild(el("span", "n", t("room.team.count", { n: taken })));
+  const obsFirst = side === "radiant" ? 0 : OBS_PER_SIDE;
+  let obs = 0;
+  for (let i = obsFirst; i < obsFirst + OBS_PER_SIDE; i++) if (watching[i]) obs++;
+
+  head.appendChild(el("div", "head-gap"));
+  head.appendChild(el("span", "n",
+    t("room.team.count", { n: taken }) + " · " + t("room.team.obs", { n: obs })));
   col.appendChild(head);
+
   for (let i = first; i < first + 5; i++) {
     col.appendChild(slotCard(i, seated[i], canKick));
+  }
+
+  const obshead = el("div", "obs-head");
+  obshead.appendChild(el("span", "swatch"));
+  obshead.appendChild(el("span", "", t("room.watch")));
+  obshead.appendChild(el("div", "head-gap"));
+  obshead.appendChild(el("span", "n", t("room.team.obs", { n: obs })));
+  col.appendChild(obshead);
+  for (let i = obsFirst; i < obsFirst + OBS_PER_SIDE; i++) {
+    col.appendChild(slotCard(i, watching[i], canKick, true));
   }
   return col;
 }
 
-// watchColumn is the five seats below the two teams (D59).
-//
-// They were a strip that said "nobody is spectating" and had no way to
-// become one. They are seats now, drawn and taken exactly like a playing
-// seat, so somebody who wants to watch a friend's game sits down rather than
-// looking for a button that was never there.
-//
-// A locked room refuses them, the same as it refuses a playing seat: an
-// observer joining a running match is a client the host's Dota did not
-// expect. That refusal lives on the coordinator; this only declines to
-// invite the click.
-function watchColumn(r, seated, canKick) {
-  const col = el("div", "team watch");
-  const head = el("div", "team-head");
-  head.appendChild(el("span", "swatch"));
-  head.appendChild(el("span", "", t("room.watch")));
-  head.appendChild(el("span", "n", t("room.team.count", { n: Object.keys(seated).length })));
-  head.appendChild(el("div", "head-gap"));
-  head.appendChild(el("span", "what", t("room.watch.note")));
-  col.appendChild(head);
-  const seats = el("div", "watchseats");
-  for (let i = 0; i < WATCH_SLOTS; i++) {
-    seats.appendChild(slotCard(i, seated[i], canKick, true));
-  }
-  col.appendChild(seats);
-  return col;
-}
 
 // canTakeSeat answers whether clicking this empty seat would do anything.
 //
@@ -834,30 +894,38 @@ function inSeat(spectator) {
 function slotCard(index, member, canKick, spectator) {
   const card = el("div");
   const mine = member && member.player_id === state.player_id;
-  card.className = "slot" + (member ? "" : " empty") + (mine ? " you" : "");
-  card.appendChild(el("div", "slot-num", spectator ? t("room.watch.seat") : String(index + 1)));
+  card.className = "slot" + (spectator ? " watch" : "")
+    + (member ? " taken" : " empty") + (mine ? " you" : "");
+  // Observers are numbered in their own range, and shown that way: O1 and O2
+  // on Radiant, O3 and O4 on Dire. A "1" on both kinds of seat in the same
+  // column would be two different seats with the same name.
+  card.appendChild(el("div", "slot-num",
+    spectator ? t("room.watch.seat", { n: index + 1 }) : String(index + 1)));
 
   if (member) card.appendChild(avatar(member.nick, member.player_id, "sm"));
 
   const body = el("div", "slot-body");
   card.appendChild(body);
   if (!member) {
+    // The label says what the seat is, not what to do with it (D68). The
+    // affordance is the row lighting up under the pointer; eight rows that
+    // each read "Sit here" is the instruction printed eight times.
+    body.appendChild(el("div", "slot-name muted", t("room.slot.empty")));
     if (canTakeSeat(index, spectator)) {
       card.classList.add("takeable");
       card.title = t(spectator ? "room.watch.take.note" : "room.slot.take.note");
-      body.appendChild(el("div", "slot-name", t(spectator ? "room.watch.take" : "room.slot.take")));
       card.onclick = () => act(() => (spectator
         ? api("/api/rooms/spectate", { room_id: state.room_id })
         : api("/api/rooms/slot", { slot: index })));
-    } else {
-      body.appendChild(el("div", "slot-name muted", t("room.slot.empty")));
     }
     return card;
   }
 
   const mmr = member.mmr ? t("status.mmr", { n: member.mmr }) : t("status.nomm");
-  body.appendChild(el("div", "slot-name",
-    mine ? t("room.slot.you", { name: member.nick }) : member.nick));
+  const name = el("div", "slot-name");
+  name.appendChild(document.createTextNode(member.nick));
+  if (mine) name.appendChild(el("span", "mine", " " + t("room.slot.mine")));
+  body.appendChild(name);
   body.appendChild(el("div", "slot-sub",
     member.is_host ? t("room.slot.host", { sub: mmr }) : mmr));
 
@@ -2318,6 +2386,12 @@ $("btn-leave").onclick = () => act(async () => {
   show("lobby");
 });
 $("btn-tolobby").onclick = () => show("lobby");
+
+// The guide, from the (i) and from its own Hide. Drawn once at start-up
+// because it is remembered rather than derived from anything on the server.
+$("btn-guide").onclick = () => setGuide(!guideOpen());
+$("btn-guidehide").onclick = () => setGuide(false);
+drawGuide();
 
 $("btn-lock").onclick = () => act(() => api("/api/rooms/status", { status: "locked_in_game" }));
 $("btn-reopen").onclick = () => act(() => api("/api/rooms/status", { status: "open_to_new_players" }));

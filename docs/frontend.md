@@ -335,6 +335,25 @@ Consequences worth knowing:
 - `desktop/dist/index.html` is a placeholder. The real interface is served
   over loopback by the Go binary; nothing in `dist/` is what a player sees.
 
+## The room screen, after D68
+
+Worth knowing before touching it, because three of its pieces are not where
+an obvious reading would put them:
+
+- **The five facts in the band are the diagnostic.** They replaced a
+  three-step panel, and the network cell in particular carries the job that
+  panel existed for: saying which of "seated / on the network / in the game"
+  this PC has actually done. It is also the control - the join and leave links
+  live in it. Do not reduce it to a decoration.
+- **`/api/playnow` chains connect and launch on the server, on purpose.** The
+  tunnel says "connecting" before the handshake finishes; doing this in the
+  page would race. If you need a variant, add it in Go beside `waitForTunnel`,
+  not in `app.js`.
+- **The watching seats belong to a board.** Two on Radiant (O1, O2), two on
+  Dire (O3, O4), numbered in their own range. `OBS_PER_SIDE` and
+  `ipam.ObserverSlots` must agree; the coordinator is the one that enforces
+  it.
+
 ## Notifications live in the shell, not the page
 
 `desktop/src/main.rs` polls `/api/state` every five seconds on its own thread

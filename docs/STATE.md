@@ -255,6 +255,7 @@ there; this is the summary.
 | T26 a player's own launch options (D65) | **done** — engine flags accepted, console commands refused at both ends |
 | T27 notifications, five of them with switches (D66) | **done** — raised by the tray, so they arrive with the window closed |
 | T28 the installer ships the window (D67) | **done** — shortcut opens `lobbybaz.exe`; no console, no browser tab |
+| T29 the lobby and the room redesigned (D68) | **done** — the owner's third handoff, adopted; looked at, at 1440 and at 1366 |
 
 **The interface was redesigned on 2026-08-25** at the owner's request: the
 old one was flat, grey and mostly empty space. What changed, beyond colour

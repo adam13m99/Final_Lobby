@@ -141,43 +141,30 @@
     <span class="ico" aria-hidden="true">&#9881;</span><span data-t="nav.settings"></span>
   </button>
 
-  <button class="nav conn" id="connstate">
-    <span class="dot" id="conndot" aria-hidden="true"></span>
-    <span id="conntext"></span>
-  </button>
+  <!-- Machine state, at the foot of the rail, under a hairline (D68). It
+       was a pill in the top bar, beside search and the player's own name -
+       four unrelated things competing for 44px. It is not navigation and it
+       is not about the person: it is whether this PC can play. -->
+  <div class="railstatus">
+    <div class="rs" id="rs-service">
+      <span class="ring" aria-hidden="true"><span class="dot"></span></span>
+      <span class="lbl" id="servicetext"></span>
+    </div>
+    <span class="rs-rule" aria-hidden="true"></span>
+    <div class="rs">
+      <span class="dot" id="conndot" aria-hidden="true"></span>
+      <span class="lbl" id="conntext"></span>
+    </div>
+  </div>
 </nav>
 
 <!-- ----------------------------------------------------------- HEADER -->
+<!-- Search, and nothing else (D68). The status pills went to the rail and
+     the player's own name to the top of the friends panel; the filters went
+     down into the room list, next to the columns they filter. -->
 <header id="top">
   <div class="searchbox">
     <input id="search" maxlength="40" data-t-placeholder="lobby.search.placeholder" autocomplete="off">
-  </div>
-  <!-- One segmented control rather than six loose pills: the filters are a
-       single choice, and six outlines look like six switches. -->
-  <div class="filters" id="filters">
-    <button class="chip active" data-filter="all" data-t="lobby.filter.all"></button>
-    <button class="chip" data-filter="joinable" data-t="lobby.filter.joinable"></button>
-    <button class="chip" data-filter="waiting">
-      <span class="cdot open" aria-hidden="true"></span><span data-t="lobby.filter.waiting"></span>
-    </button>
-    <button class="chip" data-filter="playing">
-      <span class="cdot game" aria-hidden="true"></span><span data-t="lobby.filter.playing"></span>
-    </button>
-    <button class="chip" data-filter="mine" data-t="lobby.filter.eligible"></button>
-    <button class="chip" data-filter="friends" data-t="lobby.filter.friends"></button>
-  </div>
-
-  <div class="head-gap"></div>
-
-  <div class="status">
-    <span class="pill" id="p-service"></span>
-    <span class="pill quiet" id="p-online"></span>
-    <button class="me" id="mebtn">
-      <span id="meface" data-who=""></span>
-      <span class="who">
-        <span class="name" id="menick"></span><small id="memmr"></small>
-      </span>
-    </button>
   </div>
 </header>
 
@@ -199,12 +186,35 @@
 <!-- ------------------------------------------------------------ LOBBY -->
 <section id="screen-lobby" class="screen">
   <div class="panel roomspanel">
+    <!-- One sweeping light along the top edge and one blurred halo behind
+         the title. Decoration, deliberately: the lobby is the screen people
+         sit and wait on, and a still one reads as a stopped one. Both are
+         dropped under prefers-reduced-motion. -->
+    <span class="sweepline" aria-hidden="true"></span>
+    <span class="halo" aria-hidden="true"></span>
     <div class="panel-head">
       <h2 data-t="lobby.rooms"></h2>
       <span class="count" id="roomcount"></span>
       <div class="head-gap"></div>
       <span class="hint" id="sorthint"></span>
       <button class="primary" id="btn-create" data-t="lobby.create"></button>
+    </div>
+
+    <!-- The filters, directly above the columns they filter (D68). They sat
+         in the top bar, a screen's width from the data, and were easy to
+         miss entirely. The row scrolls sideways rather than wrapping or
+         clipping. -->
+    <div class="filters" id="filters">
+      <button class="chip active" data-filter="all" data-t="lobby.filter.all"></button>
+      <button class="chip" data-filter="joinable" data-t="lobby.filter.joinable"></button>
+      <button class="chip" data-filter="waiting">
+        <span class="cdot open" aria-hidden="true"></span><span data-t="lobby.filter.waiting"></span>
+      </button>
+      <button class="chip" data-filter="playing">
+        <span class="cdot game" aria-hidden="true"></span><span data-t="lobby.filter.playing"></span>
+      </button>
+      <button class="chip" data-filter="mine" data-t="lobby.filter.eligible"></button>
+      <button class="chip" data-filter="friends" data-t="lobby.filter.friends"></button>
     </div>
 
     <!-- Every heading sorts. A room list is read for one thing at a time -
@@ -224,66 +234,63 @@
 <!-- ------------------------------------------------------------- ROOM -->
 <section id="screen-room" class="screen hidden">
 
-  <!-- One line saying which room this is and how to get out of it. The old
-       screen spent a whole panel head on the same three facts. -->
-  <div class="roomtop">
-    <button id="btn-tolobby" data-t="room.tolobby"></button>
-    <span id="room-face"></span>
-    <div class="who">
+  <!-- The room's identity and its network facts, in one band (D68).
+       Everything below the rule is the answer to "why will this not start" -
+       it used to be a run-on line at the very bottom of the screen, which is
+       the last place somebody looks and the first thing they need. -->
+  <div class="roomband">
+    <span class="sweepline" aria-hidden="true"></span>
+
+    <div class="tier1">
+      <button id="btn-tolobby" data-t="room.tolobby"></button>
+      <span id="room-face"></span>
       <div class="title">
         <h2 id="room-name" data-t="room.title"></h2>
         <span class="badge" id="room-status"></span>
       </div>
-      <div class="sub" id="room-sub"></div>
+      <div class="head-gap"></div>
+      <button class="guidebtn" id="btn-guide" data-t-title="room.guide.what">
+        <span aria-hidden="true">i</span>
+      </button>
+      <button id="btn-invite" data-t="room.invite"></button>
+      <button class="hostonly" id="btn-roomsettings" data-t="room.settings"></button>
+      <!-- One action, and which one it is depends on whether this is your
+           room. It brings the tunnel up and opens Dota in a single gesture,
+           the way GameRanger does; the network cell below says how far it
+           got if it does not finish. -->
+      <button class="primary go" id="btn-step"></button>
     </div>
-    <div class="head-gap"></div>
-    <button id="btn-invite" data-t="room.invite"></button>
-    <button class="hostonly" id="btn-roomsettings" data-t="room.settings"></button>
+
+    <span class="bandrule" aria-hidden="true"></span>
+    <div class="stats" id="roomstats"></div>
   </div>
 
-  <!-- The three steps between sitting down and being in the game, as three
-       steps. The first version was a row of buttons that were sometimes
-       disabled, and the commonest failure in the two-PC test was two players
-       in a room, neither on the network, with nothing on screen saying so. -->
-  <div class="stepper">
-    <div class="step" id="step-seat">
-      <span class="mark" id="step-seat-mark" aria-hidden="true">1</span>
-      <div class="body">
-        <div class="t" data-t="step.seat"></div>
-        <div class="d" id="step-seat-detail"></div>
-      </div>
-    </div>
-    <div class="step" id="step-net">
-      <span class="mark" id="step-net-mark" aria-hidden="true">2</span>
-      <div class="body">
-        <div class="t" data-t="step.net"></div>
-        <div class="d" id="step-net-detail"></div>
-      </div>
-    </div>
-    <div class="step" id="step-game">
-      <span class="mark" id="step-game-mark" aria-hidden="true">3</span>
-      <div class="body">
-        <div class="t" data-t="step.game"></div>
-        <div class="d" data-t="step.game.detail"></div>
-      </div>
-    </div>
-    <button class="primary" id="btn-step"></button>
+  <!-- The three steps, as one line, behind the (i). They used to be three
+       cards holding a permanent band of the screen to teach a flow somebody
+       learns once. Closed by default, and remembered. -->
+  <div class="guide hidden" id="guide">
+    <span class="kicker" data-t="room.guide.kicker"></span>
+    <span class="gstep"><span class="no" aria-hidden="true">1</span><span data-t="room.guide.one"></span></span>
+    <span class="gstep"><span class="no" aria-hidden="true">2</span><span data-t="room.guide.two"></span></span>
+    <span class="gstep"><span class="no" aria-hidden="true">3</span><span data-t="room.guide.three"></span></span>
+    <div class="head-gap"></div>
+    <button class="linkish" id="btn-guidehide" data-t="room.guide.hide"></button>
   </div>
 
   <div class="netbanner" id="netbanner" hidden></div>
 
-  <!-- Two columns because a Dota match is two teams. Filled by app.js,
-       which knows which five slots belong to which side. -->
+  <!-- Two columns because a Dota match is two teams, and the watching seats
+       belong to a side rather than to a strip of their own (D68). Filled by
+       app.js, which knows which five slots belong to which board. -->
   <div class="teams" id="slots"></div>
 
-  <!-- Five more seats under the two teams, for people who want to watch
-       rather than play (D59). They are seats, not a strip of text: somebody
-       who wants to watch a friend's game sits down in one. -->
-  <div id="watch"></div>
-
-  <div class="specrow">
+  <div class="roomfoot">
+    <!-- The host's own sentence about their room, where there is finally
+         space for it. It is somebody's free text shown to strangers: it is
+         set as text, never as markup. -->
+    <span class="sum desc" id="room-desc"></span>
+    <span class="sum" data-t="room.foot"></span>
     <div class="head-gap"></div>
-    <span class="net" id="netinfo"></span>
     <button class="danger" id="btn-leave" data-t="room.leave"></button>
   </div>
 </section>
@@ -551,6 +558,19 @@
 <!-- Friends above, chat below, both down the same side (D42.2, D42.3). The
      chat collapses the way Dota's own does, and stays collapsed. -->
 <aside id="rail">
+  <!-- The one identity affordance in the app (D68). It belongs with the
+       social column, not beside a search box. The whole row opens the
+       profile editor; the chevron is there to say that it does. -->
+  <button class="meRow" id="mebtn">
+    <span class="edge" aria-hidden="true"></span>
+    <span id="meface" data-who=""></span>
+    <span class="who">
+      <span class="name" id="menick"></span>
+      <small id="memmr"></small>
+    </span>
+    <span class="chev" aria-hidden="true">&#8250;</span>
+  </button>
+
   <div class="rail-head">
     <span class="t" data-t="friends.title"></span>
     <span class="n" id="friendcount"></span>

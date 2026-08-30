@@ -53,6 +53,14 @@
   --accent-ring: #4b4278;
   --accent-wash: rgba(145,132,217,.10);
 
+  /* Somebody who is not you, in a seat. One violet, so a board reads as
+     "people, and one of them is me" without anybody having to read a name.
+     A face still gets its own colour from its account id - that is how the
+     same person is recognisable across screens - but a seat's edge and wash
+     are about position, not identity. */
+  --host-mark: #b06ec4;
+  --host-wash: rgba(176,110,196,.11);
+
   /* Status. Muted rather than saturated: a room list where three things
      shout is a room list where nothing is read. */
   --good:      #a9cbb5;
@@ -192,23 +200,52 @@ h3 em { font-style: normal; text-transform: none; letter-spacing: 0; color: var(
 .nav:disabled { opacity: .35; cursor: default; }
 .nav-gap { flex: 1; }
 
-/* The connection light. Its colour is the whole point, so it is the one
-   thing in the toolbar that is never grey. */
-.nav.conn {
-  cursor: default; gap: 5px; height: auto; padding-block-start: 10px;
-  font-size: 10px; color: var(--dim);
+/* The two machine lights, at the foot of the rail (D68). Colour is the whole
+   point of them, so they are the one thing down here that is never grey. The
+   service light is ringed because it is the precondition - without it there
+   is no tunnel to have - and the tunnel dot blinks while it is up, because a
+   still dot and a dead app look the same. */
+.railstatus {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding-block-start: 12px; width: 100%;
 }
-.nav.conn:hover { background: none; color: var(--dim); }
+.rs {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  width: 100%; text-align: center;
+}
+.rs .lbl {
+  font-size: 9px; line-height: 1.2; color: var(--dim);
+  max-width: 48px; word-break: break-word;
+}
+.rs .ring {
+  width: 20px; height: 20px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--sunk); box-shadow: inset 0 0 0 1px var(--line2);
+}
+.rs .ring .dot { background: var(--line2); box-shadow: none; }
+.rs.up .ring { background: var(--good-soft); box-shadow: inset 0 0 0 1px var(--good-line); }
+.rs.up .ring .dot { background: var(--good-dot); box-shadow: 0 0 7px var(--good-dot); }
+.rs.up .lbl { color: var(--good); }
+.rs.down .ring { background: var(--bad-soft); box-shadow: inset 0 0 0 1px var(--bad-line); }
+.rs.down .ring .dot { background: var(--bad); box-shadow: 0 0 7px var(--bad); }
+.rs.down .lbl { color: var(--bad); }
+.rs-rule {
+  width: 22px; height: 1px;
+  background: linear-gradient(to inline-end, transparent, var(--line2), transparent);
+}
 .dot {
-  width: 7px; height: 7px; border-radius: 50%; background: var(--line2);
+  width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--line2);
   transition: background .2s ease, box-shadow .2s ease;
 }
-.dot.ok   { background: var(--good-dot); box-shadow: 0 0 8px var(--good-dot); }
+.dot.ok   { background: var(--good-dot); box-shadow: 0 0 8px var(--good-dot); animation: blink 2.6s ease-in-out infinite; }
+.dot.wait { background: var(--warn); box-shadow: 0 0 8px var(--warn); }
 .dot.busy { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
 .dot.bad  { background: var(--bad); box-shadow: 0 0 8px var(--bad); }
 
 /* ---------------------------------------------------------------- header */
 
+/* Search, and nothing else (D68). It used to carry four unrelated things in
+   44px: search, the filters, two status pills and the player's identity. */
 #top {
   grid-area: head;
   display: flex; align-items: center; gap: 14px;
@@ -241,10 +278,9 @@ h3 em { font-style: normal; text-transform: none; letter-spacing: 0; color: var(
    the sizes below are chosen so that a 1366-wide laptop - the commonest
    screen this will run on - never has to. */
 .filters {
-  display: flex; flex: 0 1 auto; min-width: 0; align-items: center; gap: 2px;
+  display: flex; flex: 0 0 auto; min-width: 0; align-items: center; gap: 3px;
   overflow-x: auto; scrollbar-width: none;
-  padding: 3px; border-radius: var(--r-md);
-  background: var(--sunk); box-shadow: var(--ring-line);
+  padding: 8px 16px 7px;
 }
 .filters::-webkit-scrollbar { display: none; }
 
@@ -256,6 +292,7 @@ h3 em { font-style: normal; text-transform: none; letter-spacing: 0; color: var(
   .searchbox { max-width: 224px; }
   .chip { padding: 0 8px; gap: 5px; }
 }
+.filters.hidden { display: none; }
 .chip {
   display: inline-flex; align-items: center; gap: 6px; flex: none;
   height: 28px; padding: 0 11px; border: 0; border-radius: var(--r-sm);
@@ -265,41 +302,46 @@ h3 em { font-style: normal; text-transform: none; letter-spacing: 0; color: var(
   transition: color .14s ease, background .14s ease;
 }
 .chip:hover { color: var(--text2); }
-.chip.active { color: var(--accent-text); background: var(--accent-soft); }
+.chip.active {
+  color: var(--accent-text); background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
 .chip .cdot { width: 7px; height: 7px; flex: none; border-radius: 50%; }
 .chip .cdot.open { background: var(--good-dot); box-shadow: 0 0 6px rgba(126,168,140,.55); }
 .chip .cdot.game { background: var(--bad); box-shadow: 0 0 6px rgba(207,139,134,.55); }
 
 .head-gap { flex: 1; }
 
-.status { display: flex; flex: none; align-items: center; gap: 8px; font-size: 12px; }
-.pill {
-  display: inline-flex; align-items: center; gap: 6px;
-  height: 26px; flex: none; padding: 0 9px; border-radius: var(--r-sm);
-  background: var(--sunk); color: var(--muted);
-  box-shadow: var(--ring-line); white-space: nowrap;
-}
-.pill.ok   { background: var(--good-soft); color: var(--good); box-shadow: inset 0 0 0 1px var(--good-line); }
-.pill.bad  { background: var(--bad-soft); color: var(--bad); box-shadow: inset 0 0 0 1px var(--bad-line); }
-.pill .live {
-  width: 6px; height: 6px; border-radius: 50%; background: currentColor;
-  animation: pulse 2.4s infinite;
-}
 @keyframes pulse { 0%, 100% { opacity: 1 } 50% { opacity: .35 } }
+@keyframes blink { 0%, 100% { opacity: 1 } 50% { opacity: .3 } }
 
-/* The player's own card. A separator rather than a box: it is who you are,
-   not another control. */
-.me {
-  display: flex; align-items: center; gap: 9px; flex: none;
-  padding: 0; padding-inline-start: 14px; margin-inline-start: 4px;
-  border: 0; border-inline-start: 1px solid var(--line);
-  background: none; color: var(--text);
-  font: inherit; text-align: start; cursor: pointer; line-height: 1.25;
+/* The player's own row, at the top of the friends panel (D68). Identity
+   belongs with the social column. The accent edge is the same mark used for
+   "this one is yours" on a room row and on a seat, so the three read as one
+   idea rather than three decorations. */
+.meRow {
+  position: relative; flex: none;
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 13px; border: 0;
+  border-block-end: 1px solid var(--line);
+  background: linear-gradient(100deg, var(--accent-soft), transparent 72%);
+  color: var(--text); font: inherit; text-align: start;
+  cursor: pointer; line-height: 1.25;
+  transition: background .16s ease;
 }
-.me .who { white-space: nowrap; }
-.me .name { font-size: 13px; font-weight: 500; }
-.me small { display: block; font-size: 11px; color: var(--dim); white-space: nowrap; }
-.me:hover .name { color: var(--accent-text); }
+.meRow:hover { background: linear-gradient(100deg, var(--accent-line), transparent 72%); }
+.meRow .edge {
+  position: absolute; inset-block: 0; inset-inline-start: 0; width: 2px;
+  background: linear-gradient(to bottom, transparent, var(--accent), transparent);
+}
+.meRow .who { min-width: 0; flex: 1; }
+.meRow .name {
+  display: block; font-size: 12.5px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.meRow small { display: block; font-size: 10.5px; color: var(--dim); white-space: nowrap; }
+.meRow .chev { flex: none; font-size: 15px; color: var(--dim); }
+.meRow:hover .chev { color: var(--accent-text); }
 
 /* --------------------------------------------------------------- strips */
 
@@ -336,7 +378,15 @@ h3 em { font-style: normal; text-transform: none; letter-spacing: 0; color: var(
 /* ---------------------------------------------------------------- stage */
 
 #stage { grid-area: stage; overflow-y: auto; padding: 16px 18px 0; }
+/* The sticky footer needs somewhere to stick to, and something under it to
+   scroll past, or it sits in mid-air on a tall window. */
+#screen-room { min-height: 100%; padding-block-end: 10px; }
 .screen { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+/* The room is the one screen that has to fit a laptop without scrolling: the
+   way out of a room must never be below the fold. Ten seats, four watching
+   seats, a band and a footer at 1366x768 is a tight fit and this is what
+   makes it one. */
+#screen-room { gap: 9px; }
 #stage > .screen { min-height: 100%; }
 
 /* The lobby is one panel, and it owns the height it is given. A panel that
@@ -346,13 +396,54 @@ h3 em { font-style: normal; text-transform: none; letter-spacing: 0; color: var(
 #screen-lobby > .roomspanel { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 
 .panel {
+  position: relative;
   background: var(--panel); box-shadow: var(--ring-line);
   border-radius: var(--r-lg); overflow: hidden; min-width: 0;
+}
+
+/* Two decorations on the rooms panel, and only there (D68). The lobby is the
+   screen people sit and wait on: a completely still one reads as a stopped
+   one. A light travels the top edge, and a soft halo breathes behind the
+   title. Both are dropped whole under prefers-reduced-motion. */
+.roomspanel { background: linear-gradient(180deg, var(--accent-soft), var(--panel) 26%); }
+.roomspanel .sweepline {
+  position: absolute; inset-block-start: 0; inset-inline-start: 0;
+  width: 16%; height: 1px; pointer-events: none;
+  background: var(--accent-lit);
+  animation: sweepline 5.2s linear infinite;
+}
+.roomspanel .halo {
+  position: absolute; inset-block-start: -70px; inset-inline-start: -60px;
+  width: 220px; height: 180px; pointer-events: none;
+  border-radius: 50%; background: var(--accent-soft); filter: blur(26px);
+  animation: halo 6s ease-in-out infinite;
+}
+@keyframes sweepline {
+  from { transform: translateX(-110%) }
+  to   { transform: translateX(720%) }
+}
+@keyframes halo {
+  0%, 100% { opacity: .5 }
+  50%      { opacity: .95 }
+}
+/* Both decorations are behind everything. A halo that washes over the title
+   it is meant to sit behind is not decoration, it is fog. */
+.roomspanel > .sweepline, .roomspanel > .halo { z-index: 0; }
+.roomspanel > .panel-head,
+.roomspanel > .filters,
+.roomspanel > .roomhead,
+.roomspanel > .roomlist { position: relative; z-index: 1; }
+/* Exactly one pulsing thing per screen, and on the lobby it is the one
+   action somebody who found nothing to join still has. */
+#btn-create { animation: createpulse 3.6s ease-in-out infinite; }
+@keyframes createpulse {
+  0%, 100% { box-shadow: 0 0 0 1px var(--accent-ring), 0 0 14px transparent }
+  50%      { box-shadow: 0 0 0 1px var(--accent-ring), 0 0 22px var(--accent-soft) }
 }
 .panel-head {
   display: flex; align-items: center; gap: 12px; padding: 12px 14px;
 }
-.panel-head h2 { font-size: 15px; }
+.panel-head h2 { font-size: 17px; font-weight: 500; }
 .panel-head .count { font-size: 12px; color: var(--dim); }
 /* The sort hint is an aside, not a heading. Lower case keeps it out of the
    way of the two things beside it that are shouting. */
@@ -492,10 +583,21 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
 
 .roomlist { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; }
 .room {
-  align-items: center; padding: 9px 14px;
+  position: relative;
+  align-items: center; padding: 11px 16px;
   border-block-end: 1px solid #21232f; cursor: pointer;
 }
 .room:hover { background: var(--panel2); }
+/* The room you are already in, marked the same way your own seat and your
+   own name are: an accent wash and a gradient edge (D68). Three places, one
+   idea - "this one is yours". */
+.room.here { background: linear-gradient(96deg, var(--accent-soft), transparent 58%); }
+.room.here:hover { background: linear-gradient(96deg, var(--accent-line), transparent 58%); }
+.room.here::before {
+  content: ""; position: absolute; inset-block: 0; inset-inline-start: 0; width: 2px;
+  background: linear-gradient(to bottom, transparent, var(--accent), transparent);
+}
+.room-meta .here { color: var(--accent-lit); }
 
 .room-who { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .room-name {
@@ -537,14 +639,19 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
 .room-ping.good { color: var(--good); }
 .room-ping.fair { color: var(--warn); }
 .room-ping.poor { color: var(--bad); }
-.bars { display: flex; align-items: flex-end; gap: 1.5px; height: 11px; }
-.bars i { width: 3px; border-radius: 1px; background: currentColor; }
+/* A five-bar meter, centred on the same midline as the number beside it. It
+   was three bars sitting on a different baseline, so the row read as two
+   things that had come apart. How many are lit is the measurement; the
+   colour is the verdict. */
+.bars { display: flex; align-items: center; gap: 1.5px; height: 12px; line-height: 1; }
+.bars i { width: 3px; border-radius: 1px; background: currentColor; opacity: .22; }
+.bars i.on { opacity: 1; }
 .bars i:nth-child(1) { height: 4px; }
-.bars i:nth-child(2) { height: 7px; opacity: .3; }
-.bars i:nth-child(3) { height: 11px; opacity: .3; }
-.room-ping.fair .bars i:nth-child(2),
-.room-ping.good .bars i:nth-child(2) { opacity: 1; }
-.room-ping.good .bars i:nth-child(3) { opacity: 1; }
+.bars i:nth-child(2) { height: 6px; }
+.bars i:nth-child(3) { height: 8px; }
+.bars i:nth-child(4) { height: 10px; }
+.bars i:nth-child(5) { height: 12px; }
+.room-ping { line-height: 1; }
 
 .room-actions { display: flex; align-items: center; gap: 7px; }
 .room-actions button { width: 62px; height: 28px; padding: 0; flex: none; font-size: 12.5px; }
@@ -553,6 +660,9 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
 .livedot { width: 8px; height: 8px; flex: none; border-radius: 50%; }
 .livedot.open { background: var(--good-dot); box-shadow: 0 0 7px rgba(126,168,140,.55); }
 .livedot.game { background: var(--bad); box-shadow: 0 0 7px rgba(207,139,134,.55); }
+
+/* Your own face, always this green. See avatar() for why. */
+.avatar.me { background: #4ec98a; color: #0f1a14; box-shadow: 0 0 0 3px rgba(78,201,138,.10); }
 
 /* An avatar is a coloured tile with initials in it. There are no uploaded
    pictures and there is no plan for any: a name has to be readable at 26px
@@ -578,50 +688,135 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
 
 /* ------------------------------------------------------------ room screen */
 
-.roomtop { display: flex; align-items: center; gap: 12px; }
-.roomtop .who { min-width: 0; }
-.roomtop .title { display: flex; align-items: center; gap: 8px; }
-.roomtop h2 { font-size: 15.5px; }
-.roomtop .sub {
-  font-size: 11.5px; color: var(--dim);
+/* The band: who this room is on top, what the network is doing underneath,
+   one border round both (D68). The two tiers are separated by a rule that
+   fades at both ends rather than a flat line, so the band reads as one thing
+   with an inside rather than as two stacked boxes. */
+.roomband {
+  position: relative; overflow: hidden; flex: none;
+  padding: 10px 14px; border-radius: var(--r-lg);
+  background: linear-gradient(100deg, var(--accent-wash), var(--panel) 54%);
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
+.roomband .sweepline {
+  position: absolute; inset-block-start: 0; inset-inline-start: 0;
+  width: 20%; height: 1px; pointer-events: none;
+  background: var(--accent-lit);
+  animation: sweepline 4.8s linear infinite;
+}
+.tier1 {
+  position: relative; z-index: 1;
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.tier1 .title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.tier1 h2 {
+  font-size: 19px; font-weight: 500; letter-spacing: -.015em;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.roomtop button { height: 30px; }
+.tier1 button { height: 30px; flex: none; }
+/* Exactly one glow on this screen, on the one action, and no pulse. Open and
+   Join in the lobby used to be as loud as the thing that starts a match. */
+.tier1 .go {
+  height: 32px; padding: 0 18px; font-size: 12.5px;
+  box-shadow: 0 0 0 1px var(--accent-ring), 0 0 12px var(--accent-soft);
+}
+.tier1 .go:disabled { box-shadow: 0 0 0 1px var(--line2); }
+/* The guide toggle. Italic, round and small: it is the one control here that
+   is about the screen rather than about the room. */
+.guidebtn {
+  width: 22px; height: 22px; padding: 0; flex: none; border-radius: 50%;
+  display: grid; place-items: center;
+  font-size: 11px; font-style: italic; font-weight: 600;
+  color: var(--muted); border: 1px solid var(--line3); background: none;
+}
+.guidebtn.on {
+  color: var(--accent-text); border-color: var(--accent-ring);
+  background: var(--accent-soft);
+}
 
-/* The three steps between sitting down and being in the game, as three
-   steps. The first version of this screen was a row of buttons that were
-   sometimes disabled, and the commonest failure in the two-PC test was two
-   players in a room, neither on the network, with nothing on screen saying
-   so. A numbered list cannot be misread that way. */
-.stepper {
-  display: flex; align-items: stretch; gap: 10px;
-  padding: 10px 12px; border-radius: var(--r-lg);
-  background: var(--panel); box-shadow: var(--ring-line);
+.bandrule {
+  display: block; height: 1px; margin: 10px 0 9px;
+  background: linear-gradient(to inline-end, transparent, var(--line2), transparent);
 }
-.step {
-  flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px;
-  padding: 7px 11px; border-radius: var(--r-md);
-  box-shadow: inset 0 0 0 1px #282b38;
+
+/* The five facts, on a recessed panel so they read as instrument panel
+   rather than as more of the header. Each cell is label over value, and the
+   hairlines between them fade top and bottom for the same reason the rule
+   above does. */
+.stats {
+  position: relative; z-index: 1;
+  display: flex; align-items: center; flex-wrap: wrap; row-gap: 8px;
+  padding: 9px 12px; border-radius: var(--r-sm);
+  background: var(--sunk); box-shadow: inset 0 0 0 1px var(--hair);
 }
-.step.now { background: var(--accent-wash); box-shadow: inset 0 0 0 1px var(--accent-ring); }
-.step .mark {
-  width: 22px; height: 22px; flex: none; border-radius: 50%;
-  display: grid; place-items: center; font-size: 11px; font-weight: 600;
-  background: var(--hair); color: var(--dimmer);
+.stat { flex: 0 1 auto; min-width: 0; padding-inline-end: 18px; }
+.stat .k {
+  font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--muted);
 }
-.step.now .mark { background: var(--accent-deep); color: var(--accent-text); }
-.step.done .mark { background: #2a3d31; color: var(--good); }
-.step .body { min-width: 0; }
-.step .t { font-size: 12.5px; font-weight: 500; color: var(--dim); }
-.step.now .t, .step.done .t { color: var(--text); }
-.step .d {
-  font-size: 11px; color: var(--dim);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+.stat .v {
+  display: flex; align-items: center; gap: 6px;
+  margin-block-start: 4px; font-size: 13px; font-weight: 500; line-height: 1;
+  color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.stepper > button { flex: none; min-width: 168px; height: auto; font-size: 13.5px; }
-/* The way back off, on the step that put you on. Small, and at the trailing
-   edge, because it is the exception rather than the way forward. */
-.step .stepoff { margin-inline-start: auto; flex: none; }
+.stat .v .faint { color: var(--dimmer); font-weight: 400; }
+.statrule {
+  flex: 0 0 1px; width: 1px; height: 26px; margin-inline-end: 18px;
+  background: linear-gradient(to bottom, transparent, var(--line2), transparent);
+}
+.netdot { width: 6px; height: 6px; flex: none; border-radius: 50%; background: var(--line2); }
+.netdot.ok { background: var(--good-dot); box-shadow: 0 0 7px var(--good-dot); }
+.netdot.wait { background: var(--warn); box-shadow: 0 0 7px var(--warn); }
+.netword { font-weight: 500; color: var(--dim); }
+.netword.ok { color: var(--good); }
+.mspill {
+  flex: none; padding: 2px 7px; border-radius: 999px;
+  font-size: 11px; font-weight: 400;
+  background: var(--good-soft); color: var(--good);
+}
+/* Getting on and off the room's network, where somebody is already looking
+   when a match will not start. */
+.netlink {
+  height: auto; padding: 0; flex: none; border: 0; background: none;
+  font-size: 11.5px; font-weight: 400; color: var(--accent-text);
+  text-decoration: underline; text-underline-offset: 2px;
+}
+.netlink:hover { background: none; color: var(--accent-lit); }
+
+/* The guide: the three steps as one line, closed by default. */
+.guide {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 11px 15px; border-radius: var(--r-md);
+  background: var(--accent-wash); box-shadow: inset 0 0 0 1px var(--accent-ring);
+  font-size: 11.5px; color: var(--dim);
+}
+.guide.hidden { display: none; }
+.guide .kicker {
+  font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--accent-lit);
+}
+.guide .gstep { display: inline-flex; align-items: center; gap: 7px; }
+.guide .gstep .no {
+  display: grid; place-items: center; width: 15px; height: 15px; flex: none;
+  border-radius: 50%; font-size: 9.5px; font-weight: 600;
+  color: var(--accent-text); background: var(--accent-deep);
+}
+
+/* The room's own footer: what this room is, and the way out of it.
+   Stuck to the bottom of the stage, because the way out of a room must never
+   be the thing that falls below the fold. On a 1366x768 laptop - the
+   commonest screen this runs on - a band, ten seats, four watching seats and
+   a footer are about thirty pixels too tall, and thirty pixels is enough to
+   hide Leave room completely. The boards scroll under it instead. */
+.roomfoot {
+  position: sticky; inset-block-end: 0; z-index: 2;
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 14px; border-radius: var(--r-md);
+  background: var(--panel2); box-shadow: var(--ring-line);
+}
+.roomfoot .sum { font-size: 11.5px; color: var(--dim); }
+.roomfoot .desc { color: var(--text2); }
+.roomfoot .desc:empty { display: none; }
 
 /* An invitation is time-limited in a way a friend is not: the room it names
    is filling up while it is being ignored. */
@@ -630,32 +825,71 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
 
 /* ---------------------------------------------------------------- slots */
 
-.teams { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
-.team { border-radius: var(--r-lg); background: var(--panel); box-shadow: var(--ring-line); overflow: hidden; }
+/* Two boards, always two, side by side until the window cannot hold them.
+   They are darker than the panel around them on purpose: the team colour
+   washes in their headers have to read strongly, and they cannot do that
+   against a ground of the same value. */
+.teams { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 8px; }
+.team {
+  border-radius: var(--r-md); background: var(--sunk);
+  box-shadow: inset 0 0 0 1px var(--line2); overflow: hidden;
+}
 .team-head {
   display: flex; align-items: center; gap: 8px;
-  padding: 8px 13px; border-block-end: 1px solid var(--hair);
-  font-size: 11px; font-weight: 500; letter-spacing: .1em; text-transform: uppercase;
+  padding: 9px 13px; border-block-end: 1px solid var(--hair);
+  font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase;
   color: var(--text2);
 }
+.team.radiant .team-head { background: linear-gradient(to inline-end, var(--good-soft), transparent 66%); }
+.team.dire .team-head { background: linear-gradient(to inline-end, var(--bad-soft), transparent 66%); }
 .team-head .swatch { width: 8px; height: 8px; flex: none; border-radius: 2px; }
-.team.radiant .swatch { background: var(--radiant); }
-.team.dire .swatch { background: var(--dire); }
+.team.radiant .team-head .swatch { background: var(--radiant); }
+.team.dire .team-head .swatch { background: var(--dire); }
 .team-head .n {
-  margin-inline-start: auto; font-size: 11.5px; font-weight: 400;
+  flex: none; font-size: 11.5px; font-weight: 400;
   letter-spacing: 0; text-transform: none; color: var(--dim);
 }
+.team-head .head-gap { flex: 1; }
 .team-body { padding: 6px; }
 
-.slot {
-  display: flex; align-items: center; gap: 9px;
-  height: 36px; padding: 0 9px; margin-block-end: 3px;
-  border-radius: 8px; box-shadow: inset 0 0 0 1px #282b38;
-  background: var(--panel2);
+/* The watching seats, at the foot of each board (D68). Recessed and
+   separated by a full-width top border, so they are plainly part of this
+   side without being confused for a sixth playing slot. */
+.obs-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 13px 5px; margin-block-start: 4px;
+  background: rgba(11, 13, 20, .5);
+  border-block-start: 1px solid var(--line2);
+  font-size: 9.5px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--dim);
 }
-.slot.empty { background: none; box-shadow: inset 0 0 0 1px #232634; }
-.slot.you { background: var(--accent-wash); box-shadow: inset 0 0 0 1px var(--accent-ring); }
+.obs-head .swatch { width: 6px; height: 6px; flex: none; border-radius: 2px; background: var(--accent); }
+.obs-head .head-gap { flex: 1; }
+.obs-head .n { flex: none; font-size: 10.5px; font-weight: 400; letter-spacing: 0; text-transform: none; }
+
+/* A seat is a row, not a card. Ten boxed cards down two columns was ten
+   outlines competing with the two board borders around them; a row with a
+   coloured edge says "occupied, and by whom" with one mark instead of four. */
+/* A fixed height, not a minimum. The two boards sit side by side and are
+   read across as much as down - "who is opposite me in slot 3" - and rows
+   that grew a little when somebody sat in them put the two columns out of
+   step with each other by the fifth seat. */
+.slot {
+  position: relative;
+  display: flex; align-items: center; gap: 11px;
+  height: 36px; padding: 0 13px;
+  border-block-end: 1px solid var(--hair);
+}
+.slot:not(.empty)::before {
+  content: ""; position: absolute; inset-block: 0; inset-inline-start: 0; width: 2px;
+  background: var(--host-mark);
+}
+.slot.empty { background: none; }
+.slot.taken { background: var(--host-wash); }
+.slot.you { background: var(--accent-wash); }
+.slot.you::before { background: var(--accent); }
 .slot.you .slot-name { color: var(--accent-text); }
+.slot .mine { font-weight: 400; color: var(--dim); }
 /* An empty seat you may take says so and lights up under the pointer. A card
    that invites a click has to look like one.
 
@@ -664,14 +898,15 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
    happen to be "Sit here". The people in the room are what the eye should
    find first. */
 .slot.takeable { cursor: pointer; }
-.slot.takeable .slot-name { color: var(--dim); font-weight: 400; }
-.slot.takeable:hover { background: var(--panel3); }
+.slot.takeable .slot-name { color: var(--muted); font-weight: 400; }
+.slot.takeable:hover { background: var(--accent-soft); }
 .slot.takeable:hover .slot-name { color: var(--accent-text); }
 .slot-num {
-  width: 18px; flex: none; text-align: end;
-  font-size: 11px; font-weight: 500; color: var(--dimmer);
+  width: 13px; flex: none; text-align: start;
+  font-size: 11px; font-weight: 400; color: var(--dimmer);
 }
-.slot-body { min-width: 0; }
+.slot-name { font-size: 12.5px; font-weight: 600; }
+.slot-body { min-width: 0; line-height: 1.25; }
 .slot-name { font-size: 13px; font-weight: 500; white-space: nowrap; }
 .slot-sub { font-size: 11.5px; color: var(--dim); white-space: nowrap; }
 .slot .gap { flex: 1; }
@@ -693,24 +928,16 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
 /* The five seats below the two teams (D59). They lie across the width
    rather than down a third column, because they are not a third team: they
    are the overflow of a room that only has two sides. */
-.team.watch .swatch { background: var(--accent); }
-.team-head .what { font-size: 11px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--dimmer); }
-.team-head .head-gap { flex: 1; }
-.watchseats {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 3px; padding: 5px 6px;
+/* A watching seat is the same row on a recessed ground, so the eye can tell
+   the two kinds apart down a single column without reading either. */
+.slot.watch {
+  height: 28px; padding: 0 13px;
+  background: rgba(11, 13, 20, .32);
 }
-.watchseats .slot { height: 32px; margin-block-end: 0; gap: 7px; }
-.watchseats .slot-num { width: 8px; }
-
-/* What is left of the old spectator strip: the network line and the way
-   out. The seats moved up into their own block. */
-.specrow {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 14px; border-radius: var(--r-lg);
-  background: var(--panel); box-shadow: var(--ring-line);
-}
-.specrow .what { font-size: 12.5px; color: var(--dim); }
+.slot.watch.taken { background: var(--host-wash); }
+.slot.watch.you { background: var(--accent-wash); }
+.slot.watch .slot-name { font-size: 11.5px; font-weight: 400; }
+.slot.watch .slot-num { width: 18px; }
 
 .describerow { display: flex; gap: 8px; flex-wrap: wrap; }
 .describerow input { flex: 1; min-width: 10rem; }

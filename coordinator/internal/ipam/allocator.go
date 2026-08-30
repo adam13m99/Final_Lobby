@@ -2,8 +2,9 @@
 //
 // The platform owns 10.87.0.0/16 and gives every room a /27. Thirty-two
 // addresses per room: .0 network, .1 reserved for the relay, .2-.11 the ten
-// player slots, .12-.16 five observers, .17-.19 three admin seats, .20-.30
-// spare, .31 broadcast.
+// player slots, .12-.15 four observers, .17-.19 three admin seats, .20-.30
+// spare, .31 broadcast. (.16 was the fifth observer until 2026-08-30 and is
+// left unused on purpose - see ObserverSlots.)
 //
 // It was a /28 until 2026-08-24. Sixteen addresses held thirteen seats with
 // every one spoken for, and the owner's room is eighteen seats (D38), so the
@@ -25,7 +26,10 @@ const (
 	// PlayerSlots is fixed by Dota 2 itself.
 	PlayerSlots = 10
 	// ObserverSlots is how many people may watch a room without playing.
-	ObserverSlots = 5
+	//
+	// Four since 2026-08-30 (D68), two shown on each team board. It was five,
+	// which is a number that cannot be split evenly between two sides.
+	ObserverSlots = 4
 	// AdminSlots sit outside both, so a full match plus a full gallery can
 	// never stop a moderator getting in.
 	AdminSlots = 3
@@ -39,8 +43,14 @@ const (
 	addressesPerRoom = 32
 
 	playerBaseOffset   = 2
-	observerBaseOffset = playerBaseOffset + PlayerSlots     // 12
-	adminBaseOffset    = observerBaseOffset + ObserverSlots // 17
+	observerBaseOffset = playerBaseOffset + PlayerSlots // 12
+	// Pinned at 17 rather than derived, so that dropping the fifth observer
+	// seat did not move every admin address down by one. A moderator's
+	// address is carried in tickets that are already issued, and a room's
+	// addressing must not depend on a product decision about seat counts.
+	// The gap at .16 is the price and it is a cheap one - eleven of these
+	// thirty-two addresses were already spare.
+	adminBaseOffset = 17
 )
 
 var (

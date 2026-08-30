@@ -1666,3 +1666,94 @@ relaunches the window. Nobody has to download anything by hand.
 `scripts/try.sh`, `scripts/live.sh` and the smoke test, which drive it
 headless or in a developer's own browser. What was wrong was never the
 program - it was which program the shortcut named.
+
+---
+
+## D68 — the lobby and the room, from the owner's third handoff
+
+**2026-08-30.** `design_handoff_lobbybaz_lobby_room/` - a rendered prototype, a
+token sheet, and a README that argues its own changes as a diff against
+screenshots of the shipped app. The third handoff of this kind, and the most
+specific. Adopted.
+
+The information architecture did not change. What moved, and why the owner's
+reasons are worth keeping:
+
+**Four things left the top bar.** It carried search, six filter chips, two
+status pills and the player's identity in 44px, and four unrelated things in
+one strip is four things nobody reads.
+
+- **The filters went down into the room list**, directly above the columns
+  they filter. They were a screen's width from the data they act on.
+- **The status pills went to the foot of the left rail.** They are machine
+  state, not navigation, and they now sit with the tunnel light they belong
+  beside.
+- **The player's identity went to the top of the friends panel**, as a row
+  with an accent edge and a chevron. Identity belongs with the social column.
+- **"N online" was deleted.** The lobby already says "5 in the lobby" and the
+  room says "2 / 10"; a third count of the same population is a number to
+  reconcile rather than a fact.
+
+**The room's network facts moved from the bottom of the screen to the top.**
+They were a run-on line - `10.87.0.7 · 10.87.0.2 · 37 ms` - with nothing
+saying which address was which, in the last place anybody looks. They are a
+labelled five-cell strip in the room's header band now: host, players, your
+address, host address, room network. These are the first things somebody
+checks when a match will not start.
+
+**The three step cards became one line behind an (i).** They held a permanent
+band of the screen teaching a flow you learn once. The strip is closed by
+default and remembered per installation.
+
+**That is only safe because the stat strip took over the stepper's real job.**
+The stepper existed because the commonest failure in the two-PC test was two
+players in a room, neither on its network, with nothing on screen saying which
+step had not happened. The network cell says exactly that, permanently, and it
+is also the control: it carries the join and leave links that were buried in
+step two.
+
+**One action, and it does both halves (owner's decision).** Create Game when
+the room is yours, Join Game when it is not, in the same place either way -
+GameRanger's convention, which is the thing our players already know. It
+brings the tunnel up **and** opens Dota, because those were two deliberate
+clicks and the second was the one people forgot.
+
+**The chaining lives on the server, in `/api/playnow`, and that is the whole
+of why it is safe.** The tunnel reports "connecting" the moment the service
+accepts it; the Noise handshake finishes some time later. A page firing
+`/api/connect` and `/api/play` back to back would hand Dota a host address
+this PC could not yet route to, and the failure would look like a broken room
+rather than a race. `waitForTunnel` polls the service until it is connected,
+for at most twenty-five seconds, and names the two things that actually cause
+a failure when it gives up.
+
+**Four watching seats, two per board (owner's decision).** They were five, in
+a full-width panel of their own below the two teams. Five cannot be split
+evenly between two sides, and the owner chose the mock's arrangement over the
+extra seat. `ipam.ObserverSlots` is 4; **`adminBaseOffset` is now pinned at 17
+rather than derived**, so dropping a seat from the gallery did not move every
+moderator's address down by one. The gap at `.16` is deliberate and cheap -
+eleven of a room's thirty-two addresses were already spare.
+
+**"Sit here" became "Empty".** A label should say what a seat is, not what to
+do with it; the affordance is the row lighting up under the pointer. Eight
+rows each reading "Sit here" is the instruction printed eight times.
+
+**Two things were adopted in spirit rather than to the letter.**
+
+The mock draws every other player's avatar in one violet. That would undo the
+thing faces are for here - a colour derived from the account id, so the same
+person is the same colour on every screen and two players called Pudge are
+told apart. **So other people keep their own colour and your own face is
+always the same green**, which is the half the mock was actually buying: you
+can find yourself in a list of ten without reading a name. The greens are
+reserved in `hueOf` so nobody else's hash can land on one.
+
+The mock's "clicking your own seat vacates it" was not built. There is no
+state in this product for being in a room without a seat; the nearest real
+thing is leaving the room, which has its own button and says so.
+
+**The room footer is stuck to the bottom of the stage.** A band, ten seats,
+four watching seats and a footer come to about thirty pixels more than a
+1366x768 laptop has, and thirty pixels is enough to hide Leave room
+completely. The boards scroll under it.
