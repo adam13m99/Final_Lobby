@@ -365,6 +365,8 @@
   "auth.relay.up": "server reachable",
   "auth.relay.down": "server unreachable",
   "auth.foot": "{n} online · {r} rooms open right now",
+  "banner.retry": "Reconnect",
+  "banner.dismiss": "Hide this",
   "terms.close": "Close",
   "terms.notnow": "Not now",
   "terms.acceptgo": "Accept and continue",

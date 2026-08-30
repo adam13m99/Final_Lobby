@@ -258,6 +258,7 @@ there; this is the summary.
 | T29 the lobby and the room redesigned (D68) | **done** — the owner's third handoff, adopted; looked at, at 1440 and at 1366 |
 | T30 five findings from the owner's live test (D69, D70, D71) | **done** — the room follows its host, the page stops redrawing itself, chat a fifth taller |
 | T31 the owner's stylesheet pass (D72) | **done** — 17 defects, Escape closes a dialog, rows reachable from the keyboard; write-up in `docs/2026-08-30-ui-fixes.md` |
+| T32 the exactness pass (D73) | **done** — live pings out of the render signatures, the lobby reconciles per row, the error strip can be acted on and put away |
 
 **The interface was redesigned on 2026-08-25** at the owner's request: the
 old one was flat, grey and mostly empty space. What changed, beyond colour

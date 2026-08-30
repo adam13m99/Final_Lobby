@@ -61,20 +61,32 @@
   --host-mark: #b06ec4;
   --host-wash: rgba(176,110,196,.11);
 
-  /* Status. Muted rather than saturated: a room list where three things
-     shout is a room list where nothing is read. */
-  --good:      #a9cbb5;
-  --good-dot:  #7ea88c;
-  --good-soft: #1c2a24;
-  --good-line: #2c4034;
-  --warn:      #cfc48b;
-  --bad:       #cf8b86;
-  --bad-soft:  #2b1f22;
-  --bad-line:  #5a3a3d;
+  /* Status. These are the design's own values rather than muted versions of
+     them: the greens had been desaturated to a sage that reads as grey at
+     7px, which is the size every one of them is actually drawn at. The
+     tints are translucent for the same reason the accent ones are - a status
+     pill sits on four different grounds in this product. */
+  --good:      #7fdcab;
+  --good-dot:  #4ec98a;
+  --good-soft: rgba(78,201,138,.10);
+  --good-line: rgba(78,201,138,.28);
+  --warn:      #e5c78b;
+  --bad:       #e58b8b;
+  --bad-text:  #efb9b9;
+  --bad-soft:  rgba(229,139,139,.10);
+  --bad-line:  rgba(229,139,139,.26);
 
   /* The two sides of a Dota match. Used only where the split is real. */
-  --radiant: #7ea88c;
-  --dire:    #cf8b86;
+  --radiant: #4ec98a;
+  --dire:    #e58b8b;
+
+  /* The room's own ground, and a team board standing on it. The room is the
+     one screen that is not the lobby's colour: the two team washes have to
+     read strongly, and they cannot do that against a surface of their own
+     value. */
+  --stage:  #0b0d14;
+  --stage2: #0d0f18;
+  --board:  #191b25;
 
   --rail: 244px;
   --bar: 72px;
@@ -103,7 +115,11 @@
    stylesheet that renders late or not at all. */
 body {
   margin: 0;
-  background: var(--bg);
+  /* Not a flat fill. One soft accent light in the top left corner, which is
+     what stops a dark screen this large from reading as a dead one. */
+  background:
+    radial-gradient(1200px 520px at 22% -6%,
+      color-mix(in srgb, var(--accent) 11%, var(--bg)), var(--bg) 62%);
   color: var(--text);
   font: 400 14px/1.5 "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
   overflow: hidden;
@@ -164,7 +180,8 @@ h3 em { font-style: normal; text-transform: none; letter-spacing: 0; color: var(
 
 #toolbar {
   grid-area: bar;
-  background: var(--bar-bg);
+  background: linear-gradient(to bottom,
+    color-mix(in srgb, var(--accent) 7%, var(--bar-bg)), var(--bar-bg) 42%);
   border-inline-end: 1px solid var(--line);
   display: flex; flex-direction: column; align-items: center;
   padding: 14px 0 12px; gap: 4px;
@@ -300,8 +317,8 @@ h3 em { font-style: normal; text-transform: none; letter-spacing: 0; color: var(
   box-shadow: inset 0 0 0 1px var(--accent-ring);
 }
 .chip .cdot { width: 7px; height: 7px; flex: none; border-radius: 50%; }
-.chip .cdot.open { background: var(--good-dot); box-shadow: 0 0 6px rgba(126,168,140,.55); }
-.chip .cdot.game { background: var(--bad); box-shadow: 0 0 6px rgba(207,139,134,.55); }
+.chip .cdot.open { background: var(--good-dot); box-shadow: 0 0 6px rgba(78,201,138,.55); }
+.chip .cdot.game { background: var(--bad); box-shadow: 0 0 6px rgba(229,139,139,.55); }
 
 /* A laptop screen. The search box and the chips both give a little so that
    the last filter is not sliced in half, which reads as a broken page rather
@@ -361,19 +378,53 @@ h3 em { font-style: normal; text-transform: none; letter-spacing: 0; color: var(
 .ad a { color: var(--accent-text); }
 
 .banner {
-  display: flex; align-items: center; gap: 12px;
-  margin: 12px 18px 0; padding: 10px 12px; border-radius: var(--r-md);
-  background: var(--bad-soft); box-shadow: inset 0 0 0 1px var(--bad-line);
-  font-size: 13px;
+  position: relative; overflow: hidden;
+  display: flex; align-items: center; gap: 10px;
+  margin: 12px 18px 0; padding: 9px 14px; border-radius: var(--r-md);
+  background: linear-gradient(96deg,
+    rgba(229,139,139,.13), rgba(229,139,139,.045) 60%, transparent);
+  box-shadow: inset 0 0 0 1px var(--bad-line);
+  font-size: 12.5px; color: var(--bad-text);
 }
+.banner::before {
+  content: ""; position: absolute; inset-block: 0; inset-inline-start: 0; width: 2px;
+  background: linear-gradient(to bottom, transparent, var(--bad), transparent);
+}
+.banner .glyph {
+  flex: none; font-size: 14px; line-height: 1; color: var(--bad);
+}
+.banner .grow { color: var(--bad-text); }
+/* Retry, and a way to put it away. A strip the app raises by itself and only
+   the app can lower is a strip that stays up for the rest of the session. */
+.banner .act {
+  flex: none; height: 22px; padding: 0 9px; border: 0; border-radius: var(--r-sm);
+  background: rgba(229,139,139,.12); color: var(--bad-text); font-size: 11.5px;
+}
+.banner .act:hover { background: rgba(229,139,139,.22); }
+.banner .shut {
+  flex: none; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 5px;
+  background: none; color: color-mix(in srgb, var(--bad-text) 65%, transparent);
+  font-size: 14px; line-height: 1;
+}
+.banner .shut:hover { background: rgba(229,139,139,.16); color: var(--bad-text); }
 .banner .icon {
   width: 20px; height: 20px; flex: none; border-radius: 50%;
   background: var(--bad); color: #241417;
   display: grid; place-items: center; font-size: 12px; font-weight: 700;
 }
-.banner.warn { background: #2b2620; box-shadow: inset 0 0 0 1px #4a3f2c; }
+.banner.warn {
+  background: linear-gradient(96deg, rgba(229,199,139,.13), rgba(229,199,139,.04) 60%, transparent);
+  box-shadow: inset 0 0 0 1px rgba(229,199,139,.26); color: #e0c294;
+}
+.banner.warn::before { background: linear-gradient(to bottom, transparent, var(--warn), transparent); }
 .banner.warn .icon { background: var(--warn); color: #241f14; }
-.banner.update { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-ring); }
+.banner.warn .glyph, .banner.warn .grow { color: #e0c294; }
+.banner.update {
+  background: linear-gradient(96deg, var(--accent-wash), transparent 70%);
+  box-shadow: inset 0 0 0 1px var(--accent-ring); color: var(--accent-text);
+}
+.banner.update::before { background: linear-gradient(to bottom, transparent, var(--accent), transparent); }
+.banner.update .grow { color: var(--accent-text); }
 .banner.update .icon { background: var(--accent-deep); color: var(--accent-text); }
 .banner .grow { font-size: 13px; }
 .banner .sub { font-size: 12px; color: var(--muted); }
@@ -383,7 +434,14 @@ h3 em { font-style: normal; text-transform: none; letter-spacing: 0; color: var(
 #stage { grid-area: stage; overflow-y: auto; padding: 16px 18px 0; }
 /* The sticky footer needs somewhere to stick to, and something under it to
    scroll past, or it sits in mid-air on a tall window. */
-#screen-room { min-height: 100%; padding-block-end: 10px; gap: 9px; }
+#screen-room {
+  min-height: 100%; gap: 9px;
+  padding: 2px 2px 10px; border-radius: var(--r-lg);
+  background:
+    radial-gradient(720px 260px at 14% 0%,
+      color-mix(in srgb, var(--accent) 9%, var(--stage2)), var(--stage) 68%);
+  box-shadow: inset 0 0 0 1px rgba(233,233,237,.05);
+}
 .screen { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 /* The room is the one screen that has to fit a laptop without scrolling: the
    way out of a room must never be below the fold. Ten seats, four watching
@@ -407,7 +465,10 @@ h3 em { font-style: normal; text-transform: none; letter-spacing: 0; color: var(
    screen people sit and wait on: a completely still one reads as a stopped
    one. A light travels the top edge, and a soft halo breathes behind the
    title. Both are dropped whole under prefers-reduced-motion. */
-.roomspanel { background: linear-gradient(180deg, var(--accent-soft), var(--panel) 26%); }
+.roomspanel {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--accent) 6%, var(--panel)), var(--panel) 26%);
+}
 .roomspanel .sweepline {
   position: absolute; inset-block-start: 0; inset-inline-start: 0;
   width: 16%; height: 1px; pointer-events: none;
@@ -592,7 +653,7 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
 .room {
   position: relative;
   align-items: center; padding: 11px 16px;
-  border-block-end: 1px solid #21232f; cursor: pointer;
+  border-block-end: 1px solid var(--hair); cursor: pointer;
 }
 .room:hover { background: var(--panel2); }
 /* A row that a keyboard can reach has to show where the keyboard is. Drawn
@@ -606,8 +667,8 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
 /* The room you are already in, marked the same way your own seat and your
    own name are: an accent wash and a gradient edge (D68). Three places, one
    idea - "this one is yours". */
-.room.here { background: linear-gradient(96deg, var(--accent-soft), transparent 58%); }
-.room.here:hover { background: linear-gradient(96deg, var(--accent-line), transparent 58%); }
+.room.here { background: linear-gradient(96deg, rgba(145,132,217,.12), transparent 58%); }
+.room.here:hover { background: linear-gradient(96deg, rgba(145,132,217,.20), transparent 58%); }
 .room.here::before {
   content: ""; position: absolute; inset-block: 0; inset-inline-start: 0; width: 2px;
   background: linear-gradient(to bottom, transparent, var(--accent), transparent);
@@ -640,9 +701,15 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
 .room-seats { display: flex; align-items: center; gap: 8px; }
 .room-seats .n { width: 34px; font-size: 12.5px; font-weight: 500; color: var(--text2); }
 .ticks { display: flex; gap: 2px; }
-.ticks i { width: 4px; height: 13px; border-radius: 1px; background: #2c2f3d; }
-.ticks i.on { background: var(--accent); }
-.ticks.full i.on { background: var(--bad); }
+.ticks i { width: 4px; height: 12px; border-radius: 1px; background: rgba(233,233,237,.10); }
+.ticks i.on {
+  background: var(--accent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+/* A full room is a fact, not a fault. It used to be painted in the same red
+   as a failed check and a poor ping. No glow on these: ten lit pips with a
+   halo each is the loudest thing in a list where nothing should shout. */
+.ticks.full i.on { background: var(--warn); box-shadow: none; }
 
 .room-mmr { font-size: 12.5px; color: var(--text2); }
 .room-mmr .kind { font-size: 10.5px; color: var(--dimmer); }
@@ -661,9 +728,9 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
    was three bars sitting on a different baseline, so the row read as two
    things that had come apart. How many are lit is the measurement; the
    colour is the verdict. */
-.bars { display: flex; align-items: center; gap: 1.5px; height: 12px; line-height: 1; }
-.bars i { width: 3px; border-radius: 1px; background: currentColor; opacity: .22; }
-.bars i.on { opacity: 1; }
+.bars { display: flex; align-items: center; gap: 2px; height: 12px; line-height: 1; }
+.bars i { width: 3px; border-radius: 1px; background: rgba(233,233,237,.14); }
+.bars i.on { background: currentColor; }
 .bars i:nth-child(1) { height: 4px; }
 .bars i:nth-child(2) { height: 6px; }
 .bars i:nth-child(3) { height: 8px; }
@@ -678,8 +745,8 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
 /* Whether a match is running in there. It is the only thing on the row that
    can be read without focusing on it. */
 .livedot { width: 8px; height: 8px; flex: none; border-radius: 50%; }
-.livedot.open { background: var(--good-dot); box-shadow: 0 0 7px rgba(126,168,140,.55); }
-.livedot.game { background: var(--bad); box-shadow: 0 0 7px rgba(207,139,134,.55); }
+.livedot.open { background: var(--good-dot); box-shadow: 0 0 8px rgba(78,201,138,.70); }
+.livedot.game { background: var(--bad); box-shadow: 0 0 8px rgba(229,139,139,.60); }
 
 /* Your own face, always this green. See avatar() for why. */
 .avatar.me { background: #4ec98a; color: #0f1a14; box-shadow: 0 0 0 3px rgba(78,201,138,.10); }
@@ -852,7 +919,7 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
    against a ground of the same value. */
 .teams { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 8px; }
 .team {
-  border-radius: var(--r-md); background: var(--sunk);
+  border-radius: var(--r-md); background: var(--board);
   box-shadow: inset 0 0 0 1px var(--line2); overflow: hidden;
 }
 .team-head {
@@ -861,8 +928,8 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
   font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase;
   color: var(--text2);
 }
-.team.radiant .team-head { background: linear-gradient(to inline-end, var(--good-soft), transparent 66%); }
-.team.dire .team-head { background: linear-gradient(to inline-end, var(--bad-soft), transparent 66%); }
+.team.radiant .team-head { background: linear-gradient(to inline-end, rgba(78,201,138,.16), transparent 66%); }
+.team.dire .team-head { background: linear-gradient(to inline-end, rgba(229,139,139,.16), transparent 66%); }
 .team-head .swatch { width: 8px; height: 8px; flex: none; border-radius: 2px; }
 .team.radiant .team-head .swatch { background: var(--radiant); }
 .team.dire .team-head .swatch { background: var(--dire); }
@@ -878,12 +945,12 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
 .obs-head {
   display: flex; align-items: center; gap: 8px;
   padding: 7px 13px 5px; margin-block-start: 4px;
-  background: rgba(11, 13, 20, .5);
+  background: color-mix(in srgb, var(--stage) 55%, transparent);
   border-block-start: 1px solid var(--line2);
   font-size: 9.5px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase;
   color: var(--dim);
 }
-.obs-head .swatch { width: 6px; height: 6px; flex: none; border-radius: 2px; background: var(--accent); }
+.obs-head .swatch { width: 6px; height: 6px; flex: none; border-radius: 2px; background: var(--accent-line); }
 .obs-head .head-gap { flex: 1; }
 .obs-head .n { flex: none; font-size: 10.5px; font-weight: 400; letter-spacing: 0; text-transform: none; }
 
@@ -906,7 +973,8 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
 }
 .slot.empty { background: none; }
 .slot.taken { background: var(--host-wash); }
-.slot.you { background: var(--accent-wash); }
+.slot.takeable .slot-name { color: var(--muted); }
+.slot.you { background: rgba(145,132,217,.12); }
 .slot.you::before { background: var(--accent); }
 .slot.you .slot-name { color: var(--accent-text); }
 .slot .mine { font-weight: 400; color: var(--dim); }
@@ -951,7 +1019,7 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
    the two kinds apart down a single column without reading either. */
 .slot.watch {
   height: 28px; padding: 0 13px;
-  background: rgba(11, 13, 20, .32);
+  background: color-mix(in srgb, var(--stage) 34%, transparent);
 }
 .slot.watch.taken { background: var(--host-wash); }
 .slot.watch.you { background: var(--accent-wash); }
@@ -972,7 +1040,11 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
   grid-area: rail;
   display: flex; flex-direction: column; min-height: 0;
   padding-block-start: 14px;
-  background: var(--head-bg);
+  /* The same wash as the toolbar, for the same reason: the two columns down
+     the sides of the window are one frame round the middle of it, and one of
+     them being flat made them read as different surfaces. */
+  background: linear-gradient(to bottom,
+    color-mix(in srgb, var(--accent) 6%, var(--head-bg)), var(--head-bg) 34%);
   border-inline-start: 1px solid var(--line);
 }
 .rail-head {

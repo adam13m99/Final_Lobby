@@ -1942,3 +1942,65 @@ product is actually used on - and the room screen fits a 1366x768 laptop
 completely for the first time: ten seats, four watching seats, the footer, no
 scrolling. The two cannot both be had at that height. The room won, which is
 the defensible way round, and the owner has been told.
+
+---
+
+## D73 - the exactness pass, and what it found under D71
+
+**2026-08-30.** Round two of the owner's stylesheet pass, appended to
+`docs/2026-08-30-ui-fixes.md`. Mostly colour, and one finding that matters more
+than the rest of it put together.
+
+**D71 did not fix the flicker. It moved it.** Guarding each panel on a
+signature is right, but three of those signatures carried a *live measurement*:
+`renderRooms` stringified whole room objects including `host_relay_ms`,
+`drawStats` carried `state.relay_ms`, and the seat boards carried each member's
+`relay_ms`. Relay pings arrive fresh on every two-second poll, so all three
+signatures changed on every poll and every one of those nodes was thrown away
+and rebuilt exactly as often as before. The guard was there and it was never
+once true.
+
+Three changes, and the first is the rule:
+
+- **A signature must not contain a number that moves by itself.** A `steady`
+  replacer drops `relay_ms` and `host_relay_ms` from every signature that is
+  built.
+- **A number that moves by itself is painted into a leaf of its own.**
+  `paintRoomPing`, `paintSeatPings` and the `.mspill` in the stat strip write
+  the new value into an existing node. A new measurement is a new number, not
+  a new board.
+- **The lobby reconciles per row.** Rows are matched by room id, only rows
+  whose own signature changed are rebuilt, and only rows that actually moved
+  are re-inserted. One room gaining a player used to rebuild all forty.
+
+**The strip that could not be put away.** `lease expired locally` comes from
+`netservice/internal/watchdog/lease.go` and the service goes on reporting it,
+correctly - a tunnel that tore down has not come back. Nothing was latched. What
+was missing is what a message like that needs and never had: **something to
+press, and a way to put it away.** The strip carries a Reconnect button (only
+for `tunnel_error`, the one of the five a player can act on) and a dismiss, and
+a dismissal is remembered by the exact sentence - so it stays down while the
+condition is unchanged and comes back up when the message changes.
+
+**The status colours had been muted into greys.** `--good` was a sage at
+`#a9cbb5`. Every status in this product is drawn at six to eight pixels, and at
+that size a desaturated colour is not a quiet colour, it is a grey one.
+Restored to the design's values, with the soft and line tints made translucent
+because a status pill in here sits on four different grounds and an opaque tint
+matches exactly one of them.
+
+**Two tests were widened, and this is the part to read before changing them
+back.** `TestTheRendererOnlySelectsClassesThatExist` and
+`TestTheRendererOnlyReadsDataAttributesThatExist` ask whether a name the script
+uses also exists in the markup. That is the right question only for names the
+markup is supposed to supply. A class the renderer creates (`.slot`) and an
+attribute it stamps on a node it created (`data-seat`, `data-room`, `data-msg`)
+are answered by the script, not by the document, and both tests were failing on
+them. They now also gather what the script itself makes: classes from
+`className =`, `classList.*` and `el(tag, "...")`, and data attributes from any
+`dataset.x =` or `delete ....dataset.x`. `sig` no longer needs its special
+case, because it is caught by the same rule that catches the other three.
+
+Both were checked against a deliberately wrong selector afterwards, and both
+still fail on one. **A guard that has been widened and not re-tested is a guard
+that has been removed.**

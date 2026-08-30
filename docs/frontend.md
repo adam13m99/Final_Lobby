@@ -499,5 +499,10 @@ WIDE=1366 TALL=768 bash scripts/preview.sh small
 14. **Never add a `transform` without asking what it does in Persian.** It is
     the one exception to the logical-properties rule, because there is
     nothing logical to write instead: give it a `[dir="rtl"]` companion.
-15. **Never leave a change on this PC.** `./scripts/ship.sh` after the commit
+15. **Never put a number that moves by itself into a render signature.**
+    A relay ping arrives fresh on every poll; a signature carrying one is a
+    guard that is never true, which is worse than no guard because it looks
+    like one. Drop it with `steady` and paint it into a leaf of its own
+    (D73).
+16. **Never leave a change on this PC.** `./scripts/ship.sh` after the commit
     (D62). The owner tests on the live product.

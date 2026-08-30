@@ -78,10 +78,44 @@ async function act(fn) {
 // the lookup from here. Translating those means translating them at their
 // source, in Go; that is a separate surface and a later task. Everything this
 // file writes itself goes through t().
-function banner(msg) {
+// What the reader has already seen and put away. Kept by its exact text: a
+// dismissed strip stays down while the condition is unchanged, and a new
+// sentence is a new problem and comes back up.
+let bannerShut = "";
+
+function banner(msg, retry) {
   const b = $("banner");
-  b.textContent = msg;
-  b.classList.toggle("hidden", !msg);
+  if (!msg) {
+    bannerShut = "";
+    b.textContent = "";
+    b.classList.add("hidden");
+    return;
+  }
+  if (msg === bannerShut) {
+    b.classList.add("hidden");
+    return;
+  }
+  // Rebuilt only when the sentence itself changes, so the buttons on it stay
+  // clickable and keep the keyboard's place.
+  if (b.dataset.msg !== msg + (retry ? "!" : "")) {
+    b.dataset.msg = msg + (retry ? "!" : "");
+    b.textContent = "";
+    b.appendChild(el("span", "glyph", "\u26A0"));
+    b.appendChild(el("span", "grow", msg));
+    if (retry) {
+      const again = el("button", "act", t("banner.retry"));
+      again.onclick = () => act(() => api("/api/connect", {}));
+      b.appendChild(again);
+    }
+    const shut = el("button", "shut", "\u00D7");
+    shut.title = t("banner.dismiss");
+    shut.onclick = () => {
+      bannerShut = msg;
+      b.classList.add("hidden");
+    };
+    b.appendChild(shut);
+  }
+  b.classList.remove("hidden");
 }
 
 // needName stops an action that cannot be done anonymously and asks for
@@ -237,6 +271,20 @@ function hueOf(id) {
 // signature has to name every input the panel draws from, including the ones
 // that are not in its argument - which is why several of them reach into
 // state for the player's own id or for whether this PC is connected.
+// The numbers that change by themselves. Nothing structural depends on them,
+// and everything that draws them draws them into a node of its own.
+const LIVE_KEYS = new Set(["relay_ms", "host_relay_ms"]);
+function steady(key, value) {
+  return LIVE_KEYS.has(key) ? undefined : value;
+}
+
+// grade turns a measurement into the one word the colour is saying. Zero is
+// not a good connection, it is no reading, and the two must never look the
+// same (D54).
+function grade(ms) {
+  return !ms ? "" : ms < 60 ? "good" : ms < 140 ? "fair" : "poor";
+}
+
 function redraw(node, sig) {
   if (node.dataset.sig === sig) return false;
   node.dataset.sig = sig;
@@ -284,10 +332,13 @@ function render() {
   // installed the app can see whether anyone is playing before deciding
   // whether to bother. Asking first is how an install gets abandoned.
 
-  banner(s.service_error || s.coordinator_error || s.tunnel_error ||
+  // A tunnel that tore down is the one of these the player can do something
+  // about, so that one gets the button.
+  const trouble = s.service_error || s.coordinator_error || s.tunnel_error ||
     (s.room_gone ? t("err.room_gone") : "") ||
     (s.removed ? t("err.removed") : "") ||
-    (s.build_warning || ""));
+    (s.build_warning || "");
+  banner(trouble, !!s.tunnel_error && trouble === s.tunnel_error);
 
   // Terms that changed after somebody signed up are terms they have not
   // agreed to. Shown only where all three facts are known: signed in, a
@@ -471,11 +522,17 @@ function renderRooms(rooms) {
 
   // Which room is mine and who I am both change what a row looks like, and
   // neither of them is in the list itself.
-  if (!redraw(box, JSON.stringify([shown, rooms.length, state.room_id, state.player_id]))) {
+  //
+  // The signature is per row, not per list: rebuilding forty rows because one
+  // of them gained a player is what made the lobby flicker, and it threw away
+  // whichever row the pointer or the keyboard happened to be on.
+  if (shown.length) {
+    reconcileRooms(box, shown);
     return;
   }
+  if (!redraw(box, "empty:" + rooms.length)) return;
   box.textContent = "";
-  if (!shown.length) {
+  {
     // An empty list says so in the middle of its own space, and offers the
     // two ways out. A single grey line against the top edge reads as a page
     // that failed rather than as a lobby with nothing in it yet.
@@ -496,7 +553,52 @@ function renderRooms(rooms) {
     box.appendChild(none);
     return;
   }
-  for (const r of shown) box.appendChild(roomCard(r));
+}
+
+// reconcileRooms puts the rows in the right order, makes the ones that have
+// genuinely changed, and leaves the rest of them alone.
+//
+// A row that is kept still has its ping repainted: that is the one part of it
+// that moves on its own, and it is a leaf with nothing in it to lose.
+function reconcileRooms(box, shown) {
+  delete box.dataset.sig;
+  const have = new Map();
+  for (const node of Array.from(box.children)) {
+    if (node.dataset && node.dataset.room) have.set(node.dataset.room, node);
+    else box.removeChild(node);
+  }
+
+  const want = [];
+  for (const r of shown) {
+    // Whether I am in *any* room matters to every row, not just to mine:
+    // joining one disables the button on all the others.
+    const sig = JSON.stringify(
+      [r, r.id === state.room_id, !!state.room_id, state.player_id], steady);
+    let node = have.get(r.id);
+    if (node && node.dataset.sig === sig) {
+      paintRoomPing(node, r);
+    } else {
+      node = roomCard(r);
+      node.dataset.room = r.id;
+      node.dataset.sig = sig;
+    }
+    have.delete(r.id);
+    want.push(node);
+  }
+  for (const dead of have.values()) box.removeChild(dead);
+
+  // Only the rows that actually moved are touched. insertBefore on a node
+  // already in place would still be a move, and a move resets a transition.
+  let i = 0;
+  for (const node of want) {
+    if (box.children[i] !== node) box.insertBefore(node, box.children[i] || null);
+    i++;
+  }
+}
+
+function paintRoomPing(row, r) {
+  const old = row.querySelector(".room-ping");
+  if (old) row.replaceChild(pingCell(r), old);
 }
 
 // One row per room: who is hosting it, one line of everything else, and the
@@ -580,8 +682,7 @@ function mmrCell(r) {
 // rather than as an excellent connection.
 function pingCell(r) {
   const ms = r.host_relay_ms || 0;
-  const grade = !ms ? "" : ms < 60 ? "good" : ms < 140 ? "fair" : "poor";
-  const cell = el("div", "room-ping rcol-hide " + grade);
+  const cell = el("div", "room-ping rcol-hide " + grade(ms));
   cell.title = ms ? t("lobby.ping.explain") : t("lobby.ping.none");
   // Five bars, not three. Three cannot show "fair" as anything but "not
   // good", and the meter is the only part of the row read without looking
@@ -692,12 +793,15 @@ function renderRoom(r) {
   // is in them, who I am, and whether the room will accept a seat change at
   // all are the whole of what a seat draws from.
   const sig = JSON.stringify([r.members || [], r.status, r.host_id,
-    state.player_id, iAmHost]);
+    state.player_id, iAmHost], steady);
   if (redraw(box, sig)) {
     box.textContent = "";
     box.appendChild(teamColumn("radiant", "room.team.radiant", 0, seated, watching, iAmHost));
     box.appendChild(teamColumn("dire", "room.team.dire", 5, seated, watching, iAmHost));
   }
+  // Always, whether or not the boards were rebuilt: this is the number that
+  // moved on its own, and repainting it is why they no longer have to be.
+  paintSeatPings(box, seated, watching);
 
   drawStats(r);
   drawAction(r);
@@ -714,8 +818,12 @@ function drawStats(r) {
   const box = $("roomstats");
   // Four of the five cells come from this PC rather than from the room.
   const sig = JSON.stringify([r.host_nick, r.seats, state.virtual_ip,
-    state.host_ip, state.connected, state.tunnel, state.relay_ms, state.is_host]);
-  if (!redraw(box, sig)) return;
+    state.host_ip, state.connected, state.tunnel, !!state.relay_ms, state.is_host]);
+  if (!redraw(box, sig)) {
+    const pill = box.querySelector(".mspill");
+    if (pill) pill.textContent = t("checks.ms", { n: state.relay_ms });
+    return;
+  }
   box.textContent = "";
 
   const cell = (labelKey, fill) => {
@@ -981,6 +1089,7 @@ function slotCard(index, member, canKick, spectator) {
   // Observers are numbered in their own range, and shown that way: O1 and O2
   // on Radiant, O3 and O4 on Dire. A "1" on both kinds of seat in the same
   // column would be two different seats with the same name.
+  card.dataset.seat = (spectator ? "o" : "p") + index;
   card.appendChild(el("div", "slot-num",
     spectator ? t("room.watch.seat", { n: index + 1 }) : String(index + 1)));
 
@@ -1034,11 +1143,28 @@ function slotCard(index, member, canKick, spectator) {
 // zero. Zero milliseconds is not a good connection, it is no reading, and
 // the two must never look the same.
 function seatPing(member) {
-  const ms = member.relay_ms || 0;
-  const grade = !ms ? "" : ms < 60 ? "good" : ms < 140 ? "fair" : "poor";
-  const e = el("span", "seat-ping " + grade, ms ? t("lobby.ping.value", { n: ms }) : "");
-  if (ms) e.title = t("room.ping.explain");
+  const e = el("span", "seat-ping");
+  paintPing(e, member.relay_ms || 0);
   return e;
+}
+
+function paintPing(e, ms) {
+  e.className = "seat-ping " + grade(ms);
+  e.textContent = ms ? t("lobby.ping.value", { n: ms }) : "";
+  if (ms) e.title = t("room.ping.explain");
+  else e.removeAttribute("title");
+}
+
+// Twenty seats, each with a number that changes on its own. Painted in place
+// so that a new measurement is a new number rather than a new board.
+function paintSeatPings(box, seated, watching) {
+  for (const card of box.querySelectorAll(".slot[data-seat]")) {
+    const e = card.querySelector(".seat-ping");
+    if (!e) continue;
+    const key = card.dataset.seat;
+    const who = (key[0] === "o" ? watching : seated)[Number(key.slice(1))];
+    paintPing(e, (who && who.relay_ms) || 0);
+  }
 }
 
 // ---------------------------------------------------------- friends rail

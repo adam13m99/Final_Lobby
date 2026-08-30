@@ -430,6 +430,19 @@ var (
 	htmlCls  = regexp.MustCompile(`class="([^"]*)"`)
 	htmlData = regexp.MustCompile(`\bdata-([a-z]+)="`)
 	jsData   = regexp.MustCompile(`\.dataset\.([a-zA-Z]+)`)
+
+	// What the renderer makes for itself. Both of the tests below ask
+	// whether a name the script uses also exists in the markup, and that is
+	// the right question only for names the markup is supposed to supply.
+	// A class the renderer creates, and an attribute it stamps on a node it
+	// created, are answered by the script rather than by the document - so
+	// they are gathered from the script and added to what the markup offers.
+	//
+	// The guard survives: a class or an attribute that is neither in the
+	// markup nor made anywhere in the script is still a selector that will
+	// never match, which is the failure both tests exist to catch.
+	jsClass  = regexp.MustCompile(`(?:className\s*=\s*|classList\.(?:add|remove|toggle)\(|el\("[a-zA-Z0-9]+", )"([^"]*)"`)
+	jsWrites = regexp.MustCompile(`\.dataset\.([a-zA-Z]+)\s*(?:=[^=]|\])|delete [a-zA-Z.]+\.dataset\.([a-zA-Z]+)`)
 )
 
 // Every $("something") in the renderer must be an id that exists.
@@ -452,16 +465,22 @@ func TestTheRendererOnlyReachesForElementsThatExist(t *testing.T) {
 	}
 }
 
-// The same for the classes it selects on.
+// The same for the classes it selects on, plus the ones it makes itself.
 func TestTheRendererOnlySelectsClassesThatExist(t *testing.T) {
 	html := read(t, filepath.Join(uiDir, "index.html"))
+	js := renderSource(t)
 	classes := map[string]bool{}
 	for _, m := range htmlCls.FindAllStringSubmatch(html, -1) {
 		for _, c := range strings.Fields(m[1]) {
 			classes[c] = true
 		}
 	}
-	for _, m := range byClass.FindAllStringSubmatch(renderSource(t), -1) {
+	for _, m := range jsClass.FindAllStringSubmatch(js, -1) {
+		for _, c := range strings.Fields(m[1]) {
+			classes[c] = true
+		}
+	}
+	for _, m := range byClass.FindAllStringSubmatch(js, -1) {
 		if !classes[m[1]] {
 			t.Errorf("app.js selects .%s, which index.html does not contain", m[1])
 		}
@@ -473,17 +492,24 @@ func TestTheRendererOnlySelectsClassesThatExist(t *testing.T) {
 // runtime and silently does nothing, which is the same trap as a missing id.
 func TestTheRendererOnlyReadsDataAttributesThatExist(t *testing.T) {
 	html := read(t, filepath.Join(uiDir, "index.html"))
+	js := renderSource(t)
 	attrs := map[string]bool{}
 	for _, m := range htmlData.FindAllStringSubmatch(html, -1) {
 		attrs[m[1]] = true
 	}
-	for _, m := range jsData.FindAllStringSubmatch(renderSource(t), -1) {
-		name := strings.ToLower(m[1])
-		// `sig` is written by the renderer itself to remember what it last
-		// drew, so it is never in the markup.
-		if name == "sig" {
-			continue
+	// The renderer's own bookkeeping: what it last drew (`sig`), which room a
+	// row is (`room`), which seat a card is (`seat`), which sentence a strip
+	// is showing (`msg`). Each is written by the script onto a node the
+	// script created, so the markup never carries it and never should.
+	for _, m := range jsWrites.FindAllStringSubmatch(js, -1) {
+		for _, name := range m[1:] {
+			if name != "" {
+				attrs[strings.ToLower(name)] = true
+			}
 		}
+	}
+	for _, m := range jsData.FindAllStringSubmatch(js, -1) {
+		name := strings.ToLower(m[1])
 		if !attrs[name] {
 			t.Errorf("app.js reads dataset.%s, so index.html needs a data-%s attribute", m[1], name)
 		}
