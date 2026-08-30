@@ -254,6 +254,7 @@ there; this is the summary.
 | T25 the host picks a side too (D64) | **done** — the room address follows the host instead of sitting in slot 0 |
 | T26 a player's own launch options (D65) | **done** — engine flags accepted, console commands refused at both ends |
 | T27 notifications, five of them with switches (D66) | **done** — raised by the tray, so they arrive with the window closed |
+| T28 the installer ships the window (D67) | **done** — shortcut opens `lobbybaz.exe`; no console, no browser tab |
 
 **The interface was redesigned on 2026-08-25** at the owner's request: the
 old one was flat, grey and mostly empty space. What changed, beyond colour

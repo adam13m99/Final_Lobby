@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/nocturne-b026e303-3448-470f-9b28-3be7710368dd/styles.css">
+<script src="_ds/nocturne-b026e303-3448-470f-9b28-3be7710368dd/_ds_bundle.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+  body { margin: 0; background: var(--color-bg); }
+  a { color: var(--color-accent-300); text-decoration: none; }
+  a:hover { color: var(--color-accent-200); text-decoration: underline; }
+  @keyframes lbSweep { 0% { transform: translateX(-110%); } 100% { transform: translateX(420%); } }
+  @keyframes lbBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+  @keyframes lbGlow { 0%, 100% { opacity: 0.28; } 50% { opacity: 0.7; } }
+  @keyframes lbRise { 0% { opacity: 0; transform: translateY(8px); } 100% { opacity: 1; transform: none; } }
+  @keyframes lbPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(145,132,217,0.34); } 50% { box-shadow: 0 0 0 6px rgba(145,132,217,0); } }
+  input::placeholder { color: color-mix(in srgb, var(--color-text) 32%, transparent); }
+</style>
+</helmet>
+
+<div style="position: relative; height: 100vh; overflow: hidden; box-sizing: border-box; padding-top: 34px; background: radial-gradient(1200px 520px at 22% -6%, color-mix(in srgb, var(--color-accent) 11%, var(--color-bg)), var(--color-bg) 62%); color: var(--color-text); font-family: var(--font-body); font-size: 13px; display: flex;">
+
+  <div style="position: absolute; top: 0; left: 0; right: 0; height: 34px; z-index: 40; display: flex; align-items: center; justify-content: center; gap: 3px; background: color-mix(in srgb, var(--color-bg) 60%, #000); border-bottom: 1px solid rgba(233,233,237,0.07);">
+    <button style="{{ navLobby }}" onClick="{{ goLobby }}">Lobby</button>
+    <button style="{{ navRoom }}" onClick="{{ goRoom }}">Room</button>
+  </div>
+
+  <div style="width: 56px; flex: 0 0 56px; display: flex; flex-direction: column; align-items: center; padding: 10px 0 12px; border-right: 1px solid rgba(233,233,237,0.07); background: linear-gradient(to bottom, color-mix(in srgb, var(--color-accent) 7%, color-mix(in srgb, var(--color-bg) 84%, #000)), color-mix(in srgb, var(--color-bg) 84%, #000) 42%);">
+    <div style="position: relative; width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; font-weight: 700; font-size: 11.5px; color: var(--color-accent-200); background: color-mix(in srgb, var(--color-accent) 18%, transparent); border: 1px solid color-mix(in srgb, var(--color-accent) 42%, transparent); box-shadow: 0 0 18px color-mix(in srgb, var(--color-accent) 26%, transparent); margin-bottom: 14px;">LB</div>
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
+      <button style="{{ railLobby }}" onClick="{{ goLobby }}">
+        <svg width="16" height="16" viewBox="0 0 256 256" fill="currentColor"><path d="M216 40H40a16 16 0 0 0-16 16v144a16 16 0 0 0 16 16h176a16 16 0 0 0 16-16V56a16 16 0 0 0-16-16Zm0 32H40V56h176ZM40 200v-64h176v64Zm0-80V88h176v32Z"></path></svg>
+        <span>Lobby</span>
+      </button>
+      <button style="{{ railRoom }}" onClick="{{ goRoom }}">
+        <svg width="16" height="16" viewBox="0 0 256 256" fill="currentColor"><path d="M128 24a104 104 0 1 0 104 104A104.1 104.1 0 0 0 128 24Zm0 160a56 56 0 1 1 56-56 56 56 0 0 1-56 56Z"></path></svg>
+        <span>Room</span>
+      </button>
+      <button style="{{ railEvents }}">
+        <svg width="16" height="16" viewBox="0 0 256 256" fill="currentColor"><path d="m248 92-32 108H40L8 92l60 36 60-92 60 92Z"></path></svg>
+        <span>Events</span>
+      </button>
+    </div>
+    <div style="flex: 1;"></div>
+    <button style="{{ railSettings }}">
+      <svg width="16" height="16" viewBox="0 0 256 256" fill="currentColor"><path d="M128 80a48 48 0 1 0 48 48 48 48 0 0 0-48-48Zm0 72a24 24 0 1 1 24-24 24 24 0 0 1-24 24Zm102-38-11-8a92 92 0 0 0 0-12l11-8a12 12 0 0 0 3-15l-16-28a12 12 0 0 0-14-5l-13 4a90 90 0 0 0-10-6l-2-13a12 12 0 0 0-12-11h-32a12 12 0 0 0-12 11l-2 13a90 90 0 0 0-10 6l-13-4a12 12 0 0 0-14 5l-16 28a12 12 0 0 0 3 15l11 8a92 92 0 0 0 0 12l-11 8a12 12 0 0 0-3 15l16 28a12 12 0 0 0 14 5l13-4a90 90 0 0 0 10 6l2 13a12 12 0 0 0 12 11h32a12 12 0 0 0 12-11l2-13a90 90 0 0 0 10-6l13 4a12 12 0 0 0 14-5l16-28a12 12 0 0 0-3-15Z"></path></svg>
+      <span>Settings</span>
+    </button>
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 7px; margin-top: 12px; font-size: 9px; line-height: 1.2; text-align: center; color: color-mix(in srgb, var(--color-text) 45%, transparent);">
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 3px; color: #7fdcab;">
+        <span style="width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; background: rgba(78,201,138,0.12); border: 1px solid rgba(78,201,138,0.28);">
+          <span style="width: 6px; height: 6px; border-radius: 50%; background: #4ec98a; box-shadow: 0 0 7px rgba(78,201,138,0.7);"></span>
+        </span>
+        <span>service<br>running</span>
+      </div>
+      <span style="width: 22px; height: 1px; background: rgba(233,233,237,0.10);"></span>
+      <span style="width: 6px; height: 6px; border-radius: 50%; background: #4ec98a; box-shadow: 0 0 8px rgba(78,201,138,0.6); animation: lbBlink 2.6s ease-in-out infinite;"></span>
+      <span>tunnel<br>on</span>
+    </div>
+  </div>
+
+  <div style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+
+    <div style="height: 44px; flex: 0 0 44px; display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid rgba(233,233,237,0.07); background: color-mix(in srgb, var(--color-bg) 90%, #000);">
+      <div style="position: relative; flex: 0 1 320px; min-width: 150px;">
+        <svg width="13" height="13" viewBox="0 0 256 256" fill="currentColor" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: color-mix(in srgb, var(--color-text) 38%, transparent);"><path d="m229 219-42-42a92 92 0 1 0-11 11l42 42a8 8 0 0 0 11-11ZM40 116a76 76 0 1 1 76 76 76 76 0 0 1-76-76Z"></path></svg>
+        <input class="input" placeholder="Search rooms or hosts" style="width: 100%; box-sizing: border-box; padding: 6px 10px 6px 29px; font-size: 12px;">
+      </div>
+      <span style="flex: 1 1 0; min-width: 0;"></span>
+    </div>
+
+    <div style="flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 10px 14px 0; gap: 10px;">
+
+      <div style="position: relative; overflow: hidden; flex: 0 0 auto; display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-radius: var(--radius-md); background: linear-gradient(96deg, rgba(229,139,139,0.13), rgba(229,139,139,0.045) 60%, transparent); border: 1px solid rgba(229,139,139,0.26);">
+        <span style="position: absolute; inset: 0 auto 0 0; width: 2px; background: linear-gradient(to bottom, transparent, #e58b8b, transparent);"></span>
+        <svg width="14" height="14" viewBox="0 0 256 256" fill="#e58b8b"><path d="M236 200 148 40a24 24 0 0 0-42 0L18 200a20 20 0 0 0 17 30h186a20 20 0 0 0 17-30ZM120 100a8 8 0 0 1 16 0v40a8 8 0 0 1-16 0Zm8 92a12 12 0 1 1 12-12 12 12 0 0 1-12 12Z"></path></svg>
+        <span style="font-size: 12.5px; color: #efb9b9;">lease expired locally</span>
+        <div style="flex: 1;"></div>
+        <span style="font-size: 11.5px; color: color-mix(in srgb, #efb9b9 70%, transparent); cursor: pointer;" style-hover="color: #efb9b9;">Retry</span>
+      </div>
+
+      <sc-if value="{{ onLobby }}" hint-placeholder-val="{{ true }}">
+      <div style="flex: 1; min-height: 0; display: flex; flex-direction: column; border-radius: var(--radius-lg); overflow: hidden; background: linear-gradient(180deg, color-mix(in srgb, var(--color-accent) 6%, var(--color-surface)), var(--color-surface) 26%); border: 1px solid rgba(233,233,237,0.08); animation: lbRise 300ms ease both;">
+
+        <div style="position: relative; overflow: hidden; flex: 0 0 auto; display: flex; align-items: center; gap: 10px; padding: 12px 16px;">
+          <span style="position: absolute; top: 0; left: 0; width: 16%; height: 1px; background: linear-gradient(to right, transparent, var(--color-accent-200), transparent); animation: lbSweep 5.2s linear infinite;"></span>
+          <span style="position: absolute; left: -60px; top: -70px; width: 220px; height: 180px; border-radius: 50%; background: radial-gradient(closest-side, color-mix(in srgb, var(--color-accent) 24%, transparent), transparent); filter: blur(26px); animation: lbGlow 6s ease-in-out infinite; pointer-events: none;"></span>
+          <span style="position: relative; font-size: 17px; font-weight: 500; letter-spacing: -0.01em;">Rooms</span>
+          <span style="position: relative; font-size: 11.5px; color: color-mix(in srgb, var(--color-text) 45%, transparent);">1 of 1 shown</span>
+          <div style="flex: 1;"></div>
+          <span style="font-size: 11.5px; color: color-mix(in srgb, var(--color-text) 42%, transparent);">sorted by players, highest first</span>
+          <button class="btn btn-primary" style="font-size: 12px; padding: 7px 15px; background: color-mix(in srgb, var(--color-accent) 14%, transparent); box-shadow: 0 0 22px color-mix(in srgb, var(--color-accent) 22%, transparent); animation: lbPulse 3.6s ease-in-out infinite;" style-hover="background: color-mix(in srgb, var(--color-accent) 26%, transparent);">+ Create room</button>
+        </div>
+
+        <div style="flex: 0 0 auto; height: 1px; background: linear-gradient(to right, transparent, rgba(233,233,237,0.13) 48px, rgba(233,233,237,0.13) calc(100% - 48px), transparent);"></div>
+
+        <div style="flex: 0 0 auto; display: flex; align-items: center; gap: 3px; padding: 9px 16px 8px; overflow-x: auto; scrollbar-width: none;">
+          <span style="{{ chipOn }}">All</span>
+          <span style="{{ chipOff }}">Has space</span>
+          <span style="{{ chipOff }}"><span style="width: 5px; height: 5px; border-radius: 50%; background: #4ec98a; display: inline-block; margin-right: 5px;"></span>Not started</span>
+          <span style="{{ chipOff }}"><span style="width: 5px; height: 5px; border-radius: 50%; background: #e58b8b; display: inline-block; margin-right: 5px;"></span>In game</span>
+          <span style="{{ chipOff }}">My MMR</span>
+          <span style="{{ chipOff }}">Friends</span>
+        </div>
+
+        <div style="flex: 0 0 auto; display: flex; align-items: center; gap: 16px; padding: 9px 16px; background: rgba(233,233,237,0.02); border-top: 1px solid rgba(233,233,237,0.05); font-size: 10px; letter-spacing: 0.13em; text-transform: uppercase; color: color-mix(in srgb, var(--color-text) 38%, transparent);">
+          <span style="flex: 1 1 auto; min-width: 0;">Room</span>
+          <span style="flex: 0 1 118px; min-width: 84px; text-align: right; color: var(--color-accent-300);">Players ↓</span>
+          <span style="flex: 0 1 74px; min-width: 40px;">MMR</span>
+          <span style="flex: 0 1 92px; min-width: 62px;">Host ping</span>
+          <span style="flex: 0 1 96px; min-width: 84px;">Status</span>
+        </div>
+
+        <div style="flex: 1; min-height: 0; overflow: auto;">
+          <div style="position: relative; overflow: hidden; display: flex; align-items: center; gap: 16px; padding: 11px 16px; cursor: pointer; background: linear-gradient(96deg, color-mix(in srgb, var(--color-accent) 12%, transparent), transparent 58%); border-top: 1px solid rgba(233,233,237,0.05); border-bottom: 1px solid rgba(233,233,237,0.05);" style-hover="background: linear-gradient(96deg, color-mix(in srgb, var(--color-accent) 20%, transparent), transparent 62%);">
+            <span style="position: absolute; inset: 0 auto 0 0; width: 2px; background: linear-gradient(to bottom, transparent, var(--color-accent), transparent);"></span>
+            <div style="flex: 1 1 220px; min-width: 190px; display: flex; align-items: center; gap: 11px;">
+              <span style="width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; font-size: 10px; font-weight: 600; color: #f5f4ff; background: linear-gradient(140deg, #b06ec4, #8a5ec9); box-shadow: 0 0 14px rgba(176,110,196,0.35);">DC</span>
+              <div style="min-width: 0; overflow: hidden;">
+                <div style="font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">deploy check - ignore</div>
+                <div style="display: flex; align-items: center; gap: 7px; margin-top: 2px; white-space: nowrap; min-width: 0; overflow: hidden;">
+                  <span style="flex: 0 0 auto; font-size: 9.5px; letter-spacing: 0.1em; padding: 2px 6px; border-radius: 4px; color: #7fdcab; background: rgba(78,201,138,0.12); border: 1px solid rgba(78,201,138,0.24);">OPEN</span>
+                  <span style="flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; font-size: 11.5px; color: color-mix(in srgb, var(--color-text) 48%, transparent);">Deploy Check ·</span>
+                  <span style="flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; font-size: 11.5px; color: var(--color-accent-300);">You are here</span>
+                </div>
+              </div>
+            </div>
+            <div style="flex: 0 1 118px; min-width: 84px; display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
+              <span style="font-size: 13px; font-weight: 500;">2/10</span>
+              <span style="display: flex; gap: 2px;">
+                <span style="width: 4px; height: 12px; border-radius: 1px; background: var(--color-accent); box-shadow: 0 0 6px color-mix(in srgb, var(--color-accent) 60%, transparent);"></span>
+                <span style="width: 4px; height: 12px; border-radius: 1px; background: var(--color-accent); box-shadow: 0 0 6px color-mix(in srgb, var(--color-accent) 60%, transparent);"></span>
+                <span style="width: 4px; height: 12px; border-radius: 1px; background: rgba(233,233,237,0.10);"></span>
+                <span style="width: 4px; height: 12px; border-radius: 1px; background: rgba(233,233,237,0.10);"></span>
+                <span style="width: 4px; height: 12px; border-radius: 1px; background: rgba(233,233,237,0.10);"></span>
+                <span style="width: 4px; height: 12px; border-radius: 1px; background: rgba(233,233,237,0.10);"></span>
+                <span style="width: 4px; height: 12px; border-radius: 1px; background: rgba(233,233,237,0.10);"></span>
+                <span style="width: 4px; height: 12px; border-radius: 1px; background: rgba(233,233,237,0.10);"></span>
+                <span style="width: 4px; height: 12px; border-radius: 1px; background: rgba(233,233,237,0.10);"></span>
+                <span style="width: 4px; height: 12px; border-radius: 1px; background: rgba(233,233,237,0.10);"></span>
+              </span>
+            </div>
+            <span style="flex: 0 1 74px; min-width: 40px; font-size: 12.5px; color: color-mix(in srgb, var(--color-text) 68%, transparent);">any</span>
+            <div style="flex: 0 1 92px; min-width: 62px; display: flex; align-items: center; gap: 6px; white-space: nowrap;">
+              <span style="display: flex; gap: 2px; align-items: flex-end; height: 12px;">
+                <span style="width: 3px; height: 4px; border-radius: 1px; background: #7fdcab;"></span>
+                <span style="width: 3px; height: 6px; border-radius: 1px; background: #7fdcab;"></span>
+                <span style="width: 3px; height: 8px; border-radius: 1px; background: #7fdcab;"></span>
+                <span style="width: 3px; height: 10px; border-radius: 1px; background: #7fdcab;"></span>
+                <span style="width: 3px; height: 12px; border-radius: 1px; background: rgba(233,233,237,0.14);"></span>
+              </span>
+              <span style="font-size: 12.5px; line-height: 1; color: #7fdcab;">37 ms</span>
+            </div>
+            <div style="flex: 0 0 96px; display: flex; align-items: center; gap: 8px; white-space: nowrap;">
+              <button class="btn btn-primary" style="font-size: 12px; padding: 6px 16px; background: color-mix(in srgb, var(--color-accent) 13%, transparent);" style-hover="background: color-mix(in srgb, var(--color-accent) 24%, transparent);" onClick="{{ goRoom }}">Open</button>
+              <span style="width: 7px; height: 7px; border-radius: 50%; background: #4ec98a; box-shadow: 0 0 8px rgba(78,201,138,0.7);"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ onRoom }}" hint-placeholder-val="{{ false }}">
+      <div style="flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 2px; border-radius: var(--radius-lg); background: radial-gradient(720px 260px at 14% 0%, color-mix(in srgb, var(--color-accent) 9%, #0d0f18), #0b0d14 68%); box-shadow: inset 0 0 0 1px rgba(233,233,237,0.05); animation: lbRise 300ms ease both;">
+
+        <div style="position: relative; overflow: hidden; flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; padding: 10px 14px; border-radius: var(--radius-md); background: linear-gradient(100deg, color-mix(in srgb, var(--color-accent) 13%, var(--color-surface)), var(--color-surface) 54%); border: 1px solid color-mix(in srgb, var(--color-accent) 22%, transparent);">
+          <span style="position: absolute; top: 0; left: 0; width: 20%; height: 1px; background: linear-gradient(to right, transparent, var(--color-accent-200), transparent); animation: lbSweep 4.8s linear infinite;"></span>
+          <div style="flex: 1 1 100%; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px;">
+            <button class="btn btn-secondary" style="flex: 0 0 auto; font-size: 12px; padding: 6px 13px;" onClick="{{ goLobby }}">← Lobby</button>
+            <span style="flex: 0 0 auto; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; font-size: 11.5px; font-weight: 600; color: #f5f4ff; background: linear-gradient(140deg, #b06ec4, #8a5ec9); box-shadow: 0 0 16px rgba(176,110,196,0.32);">DC</span>
+            <div style="flex: 1 1 200px; min-width: 0; display: flex; align-items: center; gap: 9px;">
+              <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 19px; font-weight: 500; letter-spacing: -0.015em;">deploy check - ignore</span>
+              <span style="flex: 0 0 auto; font-size: 9.5px; letter-spacing: 0.12em; padding: 2px 7px; border-radius: 4px; color: #7fdcab; background: rgba(78,201,138,0.12); border: 1px solid rgba(78,201,138,0.26);">OPEN</span>
+            </div>
+            <button style="{{ guideBtn }}" onClick="{{ toggleGuide }}" title="How a room works">i</button>
+            <button class="btn btn-secondary" style="flex: 0 0 auto; font-size: 12px; padding: 6px 15px; white-space: nowrap;">Invite</button>
+            <sc-if value="{{ isJoining }}" hint-placeholder-val="{{ true }}">
+              <button class="btn btn-primary" style="flex: 0 0 auto; font-size: 12.5px; padding: 7px 18px; white-space: nowrap; background: color-mix(in srgb, var(--color-accent) 15%, transparent); box-shadow: 0 0 12px color-mix(in srgb, var(--color-accent) 14%, transparent);" style-hover="background: color-mix(in srgb, var(--color-accent) 26%, transparent);">Join Game</button>
+            </sc-if>
+            <sc-if value="{{ isHosting }}" hint-placeholder-val="{{ false }}">
+              <button class="btn btn-primary" style="flex: 0 0 auto; font-size: 12.5px; padding: 7px 18px; white-space: nowrap; background: color-mix(in srgb, var(--color-accent) 15%, transparent); box-shadow: 0 0 12px color-mix(in srgb, var(--color-accent) 14%, transparent);" style-hover="background: color-mix(in srgb, var(--color-accent) 26%, transparent);">Create Game</button>
+            </sc-if>
+          </div>
+
+          <div style="flex: 1 1 100%; height: 1px; background: linear-gradient(to right, transparent, rgba(233,233,237,0.20) 40px, rgba(233,233,237,0.20) calc(100% - 40px), transparent);"></div>
+
+          <div style="flex: 1 1 100%; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 0; padding: 9px 12px; border-radius: var(--radius-sm); background: rgba(6,7,12,0.55); box-shadow: inset 0 0 0 1px rgba(233,233,237,0.07);">
+            <div style="{{ statCell }}">
+              <div style="{{ statLbl }}">Host</div>
+              <div style="{{ statVal }}">Deploy Check</div>
+            </div>
+            <span style="{{ statDiv }}"></span>
+            <div style="{{ statCell }}">
+              <div style="{{ statLbl }}">Players</div>
+              <div style="{{ statVal }}">2 <span style="color: color-mix(in srgb, var(--color-text) 40%, transparent);">/ 10</span></div>
+            </div>
+            <span style="{{ statDiv }}"></span>
+            <div style="{{ statCell }}">
+              <div style="{{ statLbl }}">Your address</div>
+              <div style="{{ statVal }}">10.87.0.7</div>
+            </div>
+            <span style="{{ statDiv }}"></span>
+            <div style="{{ statCell }}">
+              <div style="{{ statLbl }}">Host address</div>
+              <div style="{{ statVal }}">10.87.0.2</div>
+            </div>
+            <span style="{{ statDiv }}"></span>
+            <div style="{{ statCell }}">
+              <div style="{{ statLbl }}">Room network</div>
+              <div style="margin-top: 3px; display: flex; align-items: center; gap: 7px; font-size: 12.5px; line-height: 1;">
+                <span style="width: 6px; height: 6px; border-radius: 50%; background: #4ec98a; box-shadow: 0 0 7px rgba(78,201,138,0.7);"></span>
+                <span style="color: #7fdcab;">connected</span>
+                <span style="padding: 2px 7px; border-radius: 999px; font-size: 11px; color: #7fdcab; background: rgba(78,201,138,0.10);">37 ms</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <sc-if value="{{ guideOn }}" hint-placeholder-val="{{ false }}">
+        <div style="flex: 0 0 auto; display: flex; align-items: flex-start; gap: 22px; padding: 11px 15px; border-radius: var(--radius-md); background: color-mix(in srgb, var(--color-accent) 8%, rgba(13,15,24,0.85)); border: 1px solid color-mix(in srgb, var(--color-accent) 22%, transparent);">
+          <span style="font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-accent-300); padding-top: 2px;">How a room works</span>
+          <div style="display: flex; align-items: flex-start; gap: 20px; flex-wrap: wrap; font-size: 11.5px; color: color-mix(in srgb, var(--color-text) 60%, transparent);">
+            <span><span style="{{ guideNo }}">1</span>Take a seat on Radiant or Dire.</span>
+            <span><span style="{{ guideNo }}">2</span>Join the room's network.</span>
+            <span><span style="{{ guideNo }}">3</span>Dota opens on this PC and finds the host.</span>
+          </div>
+          <div style="flex: 1;"></div>
+          <span style="font-size: 11.5px; color: color-mix(in srgb, var(--color-text) 40%, transparent); cursor: pointer;" style-hover="color: var(--color-text);" onClick="{{ toggleGuide }}">Hide</span>
+        </div>
+        </sc-if>
+
+        <div style="flex: 0 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+
+          <div style="display: flex; flex-direction: column; min-height: 0; overflow: visible; border-radius: var(--radius-md); background: color-mix(in srgb, #0b0d14 46%, var(--color-surface)); border: 1px solid rgba(233,233,237,0.09);">
+            <div style="flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 9px 13px; background: linear-gradient(to right, rgba(78,201,138,0.16), transparent 66%); border-bottom: 1px solid rgba(233,233,237,0.06);">
+              <span style="width: 7px; height: 7px; border-radius: 2px; background: #4ec98a; box-shadow: 0 0 7px rgba(78,201,138,0.7);"></span>
+              <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;">Radiant</span>
+              <div style="flex: 1;"></div>
+              <span style="font-size: 11.5px; color: color-mix(in srgb, var(--color-text) 45%, transparent);">1/5 <span style="color: color-mix(in srgb, var(--color-text) 28%, transparent);">· 0/2 obs</span></span>
+            </div>
+            <div style="position: relative; overflow: hidden; display: flex; align-items: center; gap: 11px; padding: 8px 13px; background: linear-gradient(96deg, rgba(176,110,196,0.11), transparent 62%); border-bottom: 1px solid rgba(233,233,237,0.05);">
+              <span style="position: absolute; inset: 0 auto 0 0; width: 2px; background: linear-gradient(to bottom, transparent, #b06ec4, transparent);"></span>
+              <span style="font-size: 11px; width: 13px; color: color-mix(in srgb, var(--color-text) 40%, transparent);">1</span>
+              <span style="width: 24px; height: 24px; border-radius: 7px; display: grid; place-items: center; font-size: 9.5px; font-weight: 600; color: #f5f4ff; background: linear-gradient(140deg, #b06ec4, #8a5ec9);">DC</span>
+              <div><div style="font-size: 12.5px; font-weight: 600;">Deploy Check</div><div style="font-size: 11px; color: color-mix(in srgb, var(--color-text) 46%, transparent);">Host · no MMR set</div></div>
+            </div>
+            <div style="{{ seat }}" style-hover="background: color-mix(in srgb, var(--color-accent) 8%, transparent);"><span style="{{ seatNo }}">2</span><span style="{{ seatLbl }}">Empty</span></div>
+            <div style="{{ seat }}" style-hover="background: color-mix(in srgb, var(--color-accent) 8%, transparent);"><span style="{{ seatNo }}">3</span><span style="{{ seatLbl }}">Empty</span></div>
+            <div style="{{ seat }}" style-hover="background: color-mix(in srgb, var(--color-accent) 8%, transparent);"><span style="{{ seatNo }}">4</span><span style="{{ seatLbl }}">Empty</span></div>
+            <div style="{{ seat }}" style-hover="background: color-mix(in srgb, var(--color-accent) 8%, transparent);"><span style="{{ seatNo }}">5</span><span style="{{ seatLbl }}">Empty</span></div>
+
+            <div style="{{ obsHead }}">
+              <span style="width: 6px; height: 6px; border-radius: 2px; background: var(--color-accent-600);"></span>
+              <span style="font-size: 9.5px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: color-mix(in srgb, var(--color-text) 45%, transparent);">Observers</span>
+              <div style="flex: 1;"></div>
+              <span style="font-size: 11px; color: color-mix(in srgb, var(--color-text) 34%, transparent);">0/2</span>
+            </div>
+            <div style="{{ obsSeat }}" style-hover="background: color-mix(in srgb, var(--color-accent) 7%, transparent);"><span style="{{ seatNo }}">O1</span><span style="{{ obsLbl }}">Empty</span></div>
+            <div style="{{ obsSeatLast }}" style-hover="background: color-mix(in srgb, var(--color-accent) 7%, transparent);"><span style="{{ seatNo }}">O2</span><span style="{{ obsLbl }}">Empty</span></div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; min-height: 0; overflow: visible; border-radius: var(--radius-md); background: color-mix(in srgb, #0b0d14 46%, var(--color-surface)); border: 1px solid rgba(233,233,237,0.09);">
+            <div style="flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 9px 13px; background: linear-gradient(to right, rgba(229,139,139,0.16), transparent 66%); border-bottom: 1px solid rgba(233,233,237,0.06);">
+              <span style="width: 7px; height: 7px; border-radius: 2px; background: #e58b8b; box-shadow: 0 0 7px rgba(229,139,139,0.6);"></span>
+              <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;">Dire</span>
+              <div style="flex: 1;"></div>
+              <span style="font-size: 11.5px; color: color-mix(in srgb, var(--color-text) 45%, transparent);">1/5 <span style="color: color-mix(in srgb, var(--color-text) 28%, transparent);">· 0/2 obs</span></span>
+            </div>
+            <div style="position: relative; overflow: hidden; display: flex; align-items: center; gap: 11px; padding: 8px 13px; background: linear-gradient(96deg, color-mix(in srgb, var(--color-accent) 16%, transparent), transparent 62%); border-bottom: 1px solid rgba(233,233,237,0.05);">
+              <span style="position: absolute; inset: 0 auto 0 0; width: 2px; background: linear-gradient(to bottom, transparent, var(--color-accent), transparent);"></span>
+              <span style="font-size: 11px; width: 13px; color: color-mix(in srgb, var(--color-text) 40%, transparent);">6</span>
+              <span style="width: 24px; height: 24px; border-radius: 7px; display: grid; place-items: center; font-size: 9.5px; font-weight: 600; color: #0f1a14; background: #4ec98a;">AM</span>
+              <div><div style="font-size: 12.5px; font-weight: 600;">Arman Mcc <span style="font-weight: 400; color: color-mix(in srgb, var(--color-text) 45%, transparent);">(you)</span></div><div style="font-size: 11px; color: color-mix(in srgb, var(--color-text) 46%, transparent);">no MMR set</div></div>
+            </div>
+            <div style="{{ seat }}" style-hover="background: color-mix(in srgb, var(--color-accent) 8%, transparent);"><span style="{{ seatNo }}">7</span><span style="{{ seatLbl }}">Empty</span></div>
+            <div style="{{ seat }}" style-hover="background: color-mix(in srgb, var(--color-accent) 8%, transparent);"><span style="{{ seatNo }}">8</span><span style="{{ seatLbl }}">Empty</span></div>
+            <div style="{{ seat }}" style-hover="background: color-mix(in srgb, var(--color-accent) 8%, transparent);"><span style="{{ seatNo }}">9</span><span style="{{ seatLbl }}">Empty</span></div>
+            <div style="{{ seat }}" style-hover="background: color-mix(in srgb, var(--color-accent) 8%, transparent);"><span style="{{ seatNo }}">10</span><span style="{{ seatLbl }}">Empty</span></div>
+
+            <div style="{{ obsHead }}">
+              <span style="width: 6px; height: 6px; border-radius: 2px; background: var(--color-accent-600);"></span>
+              <span style="font-size: 9.5px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: color-mix(in srgb, var(--color-text) 45%, transparent);">Observers</span>
+              <div style="flex: 1;"></div>
+              <span style="font-size: 11px; color: color-mix(in srgb, var(--color-text) 34%, transparent);">0/2</span>
+            </div>
+            <div style="{{ obsSeat }}" style-hover="background: color-mix(in srgb, var(--color-accent) 7%, transparent);"><span style="{{ seatNo }}">O3</span><span style="{{ obsLbl }}">Empty</span></div>
+            <div style="{{ obsSeatLast }}" style-hover="background: color-mix(in srgb, var(--color-accent) 7%, transparent);"><span style="{{ seatNo }}">O4</span><span style="{{ obsLbl }}">Empty</span></div>
+          </div>
+        </div>
+
+        <div style="flex: 0 0 auto; display: flex; align-items: center; gap: 12px; padding: 9px 14px; border-radius: var(--radius-md); background: rgba(233,233,237,0.02); border: 1px solid rgba(233,233,237,0.07);">
+          <span style="font-size: 11.5px; color: color-mix(in srgb, var(--color-text) 42%, transparent);">Radiant vs Dire · 10 seats · 4 observers</span>
+          <div style="flex: 1;"></div>
+          <button class="btn btn-secondary" style="font-size: 12px; padding: 6px 14px; color: #e58b8b; border-color: rgba(229,139,139,0.34);" style-hover="background: rgba(229,139,139,0.10);">Leave room</button>
+        </div>
+      </div>
+      </sc-if>
+    </div>
+
+    <div style="flex: 0 0 auto; margin: 10px 14px 12px; border: 1px solid rgba(233,233,237,0.07); border-radius: var(--radius-lg); overflow: hidden; background: color-mix(in srgb, var(--color-bg) 88%, #000);">
+      <div style="display: flex; align-items: center; gap: 3px; padding: 7px 10px; background: linear-gradient(to right, color-mix(in srgb, var(--color-accent) 8%, transparent), transparent 50%); border-bottom: 1px solid rgba(233,233,237,0.06);">
+        <span style="font-size: 11.5px; padding: 4px 11px; border-radius: 999px; color: var(--color-accent-200); background: color-mix(in srgb, var(--color-accent) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 28%, transparent);">Lobby</span>
+        <span style="font-size: 11.5px; padding: 4px 11px; border-radius: 999px; color: color-mix(in srgb, var(--color-text) 52%, transparent); cursor: pointer;" style-hover="background: rgba(233,233,237,0.05); color: var(--color-text);">Room</span>
+        <span style="font-size: 11.5px; padding: 4px 11px; border-radius: 999px; color: color-mix(in srgb, var(--color-text) 52%, transparent); cursor: pointer;" style-hover="background: rgba(233,233,237,0.05); color: var(--color-text);">Party</span>
+        <span style="font-size: 12px; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 999px; color: color-mix(in srgb, var(--color-text) 45%, transparent); cursor: pointer;" style-hover="background: rgba(233,233,237,0.05); color: var(--color-accent-200);">+</span>
+        <div style="flex: 1;"></div>
+        <span style="font-size: 11px; color: color-mix(in srgb, var(--color-text) 42%, transparent);">1 in the lobby</span>
+      </div>
+      <div style="padding: 9px 12px 10px; font-size: 12px; color: color-mix(in srgb, var(--color-text) 55%, transparent);"><span style="color: color-mix(in srgb, var(--color-text) 32%, transparent);">12:16</span> &nbsp;<span style="color: var(--color-accent-300);">system</span>&nbsp; Deploy Check opened “deploy check - ignore”</div>
+      <div style="display: flex; gap: 8px; padding: 0 10px 10px;">
+        <input class="input" placeholder="Message #lobby" style="flex: 1; font-size: 12px; padding: 7px 11px;">
+        <button class="btn btn-primary" style="font-size: 12px; padding: 7px 16px; background: color-mix(in srgb, var(--color-accent) 12%, transparent);" style-hover="background: color-mix(in srgb, var(--color-accent) 24%, transparent);">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <div style="width: 228px; flex: 0 0 228px; display: flex; flex-direction: column; border-left: 1px solid rgba(233,233,237,0.07); background: linear-gradient(to bottom, color-mix(in srgb, var(--color-accent) 6%, color-mix(in srgb, var(--color-bg) 88%, #000)), color-mix(in srgb, var(--color-bg) 88%, #000) 34%);">
+
+    <div style="position: relative; overflow: hidden; flex: 0 0 auto; display: flex; align-items: center; gap: 10px; padding: 11px 13px; border-bottom: 1px solid rgba(233,233,237,0.07); background: linear-gradient(100deg, color-mix(in srgb, var(--color-accent) 13%, transparent), transparent 72%); cursor: pointer;" style-hover="background: linear-gradient(100deg, color-mix(in srgb, var(--color-accent) 20%, transparent), transparent 74%);">
+      <span style="position: absolute; inset: 0 auto 0 0; width: 2px; background: linear-gradient(to bottom, transparent, var(--color-accent), transparent);"></span>
+      <span style="flex: 0 0 auto; width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; font-size: 11px; font-weight: 600; color: #0f1a14; background: #4ec98a; box-shadow: 0 0 0 3px rgba(78,201,138,0.10);">AM</span>
+      <div style="min-width: 0; line-height: 1.2;">
+        <div style="font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Arman Mcc</div>
+        <div style="margin-top: 2px; font-size: 10.5px; color: color-mix(in srgb, var(--color-text) 46%, transparent);">no MMR set</div>
+      </div>
+      <div style="flex: 1;"></div>
+      <svg width="13" height="13" viewBox="0 0 256 256" fill="currentColor" style="flex: 0 0 auto; color: color-mix(in srgb, var(--color-text) 34%, transparent);"><path d="M181 133l-96 96a12 12 0 0 1-17-17l88-88-88-88a12 12 0 0 1 17-17l96 96a12 12 0 0 1 0 18Z"></path></svg>
+    </div>
+
+    <div style="flex: 1; min-height: 0; padding: 11px 13px;">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 11px;">
+      <span style="font-size: 13.5px; font-weight: 600;">Friends</span>
+      <span style="width: 23px; height: 23px; border-radius: var(--radius-sm); display: grid; place-items: center; color: color-mix(in srgb, var(--color-text) 60%, transparent); border: 1px solid rgba(233,233,237,0.10); cursor: pointer;" style-hover="border-color: color-mix(in srgb, var(--color-accent) 45%, transparent); color: var(--color-accent-200); box-shadow: 0 0 14px color-mix(in srgb, var(--color-accent) 18%, transparent);">+</span>
+    </div>
+    <div style="display: flex; gap: 6px;">
+      <input class="input" placeholder="Their username" style="flex: 1; min-width: 0; font-size: 12px; padding: 6px 10px;">
+      <button class="btn btn-primary" style="font-size: 12px; padding: 6px 13px; background: color-mix(in srgb, var(--color-accent) 12%, transparent);" style-hover="background: color-mix(in srgb, var(--color-accent) 24%, transparent);">Find</button>
+    </div>
+    <p style="margin: 9px 0 0; font-size: 11.5px; line-height: 1.5; color: #efb9b9;">no player has that username - check the spelling</p>
+    <div style="height: 1px; margin: 14px 0; background: linear-gradient(to right, transparent, rgba(233,233,237,0.12) 30px, rgba(233,233,237,0.12) calc(100% - 30px), transparent);"></div>
+    <p style="margin: 0; font-size: 11.5px; line-height: 1.5; color: color-mix(in srgb, var(--color-text) 45%, transparent);">No friends yet. Add somebody by their username.</p>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;screen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;lobby&quot;,&quot;room&quot;],&quot;default&quot;:&quot;lobby&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;hosting&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Room&quot;}}">
+const NAV = "all: unset; cursor: pointer; padding: 5px 14px; border-radius: 999px; font-size: 11.5px; font-family: var(--font-body); transition: background 140ms ease, color 140ms ease;";
+const RAIL = "all: unset; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 3px; width: 44px; padding: 7px 0; border-radius: 9px; font-size: 9.5px; font-family: var(--font-body); transition: background 140ms ease, color 140ms ease;";
+const CHIP = "font-size: 11.5px; padding: 5px 10px; border-radius: 7px; cursor: pointer; display: inline-flex; align-items: center; white-space: nowrap; transition: background 140ms ease, color 140ms ease;";
+const SEAT = "display: flex; align-items: center; gap: 11px; padding: 9px 13px; cursor: pointer; transition: background 140ms ease;";
+
+class Component extends DCLogic {
+  state = { screen: this.props.screen || "lobby", guide: false };
+
+  componentDidUpdate(prev) {
+    if (prev.screen !== this.props.screen && this.props.screen) this.setState({ screen: this.props.screen });
+  }
+
+  renderVals() {
+    const s = this.state.screen;
+    const nav = (on) => NAV + (on
+      ? "background: color-mix(in srgb, var(--color-accent) 20%, transparent); color: var(--color-accent-200);"
+      : "color: color-mix(in srgb, var(--color-text) 55%, transparent);");
+    const rail = (on) => RAIL + (on
+      ? "color: var(--color-accent-200); background: color-mix(in srgb, var(--color-accent) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 32%, transparent), 0 0 16px color-mix(in srgb, var(--color-accent) 14%, transparent);"
+      : "color: color-mix(in srgb, var(--color-text) 50%, transparent);");
+    return {
+      onLobby: s === "lobby",
+      onRoom: s === "room",
+      navLobby: nav(s === "lobby"),
+      navRoom: nav(s === "room"),
+      railLobby: rail(s === "lobby"),
+      railRoom: rail(s === "room"),
+      railEvents: rail(false),
+      railSettings: rail(false),
+      goLobby: () => this.setState({ screen: "lobby" }),
+      goRoom: () => this.setState({ screen: "room" }),
+      guideOn: this.state.guide,
+      toggleGuide: () => this.setState(st => ({ guide: !st.guide })),
+      guideBtn: "all: unset; cursor: pointer; flex: 0 0 auto; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-family: var(--font-body); font-size: 11px; font-style: italic; font-weight: 600; color: " + (this.state.guide ? "var(--color-accent-200)" : "color-mix(in srgb, var(--color-text) 55%, transparent)") + "; border: 1px solid " + (this.state.guide ? "color-mix(in srgb, var(--color-accent) 50%, transparent)" : "rgba(233,233,237,0.16)") + "; background: " + (this.state.guide ? "color-mix(in srgb, var(--color-accent) 18%, transparent)" : "transparent") + "; transition: background 140ms ease, color 140ms ease, border-color 140ms ease;",
+      statCell: "flex: 0 1 auto; min-width: 0; padding: 0 18px 0 0;",
+      statLbl: "font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase; color: color-mix(in srgb, var(--color-text) 58%, transparent);",
+      statVal: "margin-top: 4px; font-size: 13px; font-weight: 500; line-height: 1; color: var(--color-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;",
+      statDiv: "flex: 0 0 1px; width: 1px; height: 26px; margin-right: 18px; background: linear-gradient(to bottom, transparent, rgba(233,233,237,0.26), transparent);",
+      guideNo: "display: inline-grid; place-items: center; width: 15px; height: 15px; margin-right: 7px; border-radius: 50%; font-size: 9.5px; font-weight: 600; color: var(--color-accent-200); background: color-mix(in srgb, var(--color-accent) 22%, transparent); vertical-align: -2px;",
+      isHosting: this.props.hosting === true,
+      isJoining: this.props.hosting !== true,
+      chipOn: CHIP + "color: var(--color-accent-200); background: color-mix(in srgb, var(--color-accent) 20%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 32%, transparent);",
+      chipOff: CHIP + "color: color-mix(in srgb, var(--color-text) 52%, transparent);",
+      seat: SEAT + "flex: 0 0 auto; border-bottom: 1px solid rgba(233,233,237,0.05);",
+      seatLast: SEAT + "flex: 0 0 auto;",
+      seatNo: "font-size: 11px; width: 13px; color: color-mix(in srgb, var(--color-text) 35%, transparent);",
+      seatLbl: "font-size: 12.5px; color: color-mix(in srgb, var(--color-text) 62%, transparent);",
+      obsHead: "flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 7px 13px 5px; margin-top: 4px; background: rgba(11,13,20,0.5); border-top: 1px solid rgba(233,233,237,0.11);",
+      obsSeat: SEAT + "flex: 0 0 auto; padding: 7px 13px; background: rgba(11,13,20,0.32); border-bottom: 1px solid rgba(233,233,237,0.04);",
+      obsSeatLast: SEAT + "flex: 0 0 auto; padding: 7px 13px; background: rgba(11,13,20,0.32);",
+      obsLbl: "font-size: 11.5px; color: color-mix(in srgb, var(--color-text) 46%, transparent);",
+    };
+  }
+}
+</script>
+</body>
+</html>

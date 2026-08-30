@@ -40,7 +40,24 @@ const appName = "LobbyBaz"
 
 // components are the executables carried inside this installer, written out
 // in this order.
-var components = []string{"netservice.exe", "lobbyapp.exe", "lobbycli.exe"}
+//
+// lobbybaz.exe is the window the player opens; lobbyapp.exe is the server it
+// starts behind itself. Both are installed, and the shortcut points at the
+// first (D67). Pointing it at the second is what put a console window and a
+// browser tab in front of the owner.
+var components = []string{"netservice.exe", serverExe, "lobbycli.exe", shellExe}
+
+const (
+	// shellExe is the window: a Tauri binary with no console, which starts
+	// the server behind itself and points a webview at it. This is what the
+	// desktop shortcut, the uninstall icon and the post-update relaunch must
+	// all name.
+	shellExe = "lobbybaz.exe"
+	// serverExe is everything the product does. It is a console application
+	// that opens a browser tab when run on its own, which is correct for
+	// scripts/try.sh and wrong for a player.
+	serverExe = "lobbyapp.exe"
+)
 
 func main() {
 	silent := hasFlag("/silent") || hasFlag("-silent")
@@ -127,9 +144,10 @@ func install(silent bool) error {
 		say("Note: could not register in Add or Remove Programs: " + err.Error())
 	}
 
-	// After an update, put the player back where they were.
+	// After an update, put the player back where they were - in the window,
+	// not in the server behind it.
 	if silent {
-		launchAsUser(filepath.Join(dir, "lobbyapp.exe"))
+		launchAsUser(filepath.Join(dir, shellExe))
 	}
 	return nil
 }

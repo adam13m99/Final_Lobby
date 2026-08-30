@@ -5,11 +5,10 @@
 # actually does is in the Go binary it launches. So this builds that binary
 # first, puts it where the shell expects it, and then builds the shell.
 #
-# This is deliberately NOT wired into scripts/publish.sh yet. publish.sh is the
-# owner's only distribution channel and the installer it produces is known to
-# work; swapping it for one nobody has installed on a real machine would risk
-# the thing that currently works, to ship the thing that is not yet proven. Try
-# the shell by hand first, then wire it in.
+# This is now a convenience for trying the shell by hand. The real build is in
+# scripts/build.sh, which builds it alongside everything else and packs it into
+# the installer (D67) - the caution this comment used to carry cost the owner a
+# week of opening a console window and a browser tab instead of an app.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 . scripts/env.sh

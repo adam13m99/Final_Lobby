@@ -91,8 +91,12 @@ func stopExisting(dir string) {
 		_ = exec.Command("sc.exe", "delete", serviceName).Run()
 	}
 
-	// The app may be running from the folder we are about to overwrite.
-	_ = exec.Command("taskkill.exe", "/F", "/IM", "lobbyapp.exe").Run()
+	// The app may be running from the folder we are about to overwrite. The
+	// window first, then the server behind it: killing the window with /F
+	// skips its own shutdown, which is what would otherwise have stopped the
+	// server, so the server has to be named here too.
+	_ = exec.Command("taskkill.exe", "/F", "/IM", shellExe).Run()
+	_ = exec.Command("taskkill.exe", "/F", "/IM", serverExe).Run()
 
 	// Windows keeps a service registered until every handle to it closes,
 	// and creating one with the same name fails until it does.
@@ -163,7 +167,9 @@ func writeShortcut(dir string) error {
 	if err != nil {
 		return err
 	}
-	target := filepath.Join(dir, "lobbyapp.exe")
+	// The window, never the server. lobbyapp.exe is a console application
+	// that opens a browser tab; lobbybaz.exe is the app (D67).
+	target := filepath.Join(dir, shellExe)
 	script := fmt.Sprintf(
 		`$s=(New-Object -ComObject WScript.Shell).CreateShortcut(%q);`+
 			`$s.TargetPath=%q;$s.WorkingDirectory=%q;`+
@@ -202,7 +208,7 @@ func registerUninstall(dir string) error {
 		"Publisher":       "LobbyBaz",
 		"InstallLocation": dir,
 		"UninstallString": `"` + self + `" /uninstall`,
-		"DisplayIcon":     filepath.Join(dir, "lobbyapp.exe"),
+		"DisplayIcon":     filepath.Join(dir, shellExe),
 	} {
 		if err := k.SetStringValue(name, value); err != nil {
 			return err

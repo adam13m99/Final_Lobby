@@ -1613,3 +1613,56 @@ ignore notifications, or to uninstall.
 - **"The tunnel dropped" only fires while you are in a room**, and only on the
   connected-to-disconnected edge. Outside a room there is nothing to lose, and
   "not connected yet" is a different event from "dropped".
+
+---
+
+## D67 — the installer ships the window, and the shortcut points at it
+
+**2026-08-30.** The owner: *"currently when i lunch the lobbybaz, opens a cmd
+terminal then a browser page, what i need to see is the app only, no terminal,
+no browser, the app itself."*
+
+Everything needed to fix this had existed since D45 and none of it was
+shipped. `desktop/` is a Tauri shell: a real window, a tray icon, and the
+notifications D66 built. It starts `lobbyapp.exe` behind itself with
+`-url-only -no-browser` and `CREATE_NO_WINDOW`, and points a webview at the
+address it prints. It built. It ran. It was never put in the installer.
+
+`scripts/build-desktop.sh` said so, in a comment, deliberately: *"This is
+deliberately NOT wired into scripts/publish.sh yet ... swapping it for one
+nobody has installed on a real machine would risk the thing that currently
+works."* That caution was reasonable when written and wrong a week later. The
+thing that "currently worked" was a desktop shortcut pointing at
+`lobbyapp.exe` - a console application that opens a browser tab. So the owner
+double-clicked LobbyBaz and got a command window and a browser, and every
+report they gave about the product was a report about a browser tab.
+
+**This is the same recurring bug as the observer seats and the invitations,
+one layer further out.** A subsystem built, tested and finished, with nothing
+in front of it that a person can reach. Every test passed the whole time,
+because every test was about the half that worked.
+
+**What changed:**
+
+- `scripts/build.sh` builds `bin/lobbybaz.exe` with cargo as part of
+  `installer` and `all`, and packs it into the payload beside the other three.
+  A missing cargo is a **failure**, not a skip: an installer without the shell
+  reinstates the console window while looking like a successful build.
+- The installer writes four executables instead of three. The desktop
+  shortcut, the Add-or-Remove-Programs icon and the post-update relaunch all
+  name `shellExe`, and stopping an old install kills the window before the
+  server, because `taskkill /F` skips the shutdown that would have stopped the
+  server itself.
+- `installer/payload_test.go` asserts that every listed component is really
+  inside the binary. `writeComponent` did already report a missing payload -
+  on the player's machine, halfway through an install, after the service was
+  registered.
+
+**The fix reaches installed copies through the ordinary update.** They fetch
+the new installer, which rewrites the shortcut on the Public Desktop and
+relaunches the window. Nobody has to download anything by hand.
+
+`lobbyapp.exe` keeps its console and its browser: that is exactly right for
+`scripts/try.sh`, `scripts/live.sh` and the smoke test, which drive it
+headless or in a developer's own browser. What was wrong was never the
+program - it was which program the shortcut named.
