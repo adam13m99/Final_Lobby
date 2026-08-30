@@ -198,3 +198,93 @@ func TestTheApiItselfStillNeedsItsToken(t *testing.T) {
 		t.Fatalf("the room list answered without a token: %d", code)
 	}
 }
+
+// The bug this catches, in the owner's words: "An update (2026.08.30-2033)
+// could not be downloaded: the download was interrupted: unexpected EOF."
+//
+// The coordinator's http.Server carries WriteTimeout: 15s, which is one
+// deadline covering the whole response, armed when the request headers are
+// read. That is right for an API answering in milliseconds. On a thirteen
+// megabyte installer it means anybody who cannot pull the file at roughly
+// 900 KB/s has their connection cut mid-body - and a Go client copying
+// against a promised Content-Length calls that an unexpected EOF (D78).
+//
+// Reproduced against the live server before the fix: throttled to 300 KB/s,
+// the download stopped at 7,693,328 of 12,960,256 bytes.
+//
+// Two things about the shape of this test, both learned by getting them
+// wrong. It runs a real http.Server with a real WriteTimeout, because
+// httptest's default has none and would prove nothing. And the payload is
+// large: the first version used a megabyte, which the kernel and Go's own
+// buffers swallow whole, so the server finished writing before the slow
+// client had read any of it and no deadline was ever crossed. That version
+// passed without the fix, which made it a claim rather than a check.
+func TestASlowDownloadIsNotCutOff(t *testing.T) {
+	dir := t.TempDir()
+	payload := strings.Repeat("LobbyBaz installer payload. ", 1200000) // ~32 MB
+	publish(t, dir, payload, false)
+
+	s := api.New(api.Config{
+		Rooms:       room.NewStore(),
+		Tickets:     ticket.NewStore(),
+		DistDir:     dir,
+		DownloadKey: testKey,
+	})
+	srv := httptest.NewUnstartedServer(s.Routes())
+	srv.Config.WriteTimeout = 300 * time.Millisecond
+	srv.Start()
+	t.Cleanup(srv.Close)
+
+	resp, err := http.Get(srv.URL + "/d/" + testKey + "/" + api.InstallerName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	// Read in bites with a pause between them, the way a slow link delivers.
+	// Well past the write timeout in total.
+	read := 0
+	sum := sha256.New()
+	buf := make([]byte, 64<<10)
+	for {
+		n, err := resp.Body.Read(buf)
+		read += n
+		sum.Write(buf[:n])
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("the download was interrupted after %d of %d bytes: %v"+
+				"\n\t\tthis is the owner's \"unexpected EOF\": one WriteTimeout is "+
+				"covering a file that takes longer than it to send",
+				read, len(payload), err)
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+
+	if read != len(payload) {
+		t.Fatalf("got %d bytes, want %d - the response was truncated without an error",
+			read, len(payload))
+	}
+	want := sha256.Sum256([]byte(payload))
+	if hex.EncodeToString(sum.Sum(nil)) != hex.EncodeToString(want[:]) {
+		t.Fatal("the bytes that arrived are not the bytes on disk")
+	}
+}
+
+// The manifest is small and answers instantly, so it keeps the server-wide
+// deadline. This is here so that a later change extending the deadline to
+// everything shows up as a deliberate act rather than a quiet one.
+func TestOnlyTheInstallerGetsTheLongerDeadline(t *testing.T) {
+	dir := t.TempDir()
+	publish(t, dir, "pretend this is an installer", false)
+	srv := downloadServer(t, dir)
+
+	code, body := fetch(t, srv.URL+"/d/"+testKey+"/version.json")
+	if code != http.StatusOK {
+		t.Fatalf("manifest returned %d: %s", code, body)
+	}
+	if !strings.Contains(string(body), "1.2.3") {
+		t.Errorf("manifest does not name the version:\n%s", body)
+	}
+}

@@ -278,6 +278,7 @@ there; this is the summary.
 | T32 the exactness pass (D73) | **done** — live pings out of the render signatures, the lobby reconciles per row, the error strip can be acted on and put away |
 | T33 production readiness: clean, fix, harden (D74, D75, D76) | **done** — the three bugs the owner reported, `scripts/verify.sh` as the one command, `scripts/uicheck.sh` as the rung that watches the renderer over time, hourly database backups, an idle sweep, and the design handoffs filed out of the way |
 | T34 the lease the service could not renew (D77) | **done** — every match was ending three minutes in: renewal sat behind a session the Windows service has never had. Route fixed, the reason now names its cause, the banner speaks to the player, and a lost tunnel reconnects itself |
+| T35 the download that could not finish (D78) | **done** — a 15s server-wide write timeout was cutting every download of the 13 MB installer that took longer than 15s, which on a domestic link is all of them. The installer gets its own deadline; the updater resumes instead of restarting |
 
 **The interface was redesigned on 2026-08-25** at the owner's request: the
 old one was flat, grey and mostly empty space. What changed, beyond colour

@@ -73,9 +73,28 @@ func Check(manifestURL, running string, timeout time.Duration) (*Manifest, bool,
 	return &m, m.Version != running, nil
 }
 
+// Attempts is how many times Download will try before giving up, and
+// ResumeGap is how long it waits between tries.
+//
+// Downloads here cross Iran's domestic network to a box in Tehran, and a
+// thirteen megabyte transfer over that is not a thing that either completes
+// or fails cleanly - it is a thing that gets interrupted. Before this, one
+// interruption anywhere in those thirteen megabytes threw away every byte
+// already fetched and reported failure to the player (D78).
+const (
+	Attempts  = 4
+	ResumeGap = 2 * time.Second
+)
+
 // Download fetches the installer named by a manifest into dir and returns
 // its path. The file is verified against the manifest hash before the path
 // is returned, so a caller that gets a path has a file worth running.
+//
+// An interrupted transfer is resumed rather than restarted: the coordinator
+// serves the installer with http.ServeContent, which honours Range, so a
+// second attempt asks only for the bytes that are missing. A server that
+// ignores the range and starts again from zero is handled too - that answers
+// 200 rather than 206, and the partial file is thrown away.
 func Download(m *Manifest, baseURL, dir string) (string, error) {
 	url := m.URL
 	if url == "" {
@@ -84,16 +103,6 @@ func Download(m *Manifest, baseURL, dir string) (string, error) {
 			name = "LobbyBaz-Setup.exe"
 		}
 		url = strings.TrimRight(baseURL, "/") + "/" + name
-	}
-
-	c := &http.Client{Timeout: 10 * time.Minute}
-	resp, err := c.Get(url)
-	if err != nil {
-		return "", fmt.Errorf("cannot download the update: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("the update server answered %s", resp.Status)
 	}
 
 	// Download to a temporary name in the destination directory, then rename.
@@ -108,19 +117,68 @@ func Download(m *Manifest, baseURL, dir string) (string, error) {
 		os.Remove(tmpName)
 	}()
 
-	h := sha256.New()
-	n, err := io.Copy(io.MultiWriter(tmp, h), io.LimitReader(resp.Body, maxInstaller))
-	if err != nil {
-		return "", fmt.Errorf("the download was interrupted: %w", err)
+	c := &http.Client{Timeout: 10 * time.Minute}
+	var have int64
+	var lastErr error
+
+	for attempt := 1; attempt <= Attempts; attempt++ {
+		if attempt > 1 {
+			time.Sleep(ResumeGap)
+		}
+
+		n, restart, err := fetchInto(c, url, tmp, have)
+		if restart {
+			// The server sent the whole file when we asked for part of it, so
+			// everything from before this attempt was stale. fetchInto has
+			// already emptied the file and written from the start; all that is
+			// left here is to stop counting the bytes that are gone.
+			//
+			// Emptying it a second time from out here is not harmless: it
+			// happens after the new bytes have landed, and it deletes them.
+			// That is what this looked like the first time it was written.
+			have = 0
+		}
+		have += n
+
+		if err == nil {
+			lastErr = nil
+			break
+		}
+		lastErr = err
+
+		// An attempt that fetched nothing new will not do better for being
+		// repeated. Stopping here keeps a broken route from turning into four
+		// slow failures in a row.
+		if n == 0 && attempt > 1 {
+			break
+		}
+		if m.Size != 0 && have >= m.Size {
+			// Everything arrived; the error is on the tail of a connection we
+			// no longer need. The hash below is the real verdict.
+			lastErr = nil
+			break
+		}
 	}
+	if lastErr != nil {
+		return "", fmt.Errorf("the download was interrupted: %w", lastErr)
+	}
+
 	if err := tmp.Close(); err != nil {
 		return "", err
 	}
-	if got := hex.EncodeToString(h.Sum(nil)); !strings.EqualFold(got, m.SHA256) {
+
+	// Hashed by re-reading the finished file rather than as it arrives: with
+	// resumption the bytes do not all pass through one stream, and a hash
+	// assembled across attempts is a hash nobody can check by hand.
+	sum, size, err := hashFile(tmpName)
+	if err != nil {
+		return "", err
+	}
+	if !strings.EqualFold(sum, m.SHA256) {
 		return "", fmt.Errorf("the downloaded file is not the one the server described - refusing to run it")
 	}
-	if m.Size != 0 && m.Size != n {
-		return "", fmt.Errorf("the download stopped short: got %d bytes, expected %d", n, m.Size)
+	if m.Size != 0 && m.Size != size {
+		return "", fmt.Errorf("the download stopped short: got %d bytes, expected %d", size, m.Size)
 	}
 
 	final := filepath.Join(dir, "LobbyBaz-Update.exe")
@@ -130,4 +188,65 @@ func Download(m *Manifest, baseURL, dir string) (string, error) {
 		return "", err
 	}
 	return final, nil
+}
+
+// fetchInto appends to w, asking only for the bytes after `have`. It returns
+// how many arrived, whether the caller must start again from zero, and why it
+// stopped if it stopped early.
+func fetchInto(c *http.Client, url string, w *os.File, have int64) (int64, bool, error) {
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return 0, false, err
+	}
+	if have > 0 {
+		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", have))
+	}
+
+	resp, err := c.Do(req)
+	if err != nil {
+		return 0, false, fmt.Errorf("cannot download the update: %w", err)
+	}
+	defer resp.Body.Close()
+
+	restart := false
+	switch resp.StatusCode {
+	case http.StatusOK:
+		// A range we asked for and did not get. Start over.
+		restart = have > 0
+	case http.StatusPartialContent:
+	case http.StatusRequestedRangeNotSatisfiable:
+		// We already hold at least as many bytes as the server has. Let the
+		// hash decide whether they are the right ones.
+		return 0, false, nil
+	default:
+		return 0, false, fmt.Errorf("the update server answered %s", resp.Status)
+	}
+
+	if restart {
+		if _, err := w.Seek(0, io.SeekStart); err != nil {
+			return 0, true, err
+		}
+		if err := w.Truncate(0); err != nil {
+			return 0, true, err
+		}
+	} else if _, err := w.Seek(0, io.SeekEnd); err != nil {
+		return 0, false, err
+	}
+
+	n, err := io.Copy(w, io.LimitReader(resp.Body, maxInstaller))
+	return n, restart, err
+}
+
+func hashFile(path string) (string, int64, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", 0, err
+	}
+	defer f.Close()
+	h := sha256.New()
+	n, err := io.Copy(h, f)
+	if err != nil {
+		return "", 0, err
+	}
+	return hex.EncodeToString(h.Sum(nil)), n, nil
 }

@@ -36,6 +36,12 @@ const InstallerName = "LobbyBaz-Setup.exe"
 // deploy script next to the installer.
 const manifestName = "version.json"
 
+// InstallerWriteWindow is how long one download of the installer may take.
+//
+// It replaces the server-wide WriteTimeout for this one response. See
+// downloadFile for why that timeout cannot apply here.
+const InstallerWriteWindow = 30 * time.Minute
+
 // Manifest is what the app reads to decide whether it is out of date.
 type Manifest struct {
 	Version string `json:"version"`
@@ -124,6 +130,32 @@ func (s *Server) downloadFile(w http.ResponseWriter, r *http.Request) {
 	// No caching: an app checking for an update must not be handed the
 	// manifest it saw an hour ago by some middlebox on the way.
 	w.Header().Set("Cache-Control", "no-store")
+
+	if name == InstallerName {
+		// The server's WriteTimeout is fifteen seconds, which is right for an
+		// API answering in milliseconds and catastrophic for a thirteen
+		// megabyte file: it is one deadline covering the whole response, set
+		// when the request headers are read, so anybody who cannot pull the
+		// installer at about 900 KB/s has their connection cut mid-file and
+		// gets an unexpected EOF. On a domestic Iranian link that is
+		// everybody, which is the entire audience (D78).
+		//
+		// So this one response gets its own deadline. Thirty minutes is
+		// roughly 7 KB/s across the whole file: slower than any connection
+		// this product is usable on, and still bounded, so a client that
+		// opens the download and stops reading cannot hold a connection for
+		// ever.
+		if err := http.NewResponseController(w).SetWriteDeadline(
+			time.Now().Add(InstallerWriteWindow)); err != nil {
+			// Not fatal. An unsupported deadline means the fifteen-second one
+			// still applies, which is the behaviour that was broken rather
+			// than a new failure - but it is worth saying out loud, because
+			// the symptom lands on a player and not here.
+			s.log.Warn("cannot extend the write deadline for the installer; "+
+				"a slow download will be cut off", "err", err)
+		}
+	}
+
 	http.ServeContent(w, r, name, info.ModTime(), f)
 }
 

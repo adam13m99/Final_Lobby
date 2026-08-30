@@ -384,6 +384,17 @@ and two of them already have been:
 
 ### Serving the download
 
+**`WriteTimeout` is fifteen seconds and must never apply to the installer.**
+It is a single deadline over a whole response, armed when the headers are
+read, so on a thirteen megabyte file it silently caps every download at
+whatever can be pushed in fifteen seconds - about 900 KB/s, which on Iran's
+domestic network is nobody. `downloadFile` sets its own deadline with
+`http.NewResponseController` for that one response; the server-wide one stays
+for the API, where it belongs (D78). Anything large added to this server later
+needs the same treatment, and will fail the same silent way if it does not
+get it: the client sees a truncated body, and the server logs nothing at all.
+
+
 The coordinator also serves the installer, from `-dist-dir`, under an
 unguessable path segment from `-download-key-file`. That is the only thing in
 front of it, because a browser cannot send a bearer token. It reuses TCP 7001
@@ -497,22 +508,25 @@ the store on the next tick, before anybody has read why it ended.
    are coupled, every seat change becomes a reconnection (D74).
 10. **Never let a restart be casual.** Rooms are in memory. Deploying the
    coordinator closes every open one; `ship.sh` counts them first and says so.
-11. **Never put a route behind `signedIn` without asking who calls it.** The
+11. **Never let a response big enough to take seconds inherit `WriteTimeout`.**
+   It is one deadline over the whole response and it cuts the connection
+   mid-body with nothing in the log. `downloadFile` is the pattern (D78).
+12. **Never put a route behind `signedIn` without asking who calls it.** The
    Windows service calls `/v1/lease/renew` and has no session, and cannot get
    one: sessions belong to the desktop app and the service outlives it. With
    accounts on, that guard answered it 401 and every match ended three minutes
    later (D77). The ticket is the credential on that route, the way it is on
    `/internal/validate-ticket`.
-12. **Never trust a test that runs without the account database to tell you
+13. **Never trust a test that runs without the account database to tell you
    what production does.** `newHarness` has no accounts, so `signedIn` is a
    no-op inside it and every route looks open. Anything about who may call
    what belongs in `newAuthRig` or in `smoke.sh`, both of which have accounts
    on, like the live server.
-13. **Never discard the error from a check you fail closed on.** The watchdog
+14. **Never discard the error from a check you fail closed on.** The watchdog
    threw away the reason its lease check did not answer, so a refused request
    and a dead network were the same event for three minutes and then reported
    themselves as an expiry. Say it out loud, and name the cause in whatever
    reaches the player's screen.
-14. **Never commit secrets.** `github_token_admin.txt` and
+15. **Never commit secrets.** `github_token_admin.txt` and
    `mobinhost_server_1.txt` are gitignored; the download key and API token
    live only on the server. Verify before every commit.

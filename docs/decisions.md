@@ -2261,3 +2261,74 @@ cannot keep playing by unplugging their network cable, and nothing about this
 bug was their fault. Whether three minutes is the right number for a domestic
 network that drops is a product question and belongs to the owner, not to this
 entry.
+
+## D78 - the fifteen-second write timeout on a thirteen-megabyte file
+
+**2026-08-31.** The owner: *"An update (2026.08.30-2033) could not be
+downloaded: the download was interrupted: unexpected EOF."*
+
+**The coordinator's `http.Server` carried `WriteTimeout: 15 * time.Second`.**
+That is one deadline covering an entire response, armed when the request
+headers are read. It is exactly right for an API answering in milliseconds,
+and it was also being applied to the installer - thirteen megabytes of it -
+so anybody who could not pull the whole file at roughly 900 KB/s had their
+connection cut mid-body. A Go client copying against a promised
+Content-Length calls that `unexpected EOF`, which is the message the owner
+read.
+
+Reproduced against the live server, deliberately, before anything was
+changed: three unthrottled downloads from this PC completed in 13.0, 15.2 and
+13.1 seconds - the second one inside the margin by luck. Throttled to 300
+KB/s with `curl --limit-rate`, the same download stopped dead at **7,693,328
+of 12,960,256 bytes**.
+
+The audience for this product is on Iran's domestic network. Almost nobody on
+it can sustain 900 KB/s to a box in Tehran. **This was not only the update
+failing; it is very likely that most first-time downloads of the installer
+have been failing since the download page existed**, and the ones that
+succeeded did so because a browser retried with a Range request without
+telling anybody.
+
+**The fix, server side.** The download handler now sets its own write deadline
+with `http.NewResponseController`, and only for the installer:
+`InstallerWriteWindow` is thirty minutes, about 7 KB/s across the whole file.
+Slower than any connection this product is usable on, and still bounded, so a
+client that opens the download and stops reading cannot hold a connection open
+for ever. The server-wide fifteen seconds stays for everything else, which is
+where it belongs.
+
+**The fix, client side.** The server's timeout was the cause here, but it is
+not the last interruption that will ever happen: thirteen megabytes across a
+domestic Iranian route is not a transfer that either completes or fails
+cleanly, it is one that gets interrupted. `selfupdate.Download` used to throw
+away every byte it had on the first error and report failure. It now resumes -
+four attempts, two seconds apart, asking for `bytes=<have>-` each time. The
+coordinator serves the installer through `http.ServeContent`, which honours
+Range already, so this needed nothing new on the server.
+
+Two details of that worth keeping:
+
+- **A server that ignores the Range and answers 200 must start the file
+  again**, or the first attempt's bytes end up glued in front of the second's.
+  This is handled, and the test for it caught a real bug in the first version
+  of the code: the caller emptied the file *after* the fetch had already
+  refilled it, deleting exactly the bytes it had just gone and got.
+- **The hash is computed by re-reading the finished file**, not accumulated as
+  the bytes arrive. With resumption they do not all pass through one stream,
+  and a hash assembled across attempts is one nobody can check by hand.
+
+**The test.** `TestASlowDownloadIsNotCutOff` runs a real `http.Server` with a
+real `WriteTimeout` - `httptest`'s default has none, and would have proved
+nothing - and reads the body in bites with pauses between them.
+
+It also had to be written twice. The first version used a one-megabyte
+payload and passed without the fix, because a megabyte disappears into the
+kernel's socket buffer and Go's own: the server finished writing before the
+slow client had read any of it, and no deadline was ever crossed. **A test of
+a timeout has to make the writer actually block.** At thirty-two megabytes it
+does, and it fails without the fix with the owner's own words - *the download
+was interrupted after 14,647,808 of 33,600,000 bytes: unexpected EOF*.
+
+That is the second time in two days that a check had to be watched failing
+before it could be believed (D75), and the second time the first version of it
+was a claim rather than a check.
