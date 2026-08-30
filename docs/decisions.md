@@ -2154,3 +2154,110 @@ there. `deploy.sh` created directories on the relay path only, so a rebuilt
 server would have come back with a coordinator that would not start.
 `deploy_coordinator` now prepares its own host - the unix user and every
 directory the unit names - the same way `deploy_relay` always has.
+
+## D77 - the lease renewal the service was never allowed to make
+
+**2026-08-30.** The owner: *"i have to keep Join network after a while being in
+the room, why does it disconnect? Room network / not connected / join. and also
+the error at the top shows for lease expiry which it shouldn't happen."*
+
+Every match on the live product was ending three minutes after it started.
+
+**The chain.** `POST /v1/lease/renew` was registered behind `signedIn`. With
+accounts on - which is production, since D60 - `signedIn` refuses a request
+carrying no `X-LobbyBaz-Session` header. The only caller is the watchdog inside
+the Windows service, which holds a ticket and the shared bearer token and has
+never held a session: sessions belong to the desktop app, and the service
+outlives it and runs as LocalSystem. So the coordinator answered 401 to every
+lease check, thirty seconds apart, for every player in every room.
+
+The client was not wrong about any of it. `leaseChecker` reads 401 as
+`VerdictUnreachable` on purpose, because without an answer it genuinely cannot
+tell a valid lease from a revoked one, and claiming valid would mean anybody
+who can black-hole the coordinator gets an unrevokable session. The watchdog
+then failed closed after its three-minute local expiry, exactly as designed.
+Every part behaved correctly and the product did not work.
+
+Confirmed against the live server before changing anything: a POST to
+`/v1/lease/renew` with the bearer token and no session returned **401**.
+
+**The fix is the route.** Renewal is `s.limited` now: bearer token, rate limit,
+no session. The ticket is the credential here, the same as on
+`/internal/validate-ticket` - thirty-two random bytes naming one player in one
+room, revocable the instant anybody is kicked or a room closes. Whoever holds
+it already holds the tunnel, so renewing grants nothing they do not have. There
+is a comment above the route saying so, because the change looks like a
+loosening and is not one.
+
+**Why nothing caught it.** `TestLeaseRenewKeepsALongMatchAlive` has existed
+since the watchdog did, and it passes. It runs on `newHarness`, a coordinator
+with **no account database**, where `signedIn` is a deliberate no-op. The test
+was green for the entire time the feature was dead in production, and it will
+stay green forever, because it is testing a configuration nobody runs.
+
+This is the third time this repository has shipped a subsystem that passed its
+own tests and no real caller could reach. The rule that came out of the first
+two was *build the client's door in the same commit*. The rule this one adds
+is narrower and sharper: **a test that exercises a code path through a
+configuration production does not use has not tested production.** The account
+database is not a detail of the environment; it changes which requests are
+allowed.
+
+So the door is now knocked on the way the service knocks on it, twice:
+
+- `TestTheServiceRenewsALeaseWithoutASession` in `auth_test.go` - the
+  accounts-on rig, a real ticket, no session header. It fails with the
+  production 401 when the route is put back behind `signedIn`; that was
+  checked, not assumed.
+- a section in `smoke.sh` that signs an account up over the real coordinator
+  API, hosts a room, and renews the ticket with no session over HTTP. It also
+  fails on the old route, and it says what the failure costs: *"every match
+  ends three minutes in"*.
+
+Two more tests came with them: an unknown ticket must answer 200 with
+`valid:false` rather than an error status, because the watchdog reads any
+non-200 as "cannot tell" and would wait three minutes to act on a clear no; and
+a revoked ticket must stop renewing at once, which is the property `signedIn`
+was never providing and the ticket table always was.
+
+**The second half: the message.** The owner also said the error should not be
+there, and they were right twice over. `w.check(ctx)`'s error was discarded -
+`verdict, _ :=` - so a coordinator refusing us looked identical to a dead
+network for three minutes and then reported itself as *"lease expired
+locally"*. That sentence is true about our own timer and says nothing about
+what happened, which is why the search started at the network and not at a
+route table. The watchdog now:
+
+- logs every unanswered check at Warn with the error, how many in a row, and
+  how long is left before it tears down - so the failure is visible in the
+  service log within thirty seconds instead of invisible for three minutes;
+- keeps the last error and names it in the teardown reason, so what reaches
+  the app is `lease expired locally: lease check unauthorised`.
+
+And the app stops showing the service's internal wording to a player.
+`tunnelErrorKey` maps the reasons to `err.tunnel_revoked`, `err.tunnel_lease`
+and `err.tunnel_stopped`; the raw text still travels for the log and the
+diagnostics upload, and is still the fallback for a reason nothing recognises.
+
+That created a real gap in the i18n guard, which only ever read `index.html`
+and `app.js`: a key named in Go was invisible to both halves of it - it looked
+unused to one test and undefined to nothing at all. `keysUsed` now reads
+`server.go` too. Both tests were then checked against a Go-named key that does
+not exist and a catalogue key nothing names, and both still fail.
+
+**The third half: it comes back by itself.** Even with the lease fixed, a
+tunnel that goes down mid-match stayed down until somebody noticed a banner and
+pressed a button - on a screen they were not looking at, because they were
+inside Dota. `recoverTunnel` reconnects on its own, and is deliberately narrow:
+only after a lease expiry, never after `authorisation revoked`, which is a kick
+and not something an app should argue with; only while the coordinator still
+says this player is seated, which `pull` has already cleared otherwise, so the
+loop ends by itself; and once every thirty seconds at most, with one attempt in
+flight at a time, because status is polled every couple of seconds.
+
+**What was deliberately not changed.** The three-minute local expiry and the
+fail-closed policy stay as they are. They are the reason a revoked player
+cannot keep playing by unplugging their network cable, and nothing about this
+bug was their fault. Whether three minutes is the right number for a domestic
+network that drops is a product question and belongs to the owner, not to this
+entry.

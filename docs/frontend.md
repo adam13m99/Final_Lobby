@@ -472,6 +472,11 @@ WIDE=1366 TALL=768 bash scripts/preview.sh small
 ## Where to be careful
 
 1. **Never type a word a player reads into the markup or the script.** Key it.
+   That includes words arriving from Go. The Windows service reports a
+   teardown as "lease expired locally", which is accurate, untranslated, and
+   no use to anybody; `tunnelErrorKey` in `server.go` maps the reasons it
+   knows to keys, and `keysUsed` in `ui_test.go` reads `server.go` so a key
+   named there is checked like any other (D77).
 2. **Never write `left`, `right`, `top` or `bottom`.** Logical properties.
 3. **Never use `innerHTML`** for anything a person typed.
 4. **Never name a colour below the token block.**

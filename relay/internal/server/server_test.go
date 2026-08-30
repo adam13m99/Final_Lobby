@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"lobbybaz/protocol/crypto"
-	"lobbybaz/relay/internal/server"
 	"lobbybaz/protocol/wire"
+	"lobbybaz/relay/internal/server"
 )
 
 // testPeer is a minimal client used to drive the relay in tests.

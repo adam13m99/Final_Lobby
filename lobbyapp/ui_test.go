@@ -107,8 +107,37 @@ func keysUsed(t *testing.T) map[string][]string {
 			used[lit] = append(used[lit], "app.js")
 		}
 	}
+
+	// The Go side names keys too. Not many - it has no business writing the
+	// interface's words - but the app translates what the Windows service
+	// reports, because the service says things like "lease expired locally"
+	// and a player cannot read that (D77). A key named only in Go looked
+	// unused to this test and looked undefined to nothing at all, which is
+	// the gap that lets a banner render an i18n key at somebody.
+	for _, lit := range goLiterals(read(t, "server.go")) {
+		if keyShape.MatchString(lit) && strings.Contains(lit, ".") {
+			used[lit] = append(used[lit], "server.go")
+		}
+	}
 	return used
 }
+
+// goLiterals pulls the interpreted string literals out of Go source. Line
+// comments go first, for the same reason they do in the renderer.
+func goLiterals(src string) []string {
+	var out []string
+	for _, line := range strings.Split(src, "\n") {
+		if i := strings.Index(line, "//"); i >= 0 {
+			line = line[:i]
+		}
+		for _, m := range goQuote.FindAllStringSubmatch(line, -1) {
+			out = append(out, m[1])
+		}
+	}
+	return out
+}
+
+var goQuote = regexp.MustCompile(`"([^"\\]*)"`)
 
 func TestEveryKeyTheInterfaceAsksForExists(t *testing.T) {
 	en := catalogue(t, "en")

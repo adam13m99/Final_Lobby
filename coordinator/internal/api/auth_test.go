@@ -358,3 +358,80 @@ func TestACoordinatorWithoutAccountsStillWorks(t *testing.T) {
 		t.Errorf("signing in to an accountless server gave %d, want 503", rec.Code)
 	}
 }
+
+// The Windows service holds a ticket and the shared bearer token. It has
+// never held a session and cannot: sessions are the desktop app's, and the
+// service outlives it and runs as LocalSystem.
+//
+// This test exists because the one that already covered renewal ran on a
+// coordinator with no account database, where signedIn is a deliberate no-op.
+// It was green for the whole time production was answering the service 401,
+// the watchdog was reading that as "cannot tell", and every match was ending
+// three minutes after it started (D77).
+//
+// So: accounts on, no session header, exactly what the service sends.
+func TestTheServiceRenewsALeaseWithoutASession(t *testing.T) {
+	g := newAuthRig(t)
+	_, session := g.register("reza", "a long enough password")
+
+	rec, room := g.do(http.MethodPost, "/v1/rooms", session, map[string]any{"name": "Ranked"})
+	if rec.Code != http.StatusOK && rec.Code != http.StatusCreated {
+		t.Fatalf("create room: %d %s", rec.Code, rec.Body.String())
+	}
+	tok, _ := room["ticket"].(string)
+	if tok == "" {
+		t.Fatal("hosting a room gave back no ticket")
+	}
+
+	rec, out := g.do(http.MethodPost, "/v1/lease/renew", "", map[string]any{"ticket": tok})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("renew without a session gave %d %s - the service cannot send one, "+
+			"so this is every player dropped three minutes into every match",
+			rec.Code, rec.Body.String())
+	}
+	if out["valid"] != true {
+		t.Fatalf("renew answered %v, want valid:true", out)
+	}
+}
+
+// A ticket that is not ours is still refused, session or no session. The
+// ticket is the credential; nothing else is being trusted here.
+func TestRenewingAnUnknownTicketIsRefused(t *testing.T) {
+	g := newAuthRig(t)
+	rec, out := g.do(http.MethodPost, "/v1/lease/renew", "", map[string]any{
+		"ticket": "not-a-ticket-anybody-ever-issued",
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200 with valid:false - the watchdog reads any "+
+			"other status as \"cannot tell\" and waits three minutes", rec.Code)
+	}
+	if out["valid"] != false {
+		t.Fatalf("an unknown ticket renewed: %v", out)
+	}
+}
+
+// Revocation still ends a lease at once. This is the property signedIn was
+// never providing and the ticket table always was.
+func TestRevokingARoomEndsItsLeasesImmediately(t *testing.T) {
+	g := newAuthRig(t)
+	_, session := g.register("reza", "a long enough password")
+
+	rec, room := g.do(http.MethodPost, "/v1/rooms", session, map[string]any{"name": "Ranked"})
+	if rec.Code != http.StatusOK && rec.Code != http.StatusCreated {
+		t.Fatalf("create room: %d %s", rec.Code, rec.Body.String())
+	}
+	tok, _ := room["ticket"].(string)
+	id, _ := room["room_id"].(string)
+
+	if _, out := g.do(http.MethodPost, "/v1/lease/renew", "", map[string]any{"ticket": tok}); out["valid"] != true {
+		t.Fatal("a fresh lease did not renew")
+	}
+
+	// Leaving closes the room, which revokes every ticket in it (D70).
+	g.do(http.MethodPost, "/v1/rooms/"+id+"/leave", session, map[string]any{})
+
+	_, out := g.do(http.MethodPost, "/v1/lease/renew", "", map[string]any{"ticket": tok})
+	if out["valid"] != false {
+		t.Fatalf("a revoked ticket still renews: %v - the watchdog would never tear down", out)
+	}
+}

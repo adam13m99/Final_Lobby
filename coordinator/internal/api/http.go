@@ -241,7 +241,18 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /v1/rooms/{id}/invite", s.signedIn(s.limitManage, s.invite))
 	mux.HandleFunc("POST /v1/rooms/{id}/spectate", s.signedIn(s.limitJoin, s.spectateRoom))
 	mux.HandleFunc("POST /v1/rooms/{id}/connect", s.signedIn(s.limitRead, s.connectRoom))
-	mux.HandleFunc("POST /v1/lease/renew", s.signedIn(s.limitRead, s.renewLease))
+	// Renewing a lease is deliberately NOT behind signedIn, and putting it
+	// back there breaks every match after three minutes. The caller is the
+	// Windows service, which holds a ticket and the shared bearer token and
+	// has never held a session - sessions belong to the desktop app. With
+	// accounts on, signedIn answered it 401, the watchdog could not tell
+	// valid from revoked, and it failed closed on schedule (D77).
+	//
+	// The ticket is the credential here, the same way it is on
+	// /internal/validate-ticket: thirty-two random bytes naming one player in
+	// one room, revocable at any moment. Whoever holds it already holds the
+	// tunnel, so renewing grants nothing they do not already have.
+	mux.HandleFunc("POST /v1/lease/renew", s.limited(s.limitRead, s.renewLease))
 
 	// One call per poll. The client asks for everything it draws at once:
 	// who it is, what rooms exist, who is in them, and both chat channels.
@@ -793,8 +804,13 @@ func (s *Server) setStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "status": body.Status})
 }
 
-// renewLease is what the net-service watchdog calls. A ticket that renews is
-// still authorised; anything else means tear the tunnel down.
+// renewLease is what the net-service watchdog calls, every thirty seconds,
+// for every player in a room. A ticket that renews is still authorised;
+// anything else means tear the tunnel down.
+//
+// It answers 200 with valid:false rather than an error status on purpose. The
+// watchdog treats any non-200 as "cannot tell" and fails closed after three
+// minutes, so a status code here would turn a clear no into a slow one.
 func (s *Server) renewLease(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Ticket string `json:"ticket"`

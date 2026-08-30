@@ -3,6 +3,7 @@ package watchdog_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -15,7 +16,7 @@ func TestRevokedVerdictTearsDownImmediately(t *testing.T) {
 	check := func(context.Context) (watchdog.Verdict, error) {
 		return watchdog.VerdictRevoked, nil
 	}
-	w := watchdog.New(check, 10*time.Millisecond, time.Hour, func(string) { torn.Store(true) })
+	w := watchdog.New(check, 10*time.Millisecond, time.Hour, nil, func(string) { torn.Store(true) })
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
@@ -33,7 +34,7 @@ func TestOutageDoesNotExtendTheLease(t *testing.T) {
 	}
 	// Local expiry of 80ms: an unreachable coordinator must not keep the
 	// tunnel alive past it.
-	w := watchdog.New(check, 10*time.Millisecond, 80*time.Millisecond, func(string) { torn.Store(true) })
+	w := watchdog.New(check, 10*time.Millisecond, 80*time.Millisecond, nil, func(string) { torn.Store(true) })
 
 	ctx, cancel := context.WithTimeout(context.Background(), 400*time.Millisecond)
 	defer cancel()
@@ -49,7 +50,7 @@ func TestValidChecksKeepTunnelAlive(t *testing.T) {
 	check := func(context.Context) (watchdog.Verdict, error) {
 		return watchdog.VerdictValid, nil
 	}
-	w := watchdog.New(check, 10*time.Millisecond, 100*time.Millisecond, func(string) { torn.Store(true) })
+	w := watchdog.New(check, 10*time.Millisecond, 100*time.Millisecond, nil, func(string) { torn.Store(true) })
 
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 	defer cancel()
@@ -71,7 +72,7 @@ func TestRecoveryAfterBriefOutageKeepsTunnelAlive(t *testing.T) {
 		}
 		return watchdog.VerdictValid, nil
 	}
-	w := watchdog.New(check, 10*time.Millisecond, 200*time.Millisecond, func(string) { torn.Store(true) })
+	w := watchdog.New(check, 10*time.Millisecond, 200*time.Millisecond, nil, func(string) { torn.Store(true) })
 
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 	defer cancel()
@@ -88,12 +89,41 @@ func TestTeardownReasonDistinguishesRevocationFromExpiry(t *testing.T) {
 
 	revoked := watchdog.New(
 		func(context.Context) (watchdog.Verdict, error) { return watchdog.VerdictRevoked, nil },
-		10*time.Millisecond, time.Hour, capture)
+		10*time.Millisecond, time.Hour, nil, capture)
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 	revoked.Run(ctx)
 
 	if r := reason.Load(); r == nil || *r != "authorisation revoked" {
 		t.Fatalf("reason = %v, want \"authorisation revoked\"", r)
+	}
+}
+
+// The expiry reason has to name what stopped the answers arriving.
+//
+// For weeks the coordinator was refusing the service with a 401 and the only
+// thing anybody ever saw was "lease expired locally" - a description of our
+// own timer running out, which sent everyone looking at the network. The
+// cause was in the error the checker returned and was thrown away (D77).
+func TestExpiryReasonNamesTheCause(t *testing.T) {
+	var reason atomic.Pointer[string]
+	w := watchdog.New(
+		func(context.Context) (watchdog.Verdict, error) {
+			return watchdog.VerdictUnreachable, errors.New("lease check unauthorised")
+		},
+		10*time.Millisecond, 40*time.Millisecond, nil,
+		func(r string) { reason.Store(&r) })
+
+	ctx, cancel := context.WithTimeout(context.Background(), 400*time.Millisecond)
+	defer cancel()
+	w.Run(ctx)
+
+	r := reason.Load()
+	if r == nil {
+		t.Fatal("the tunnel was never torn down")
+	}
+	if !strings.Contains(*r, "lease check unauthorised") {
+		t.Fatalf("reason = %q, and somebody reading it cannot tell a refused "+
+			"lease check from a dead network", *r)
 	}
 }

@@ -209,9 +209,9 @@ func ValidateArgs(args []string) error {
 // map, and the state change that follows it is the moment the server accepts
 // players.
 const (
-	markerMapSpawned  = "Spawn Server: dota"
-	markerServerLive  = "ss_loading -> ss_active"
-	markerSocketOpen  = "Network socket 'server' opened on port "
+	markerMapSpawned = "Spawn Server: dota"
+	markerServerLive = "ss_loading -> ss_active"
+	markerSocketOpen = "Network socket 'server' opened on port "
 )
 
 // ServerReady reports whether the host's Dota 2 has finished starting its

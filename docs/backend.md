@@ -345,6 +345,23 @@ with the room list, the lobby chat and the online count, and nothing
 belonging to a person (D45). Asking somebody to sign up before they can see
 whether anybody is playing is how an install gets abandoned.
 
+### Leases, and who is allowed to renew one
+
+A ticket is good for ten minutes and the watchdog inside the Windows service
+renews it every thirty seconds. Three things about that are easy to get wrong,
+and two of them already have been:
+
+- **`POST /v1/lease/renew` is not behind `signedIn`, on purpose.** The service
+  has no session and never will. The ticket is the credential (D77).
+- **It answers 200 with `valid:false` for a bad ticket**, never an error
+  status. The watchdog reads any non-200 as "cannot tell" and waits out its
+  three-minute local expiry before acting, so a status code turns a clear no
+  into a slow one.
+- **The watchdog fails closed and that is deliberate.** A coordinator it cannot
+  reach never extends authorisation; it only delays the explicit answer until
+  local expiry. Treating "cannot ask" as "still allowed" would hand an
+  unrevokable session to anybody who can black-hole the coordinator.
+
 ### Presence and latency
 
 - `player.Registry` holds `LastSeen`, `InGame`, `RelayMillis` and `RelayAt`
@@ -480,6 +497,22 @@ the store on the next tick, before anybody has read why it ended.
    are coupled, every seat change becomes a reconnection (D74).
 10. **Never let a restart be casual.** Rooms are in memory. Deploying the
    coordinator closes every open one; `ship.sh` counts them first and says so.
-11. **Never commit secrets.** `github_token_admin.txt` and
+11. **Never put a route behind `signedIn` without asking who calls it.** The
+   Windows service calls `/v1/lease/renew` and has no session, and cannot get
+   one: sessions belong to the desktop app and the service outlives it. With
+   accounts on, that guard answered it 401 and every match ended three minutes
+   later (D77). The ticket is the credential on that route, the way it is on
+   `/internal/validate-ticket`.
+12. **Never trust a test that runs without the account database to tell you
+   what production does.** `newHarness` has no accounts, so `signedIn` is a
+   no-op inside it and every route looks open. Anything about who may call
+   what belongs in `newAuthRig` or in `smoke.sh`, both of which have accounts
+   on, like the live server.
+13. **Never discard the error from a check you fail closed on.** The watchdog
+   threw away the reason its lease check did not answer, so a refused request
+   and a dead network were the same event for three minutes and then reported
+   themselves as an expiry. Say it out loud, and name the cause in whatever
+   reaches the player's screen.
+14. **Never commit secrets.** `github_token_admin.txt` and
    `mobinhost_server_1.txt` are gitignored; the download key and API token
    live only on the server. Verify before every commit.

@@ -334,11 +334,19 @@ function render() {
 
   // A tunnel that tore down is the one of these the player can do something
   // about, so that one gets the button.
-  const trouble = s.service_error || s.coordinator_error || s.tunnel_error ||
+  //
+  // The service reports a teardown in its own words - "lease expired locally"
+  // - which is accurate, untranslated, and tells nobody what happened or what
+  // to do. The app names a key for the reasons it knows and the raw text is
+  // the fallback for the ones it does not (D77).
+  const tunnelTrouble = s.tunnel_error
+    ? (s.tunnel_error_key ? t(s.tunnel_error_key) : s.tunnel_error)
+    : "";
+  const trouble = s.service_error || s.coordinator_error || tunnelTrouble ||
     (s.room_gone ? t("err.room_gone") : "") ||
     (s.removed ? t("err.removed") : "") ||
     (s.build_warning || "");
-  banner(trouble, !!s.tunnel_error && trouble === s.tunnel_error);
+  banner(trouble, !!tunnelTrouble && trouble === tunnelTrouble);
 
   // Terms that changed after somebody signed up are terms they have not
   // agreed to. Shown only where all three facts are known: signed in, a

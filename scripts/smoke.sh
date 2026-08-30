@@ -194,6 +194,57 @@ expect "the room is visible to a stranger"         'Smoke Room'    "$SYNC"
 
 
 say ""
+say "=== the lease the Windows service renews ==="
+# This is the door the service knocks on, knocked on the way the service
+# knocks: it holds a ticket and the shared bearer token, and it has no session
+# because sessions belong to the desktop app.
+#
+# It is checked here, over the real API, because the unit test that covered
+# renewal ran on a coordinator with no account database - where the session
+# guard is a deliberate no-op. That test stayed green for weeks while
+# production answered the service 401, the watchdog read that as "cannot
+# tell", and every match ended three minutes after it started (D77).
+LEASE_SESSION=$(curl -sS -X POST -H 'Content-Type: application/json' \
+  -d "{\"username\":\"leaseholder\",\"display_name\":\"Lease Holder\",\"password\":\"correct horse battery\",\"accept_terms_version\":\"$VER\"}" \
+  "$COORD/v1/auth/signup" 2>&1 | python -c "import sys,json;print(json.load(sys.stdin).get('session',''))" 2>/dev/null)
+
+if [ -z "$LEASE_SESSION" ]; then
+  bad "could not sign up an account to hold a lease"
+else
+  LEASE_ROOM=$(curl -sS -X POST -H 'Content-Type: application/json' \
+    -H "X-LobbyBaz-Session: $LEASE_SESSION" -d '{"name":"Lease Room"}' \
+    "$COORD/v1/rooms" 2>&1)
+  LEASE_TICKET=$(printf '%s' "$LEASE_ROOM" | grep -o '"ticket":"[^"]*"' | head -1 | cut -d'"' -f4)
+  LEASE_ROOM_ID=$(printf '%s' "$LEASE_ROOM" | grep -o '"room_id":"[^"]*"' | head -1 | cut -d'"' -f4)
+
+  if [ -z "$LEASE_TICKET" ]; then
+    bad "hosting a room gave back no ticket"
+  else
+    ok "a player holding a room holds a ticket"
+
+    # No session header. This is the whole test.
+    RENEW=$(curl -sS -o "$WORK/renew.json" -w '%{http_code}' -X POST \
+      -H 'Content-Type: application/json' -d "{\"ticket\":\"$LEASE_TICKET\"}" \
+      "$COORD/v1/lease/renew" 2>&1)
+    if [ "$RENEW" = "200" ]; then
+      ok "the service can renew a lease with no session"
+    else
+      bad "renewing without a session gave HTTP $RENEW - every match ends three minutes in"
+    fi
+    expect "and the coordinator says the lease is good" '"valid":true' "$(cat "$WORK/renew.json" 2>/dev/null)"
+
+    # And the other half: a lease that was revoked must stop renewing, or the
+    # watchdog would never tear anything down.
+    curl -sS -X POST -H 'Content-Type: application/json' \
+      -H "X-LobbyBaz-Session: $LEASE_SESSION" -d '{}' \
+      "$COORD/v1/rooms/$LEASE_ROOM_ID/leave" >/dev/null 2>&1
+    GONE=$(curl -sS -X POST -H 'Content-Type: application/json' \
+      -d "{\"ticket\":\"$LEASE_TICKET\"}" "$COORD/v1/lease/renew" 2>&1)
+    expect "a revoked lease stops renewing"            '"valid":false' "$GONE"
+  fi
+fi
+
+say ""
 say "=== a player's own launch options ==="
 # The parser lives in protocol/launch and both ends use it. This proves the
 # app's half: the field accepts what Dota players actually type, refuses the

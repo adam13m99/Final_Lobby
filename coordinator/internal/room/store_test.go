@@ -319,7 +319,6 @@ func TestTheHostTakesTheRoomAddressWithThem(t *testing.T) {
 	}
 }
 
-
 // --- the host, watched rather than asked (D69, D70) ----------------------
 
 // The bug the owner reported: they left a room and it was still in the lobby,
@@ -448,7 +447,6 @@ func TestReopeningOverridesTheAutomaticLock(t *testing.T) {
 		t.Fatalf("moved seat mid-match in a reopened room: %v", err)
 	}
 }
-
 
 // --- an address belongs to the player, not to the seat (D74) -------------
 

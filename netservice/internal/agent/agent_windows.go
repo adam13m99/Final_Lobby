@@ -170,6 +170,7 @@ func (a *Agent) connect(parent context.Context, req ipc.Request) ipc.Response {
 			leaseChecker(req.Coordinator, req.Ticket, req.AuthToken),
 			30*time.Second,
 			3*time.Minute,
+			a.log.With("room", req.RoomID),
 			func(reason string) { a.Disconnect(reason) },
 		)
 		go wd.Run(ctx)

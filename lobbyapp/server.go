@@ -51,6 +51,13 @@ type server struct {
 	// failed, so a background attempt can still say so on screen.
 	connectErr string
 
+	// recovering guards the automatic reconnection in recoverTunnel, and
+	// recoverAt throttles it. Status is polled every couple of seconds, so
+	// without these a tunnel that will not come up would be retried every
+	// couple of seconds for as long as the app is open.
+	recovering bool
+	recoverAt  time.Time
+
 	diagMu   sync.Mutex
 	diagBusy bool
 	diagLast []lobby.DiagCheck
@@ -222,7 +229,6 @@ func (s *server) api() *lobby.Client {
 	return c
 }
 
-
 // --- development: the interface, served from disk ------------------------
 
 // devUI holds the directory the interface is being served from when the app
@@ -327,7 +333,12 @@ func (s *server) state(w http.ResponseWriter, r *http.Request) {
 			out["virtual_ip"] = resp.VirtualIP
 		}
 		if resp.Err != "" {
+			// The raw reason travels for the log and the diagnostics upload;
+			// the key is what the player is shown. The service speaks in
+			// terms of its own state - "lease expired locally" - which is
+			// accurate, untranslated, and tells nobody what to do (D77).
 			out["tunnel_error"] = resp.Err
+			out["tunnel_error_key"] = tunnelErrorKey(resp.Err)
 		}
 	}
 
@@ -372,7 +383,93 @@ func (s *server) state(w http.ResponseWriter, r *http.Request) {
 	}
 	s.diagMu.Unlock()
 
+	// Last, because it reads what everything above it decided.
+	s.recoverTunnel(out)
+
 	writeJSON(w, http.StatusOK, out)
+}
+
+// recoverTunnel brings the room's network back by itself after it was lost to
+// something that has since stopped being true.
+//
+// A player whose tunnel went down mid-match had to notice a banner and press a
+// button, on a screen they were not looking at because they were in Dota. The
+// tunnel is not something they asked for and not something they should have to
+// think about: they asked to be in a room, and being in a room means being on
+// its network (the same reasoning as autoConnect).
+//
+// It is deliberately narrow:
+//
+//   - Only after a lease expiry. "authorisation revoked" means a kick or a
+//     closed room, and retrying that is an app arguing with a moderator.
+//   - Only while the coordinator still says this player is seated. `pull` has
+//     already cleared the room otherwise, so an empty room_id here means there
+//     is nothing to reconnect to and the loop ends by itself.
+//   - Once every thirty seconds at most, and one at a time.
+//
+// The whole thing is a safety net under D77, not the fix for it. A lease that
+// renews properly never gets here.
+func (s *server) recoverTunnel(out map[string]any) {
+	if !s.shouldRecover(out, time.Now()) {
+		return
+	}
+	go func() {
+		s.autoConnect()
+		s.mu.Lock()
+		s.recovering = false
+		s.mu.Unlock()
+	}()
+}
+
+// RecoverEvery is the shortest gap between two automatic reconnections.
+//
+// Status is polled every couple of seconds. Without a gap here, a tunnel that
+// will not come up would be retried every couple of seconds for as long as the
+// app is open, against a coordinator that is already having a bad day.
+const RecoverEvery = 30 * time.Second
+
+// shouldRecover answers whether now is the moment to try, and books the slot
+// if it is. Separated from the goroutine so the decision can be tested; the
+// bookkeeping is inside the same lock as the answer so two polls arriving
+// together cannot both be told yes.
+func (s *server) shouldRecover(out map[string]any, now time.Time) bool {
+	if out["service"] != true || out["connected"] == true {
+		return false
+	}
+	if out["tunnel_error_key"] != "err.tunnel_lease" {
+		return false
+	}
+	if id, _ := out["room_id"].(string); id == "" || out["room"] == nil {
+		return false
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.recovering || now.Sub(s.recoverAt) < RecoverEvery {
+		return false
+	}
+	s.recovering = true
+	s.recoverAt = now
+	return true
+}
+
+// tunnelErrorKey names the sentence to show a player for a teardown reason.
+//
+// It matches on a prefix rather than the whole string, because a reason now
+// carries its cause after a colon and the cause is for the log, not for the
+// person. An unrecognised reason maps to nothing and the raw text is shown:
+// wrong for a player to read, and better than a blank banner over a tunnel
+// that is genuinely down.
+func tunnelErrorKey(reason string) string {
+	switch {
+	case strings.HasPrefix(reason, "authorisation revoked"):
+		return "err.tunnel_revoked"
+	case strings.HasPrefix(reason, "lease expired locally"):
+		return "err.tunnel_lease"
+	case strings.HasPrefix(reason, "service stopping"):
+		return "err.tunnel_stopped"
+	}
+	return ""
 }
 
 // pull performs the coordinator sync and folds the result into the reply.
