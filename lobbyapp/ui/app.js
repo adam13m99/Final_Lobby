@@ -168,6 +168,30 @@ function el(tag, cls, text) {
   return e;
 }
 
+// pressable makes a div that acts like a button act like one for somebody who
+// is not holding a mouse.
+//
+// A room row, an empty seat and a friend are all whole-row targets: the click
+// is on the row rather than on a button inside it, because the row is what a
+// player is aiming at. That is right, and it left every one of them reachable
+// only by pointer - no tab stop, no Enter, nothing announced. This gives them
+// the three things a button has and nothing else: a stop in the tab order,
+// the role, and the two keys.
+//
+// Buttons nested inside these rows already stop their own clicks; they stop
+// keys here too, or Enter on a Kick button would also take its seat.
+function pressable(e) {
+  e.tabIndex = 0;
+  e.setAttribute("role", "button");
+  e.onkeydown = (ev) => {
+    if (ev.key !== "Enter" && ev.key !== " ") return;
+    if (ev.target !== e) return;
+    ev.preventDefault();
+    if (e.onclick) e.onclick(ev);
+  };
+  return e;
+}
+
 // ------------------------------------------------------------- portraits
 
 // Nobody uploads a picture, and asking them to would be one more thing
@@ -480,7 +504,7 @@ function renderRooms(rooms) {
 // button in the last column joins it.
 function roomCard(r) {
   const mine = r.id === state.room_id;
-  const card = el("div", "room" + (mine ? " here" : ""));
+  const card = pressable(el("div", "room" + (mine ? " here" : "")));
   card.onclick = () => (mine ? show("room") : joinRoom(r));
 
   const who = el("div", "room-who");
@@ -971,6 +995,7 @@ function slotCard(index, member, canKick, spectator) {
     body.appendChild(el("div", "slot-name muted", t("room.slot.empty")));
     if (canTakeSeat(index, spectator)) {
       card.classList.add("takeable");
+      pressable(card);
       card.title = t(spectator ? "room.watch.take.note" : "room.slot.take.note");
       card.onclick = () => act(() => (spectator
         ? api("/api/rooms/spectate", { room_id: state.room_id })
@@ -1188,6 +1213,7 @@ function friendRow(f) {
   // the dock rather than as a dialog, clicking the person is the whole
   // gesture.
   row.classList.add("clickable");
+  pressable(row);
   row.title = t("friends.message");
   row.onclick = () => openConversation(f);
 
@@ -2526,6 +2552,63 @@ for (const k of NOTIFY_KEYS) {
 // whole point of scripts/live.sh. The first value is remembered rather than
 // acted on, or every start-up would reload once for nothing.
 let uiStamp = null;
+
+// --- getting out of a dialog ---------------------------------------------
+
+// Every dialog in here had exactly one way out: find its own button and click
+// it. On a desktop application Escape is the way out, and clicking the dark
+// area around a card is the other one, and a card that ignores both reads as
+// stuck rather than as modal.
+//
+// Each gate names the control Escape should press rather than being hidden
+// directly, so a dialog that has cleaning up to do still does it - the terms
+// remember how far they were read, the profile form puts its fields back.
+// Two are deliberately absent: the name gate, because there is no application
+// behind it to go back to, and no gate is dismissed while a request it
+// started is still running.
+const DISMISS = [
+  ["passgate", "pw-cancel"],
+  ["profilegate", "p-cancel"],
+  ["invitegate", "inviteclose"],
+  ["roomsetgate", "roomsetclose"],
+  ["creategate", "createcancel"],
+  ["termsgate", "termsclose"],
+];
+
+function topGate() {
+  for (const [gate, close] of DISMISS) {
+    if (!$(gate).classList.contains("hidden")) return [gate, close];
+  }
+  return null;
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || e.defaultPrevented) return;
+  // The chat's friend menu hangs off the tab strip rather than being a gate,
+  // and it is in front of everything: it goes first.
+  const menu = $("chatmenu");
+  if (!menu.classList.contains("hidden")) {
+    menu.classList.add("hidden");
+    return;
+  }
+  const top = topGate();
+  if (!top) return;
+  e.preventDefault();
+  $(top[1]).click();
+});
+
+// The backdrop only. A click that started inside the card and ended outside it
+// - a drag off the end of a text selection - is not somebody asking to leave.
+for (const [gate, close] of DISMISS) {
+  $(gate).addEventListener("mousedown", (e) => {
+    if (e.target !== $(gate)) return;
+    const up = (ev) => {
+      document.removeEventListener("mouseup", up);
+      if (ev.target === $(gate)) $(close).click();
+    };
+    document.addEventListener("mouseup", up);
+  });
+}
 
 async function refresh() {
   try {

@@ -492,5 +492,12 @@ WIDE=1366 TALL=768 bash scripts/preview.sh small
     dangerous one: **the signature must name every input the panel draws
     from**, including the ones that are not in its argument. A signature that
     misses one is a panel that silently stops updating.
-13. **Never leave a change on this PC.** `./scripts/ship.sh` after the commit
+13. **Never write a media query above the rule it narrows**, and never write
+    the same declaration twice. Same specificity means the later one wins, so
+    the first is either dead or is silently deciding something four hundred
+    lines away (D72).
+14. **Never add a `transform` without asking what it does in Persian.** It is
+    the one exception to the logical-properties rule, because there is
+    nothing logical to write instead: give it a `[dir="rtl"]` companion.
+15. **Never leave a change on this PC.** `./scripts/ship.sh` after the commit
     (D62). The owner tests on the live product.

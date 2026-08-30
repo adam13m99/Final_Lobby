@@ -1887,3 +1887,58 @@ Not everything is guarded, and the line is deliberate: a panel that sets
 string twice is invisible and costs nothing. It is destroying and rebuilding
 subtrees that people are pointing at, scrolling and typing into that had to
 stop.
+
+---
+
+## D72 - the owner's stylesheet pass, adopted
+
+**2026-08-30.** The owner delivered `app.css` and `app.js` read line by line
+against the D68 components, with the findings written up in
+`docs/2026-08-30-ui-fixes.md`. Seventeen defects, no markup and no strings
+touched. Adopted whole; the write-up is the record and is not repeated here.
+
+Four of them are worth naming, because each is a rule rather than a fix:
+
+**A media query written above the rule it overrides does nothing.** The
+`max-width: 1440px` block sat before the base `.chip` rule. Same specificity,
+so the later declaration won at every width and the laptop adaptation had
+never once applied. Moved below. Anything narrowing a base rule has to be
+written after it.
+
+**A declaration written twice is a rule somebody will read and believe.** Four
+pairs - `.slot-name`, `.room-ping`, `#screen-room` and `@keyframes blink` -
+where the first was dead and the second was the truth. The blink one had been
+quietly deciding how the rail's tunnel light pulsed from four hundred lines
+away, in the front-door section.
+
+**A comment that describes behaviour has to be checked against it.** The
+lobby's decorations carry a comment saying both are dropped whole under
+`prefers-reduced-motion`. The media query listed neither, nor the Create room
+pulse, nor the tunnel blink. A comment that is wrong is worse than no comment:
+the next person reads it instead of the rule.
+
+**Two rules were not direction-agnostic**, in a file whose own header says
+every rule is. Both are transforms, which have no logical form: the sweeping
+light travelled off the panel immediately under `dir="rtl"`, and the
+magnifier's handle pointed into its own lens. Each has an explicit RTL rule
+now. The general point holds - **a transform is the exception to D44 and needs
+a `[dir="rtl"]` companion**, because there is nothing logical to write instead.
+
+Beyond the defects it added two things the interface did not have:
+
+- **Escape and a backdrop click close a dialog.** Six of them had exactly one
+  way out. Escape presses the dialog's own close control rather than hiding
+  it, so each still does its own cleanup. The name gate is excluded on
+  purpose: there is no application behind it to go back to.
+- **Room rows, empty seats and friend rows are reachable from the keyboard.**
+  All three are whole-row targets, which is correct - the row is what a player
+  aims at - and all three were `div`s with an `onclick`, so none had a tab
+  stop, a role or a key. `pressable()` gives them exactly those three.
+
+**One thing it changes that the owner should look at.** D68's chat dock was
+212px; the owner asked for a fifth more on 2026-08-30 and got 254. This pass
+gives 60px of that back below 820px of viewport - which is every screen the
+product is actually used on - and the room screen fits a 1366x768 laptop
+completely for the first time: ten seats, four watching seats, the footer, no
+scrolling. The two cannot both be had at that height. The room won, which is
+the defensible way round, and the owner has been told.

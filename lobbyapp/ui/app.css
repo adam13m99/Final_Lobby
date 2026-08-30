@@ -215,7 +215,7 @@ h3 em { font-style: normal; text-transform: none; letter-spacing: 0; color: var(
 }
 .rs .lbl {
   font-size: 9px; line-height: 1.2; color: var(--dim);
-  max-width: 48px; word-break: break-word;
+  max-width: 48px; overflow-wrap: break-word;
 }
 .rs .ring {
   width: 20px; height: 20px; border-radius: 50%;
@@ -271,6 +271,7 @@ h3 em { font-style: normal; text-transform: none; letter-spacing: 0; color: var(
   background: var(--dim); transform: rotate(-45deg); transform-origin: top;
   pointer-events: none;
 }
+[dir="rtl"] .searchbox::after { transform: rotate(45deg); }
 
 /* One segmented control rather than six loose pills. The filters are a single
    choice, and six separate outlines look like six separate switches.
@@ -284,14 +285,6 @@ h3 em { font-style: normal; text-transform: none; letter-spacing: 0; color: var(
 }
 .filters::-webkit-scrollbar { display: none; }
 
-/* A laptop screen. The search box and the chips both give a little so that
-   the last filter is not sliced in half, which reads as a broken page
-   rather than as a list that scrolls. */
-@media (max-width: 1440px) {
-  #top { gap: 10px; }
-  .searchbox { max-width: 224px; }
-  .chip { padding: 0 8px; gap: 5px; }
-}
 .filters.hidden { display: none; }
 .chip {
   display: inline-flex; align-items: center; gap: 6px; flex: none;
@@ -310,10 +303,20 @@ h3 em { font-style: normal; text-transform: none; letter-spacing: 0; color: var(
 .chip .cdot.open { background: var(--good-dot); box-shadow: 0 0 6px rgba(126,168,140,.55); }
 .chip .cdot.game { background: var(--bad); box-shadow: 0 0 6px rgba(207,139,134,.55); }
 
+/* A laptop screen. The search box and the chips both give a little so that
+   the last filter is not sliced in half, which reads as a broken page rather
+   than as a list that scrolls. This block has to come after the base .chip
+   rule, not before it: same specificity, so whichever is written last wins,
+   and written first it did nothing at all. */
+@media (max-width: 1440px) {
+  #top { gap: 10px; }
+  .searchbox { max-width: 224px; }
+  .chip { padding: 0 8px; gap: 5px; }
+}
+
 .head-gap { flex: 1; }
 
-@keyframes pulse { 0%, 100% { opacity: 1 } 50% { opacity: .35 } }
-@keyframes blink { 0%, 100% { opacity: 1 } 50% { opacity: .3 } }
+@keyframes blink { 0%, 100% { opacity: 1 } 50% { opacity: .25 } }
 
 /* The player's own row, at the top of the friends panel (D68). Identity
    belongs with the social column. The accent edge is the same mark used for
@@ -380,13 +383,12 @@ h3 em { font-style: normal; text-transform: none; letter-spacing: 0; color: var(
 #stage { grid-area: stage; overflow-y: auto; padding: 16px 18px 0; }
 /* The sticky footer needs somewhere to stick to, and something under it to
    scroll past, or it sits in mid-air on a tall window. */
-#screen-room { min-height: 100%; padding-block-end: 10px; }
+#screen-room { min-height: 100%; padding-block-end: 10px; gap: 9px; }
 .screen { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 /* The room is the one screen that has to fit a laptop without scrolling: the
    way out of a room must never be below the fold. Ten seats, four watching
    seats, a band and a footer at 1366x768 is a tight fit and this is what
    makes it one. */
-#screen-room { gap: 9px; }
 #stage > .screen { min-height: 100%; }
 
 /* The lobby is one panel, and it owns the height it is given. A panel that
@@ -409,7 +411,7 @@ h3 em { font-style: normal; text-transform: none; letter-spacing: 0; color: var(
 .roomspanel .sweepline {
   position: absolute; inset-block-start: 0; inset-inline-start: 0;
   width: 16%; height: 1px; pointer-events: none;
-  background: var(--accent-lit);
+  background: linear-gradient(to right, transparent, var(--accent-hi), transparent);
   animation: sweepline 5.2s linear infinite;
 }
 .roomspanel .halo {
@@ -422,6 +424,11 @@ h3 em { font-style: normal; text-transform: none; letter-spacing: 0; color: var(
   from { transform: translateX(-110%) }
   to   { transform: translateX(720%) }
 }
+@keyframes sweepline-rtl {
+  from { transform: translateX(110%) }
+  to   { transform: translateX(-720%) }
+}
+[dir="rtl"] .sweepline { animation-name: sweepline-rtl; }
 @keyframes halo {
   0%, 100% { opacity: .5 }
   50%      { opacity: .95 }
@@ -564,7 +571,7 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
   gap: 12px;
 }
 .roomhead {
-  flex: none; padding: 0 14px 7px;
+  flex: none; padding: 0 16px 7px;
   border-block-end: 1px solid var(--line);
 }
 /* Every heading sorts. A room list is read for one thing at a time - who has
@@ -588,6 +595,14 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
   border-block-end: 1px solid #21232f; cursor: pointer;
 }
 .room:hover { background: var(--panel2); }
+/* A row that a keyboard can reach has to show where the keyboard is. Drawn
+   inside the row rather than around it: a ring outside a full-width row is
+   clipped on three sides by the list that holds it. */
+.room:focus-visible,
+.slot.takeable:focus-visible,
+.friend.clickable:focus-visible {
+  outline: none; box-shadow: inset 0 0 0 2px rgba(145,132,217,.45);
+}
 /* The room you are already in, marked the same way your own seat and your
    own name are: an accent wash and a gradient edge (D68). Three places, one
    idea - "this one is yours". */
@@ -635,7 +650,10 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
 /* Three bars, lit by how good the number is. Zero means the host has not
    reported one yet, which is not the same as an excellent connection and
    must never be drawn as one (D54). */
-.room-ping { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--dimmer); }
+.room-ping {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 12.5px; line-height: 1; color: var(--dimmer);
+}
 .room-ping.good { color: var(--good); }
 .room-ping.fair { color: var(--warn); }
 .room-ping.poor { color: var(--bad); }
@@ -651,10 +669,12 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
 .bars i:nth-child(3) { height: 8px; }
 .bars i:nth-child(4) { height: 10px; }
 .bars i:nth-child(5) { height: 12px; }
-.room-ping { line-height: 1; }
 
 .room-actions { display: flex; align-items: center; gap: 7px; }
-.room-actions button { width: 62px; height: 28px; padding: 0; flex: none; font-size: 12.5px; }
+.room-actions button {
+  min-width: 62px; height: 28px; padding: 0 8px; flex: none;
+  font-size: 12.5px; white-space: nowrap;
+}
 /* Whether a match is running in there. It is the only thing on the row that
    can be read without focusing on it. */
 .livedot { width: 8px; height: 8px; flex: none; border-radius: 50%; }
@@ -701,16 +721,16 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
 .roomband .sweepline {
   position: absolute; inset-block-start: 0; inset-inline-start: 0;
   width: 20%; height: 1px; pointer-events: none;
-  background: var(--accent-lit);
+  background: linear-gradient(to right, transparent, var(--accent-hi), transparent);
   animation: sweepline 4.8s linear infinite;
 }
 .tier1 {
   position: relative; z-index: 1;
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
 }
-.tier1 .title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.tier1 .title { display: flex; align-items: center; gap: 8px; flex: 1 1 180px; min-width: 0; }
 .tier1 h2 {
-  font-size: 19px; font-weight: 500; letter-spacing: -.015em;
+  min-width: 0; font-size: 19px; font-weight: 500; letter-spacing: -.015em;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .tier1 button { height: 30px; flex: none; }
@@ -759,6 +779,7 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
   margin-block-start: 4px; font-size: 13px; font-weight: 500; line-height: 1;
   color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.stat .v > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .stat .v .faint { color: var(--dimmer); font-weight: 400; }
 .statrule {
   flex: 0 0 1px; width: 1px; height: 26px; margin-inline-end: 18px;
@@ -850,7 +871,6 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
   letter-spacing: 0; text-transform: none; color: var(--dim);
 }
 .team-head .head-gap { flex: 1; }
-.team-body { padding: 6px; }
 
 /* The watching seats, at the foot of each board (D68). Recessed and
    separated by a full-width top border, so they are plainly part of this
@@ -878,8 +898,8 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
   position: relative;
   display: flex; align-items: center; gap: 11px;
   height: 36px; padding: 0 13px;
-  border-block-end: 1px solid var(--hair);
 }
+.slot + .slot { border-block-start: 1px solid var(--hair); }
 .slot:not(.empty)::before {
   content: ""; position: absolute; inset-block: 0; inset-inline-start: 0; width: 2px;
   background: var(--host-mark);
@@ -905,7 +925,6 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
   width: 13px; flex: none; text-align: start;
   font-size: 11px; font-weight: 400; color: var(--dimmer);
 }
-.slot-name { font-size: 12.5px; font-weight: 600; }
 .slot-body { min-width: 0; line-height: 1.25; }
 .slot-name { font-size: 13px; font-weight: 500; white-space: nowrap; }
 .slot-sub { font-size: 11.5px; color: var(--dim); white-space: nowrap; }
@@ -1037,6 +1056,9 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
 /* Minimised, the dock is its tab strip and nothing else - the same gesture
    Dota's own main-menu chat uses (D42.3). */
 .chatdock.collapsed { height: 38px; }
+@media (max-height: 820px) {
+  .chatdock { height: 194px; margin-block: 10px 12px; }
+}
 .chatdock.collapsed .chatbody, .chatdock.collapsed .tabmenu { display: none; }
 .chatdock.collapsed .tabmin span { transform: rotate(180deg); }
 
@@ -1066,7 +1088,7 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
   border-radius: 50%; background: var(--accent-lit);
 }
 .chattab .x { color: var(--dimmer); font-size: 13px; line-height: 1; padding: 0 1px; border-radius: 4px; }
-.chattab .x:hover { color: var(--text); background: rgba(255,255,255,.1); }
+.chattab .x:hover { color: var(--text); background: var(--panel3); }
 
 .tabadd, .tabmin {
   width: 26px; height: 26px; flex: none; padding: 0;
@@ -1327,7 +1349,6 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
 .authnet .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--good-dot); animation: blink 2.4s ease-in-out infinite; }
 .authnet.off { color: var(--bad); }
 .authnet.off .dot { background: var(--bad); }
-@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
 .authrule {
   height: 1px; margin-block: 6px 2px;
   background: linear-gradient(to right, rgba(145,132,217,.45), rgba(233,233,237,.10) 40%, transparent);
@@ -1407,7 +1428,11 @@ button.primary.block { box-shadow: 0 0 24px rgba(145,132,217,.22); }
    still gets every state the loops were signalling, because none of them was
    carrying information in the first place. */
 @media (prefers-reduced-motion: reduce) {
-  .authglow, .authsweep, .authnet .dot, .sweep span { animation: none; }
+  .authglow, .authsweep, .authnet .dot, .sweep span,
+  .roomspanel .sweepline, .roomspanel .halo, .roomband .sweepline,
+  .dot.ok { animation: none; }
+  #btn-create { animation: none; box-shadow: 0 0 0 1px var(--accent-ring); }
+  .chatdock, .meRow, .room, .slot, .nav, .chip { transition: none; }
   .authcard, .termscard { animation: fadein 200ms ease both; }
   @keyframes fadein { 0% { opacity: 0; } 100% { opacity: 1; } }
 }
