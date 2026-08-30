@@ -158,6 +158,25 @@ func main() {
 	players := player.NewRegistry()
 	board := chat.NewBoard()
 
+	// What a room cannot see about its own host: whether they are still
+	// talking to us, and whether they are in a match (D69, D70). The registry
+	// is the only place either fact lives, so the room store is handed a
+	// lookup into it rather than a copy of it.
+	//
+	// A host is counted present on the same window everything else uses for
+	// presence. It is short - thirty seconds - and the grace it starts is a
+	// minute, so a room outlives ninety seconds of silence before it closes.
+	rooms.WatchHosts(func(hostID string) room.HostFacts {
+		p, ok := players.Get(hostID)
+		if !ok {
+			return room.HostFacts{}
+		}
+		return room.HostFacts{
+			Online: time.Since(p.LastSeen) <= api.OnlineWindow,
+			InGame: p.InGame,
+		}
+	})
+
 	srv := api.New(api.Config{
 		Rooms:       rooms,
 		Tickets:     tickets,

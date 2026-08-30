@@ -343,6 +343,15 @@ type roomView struct {
 	HostRelayMillis int `json:"host_relay_ms,omitempty"`
 	// Players is the bare ID list the first CLI was written against.
 	Players []string `json:"players"`
+	// HostAway is set while the room is counting down to closure because its
+	// host stopped answering (D70). The room is still there and the host can
+	// still come back; saying nothing and drawing it as a normal open room is
+	// how somebody joins a room that vanishes ten seconds later.
+	HostAway bool `json:"host_away,omitempty"`
+	// HostInGame is the coordinator's own observation that the host is in a
+	// match (D69). The status below already reads locked_in_game because of
+	// it; this says which of the two reasons it is.
+	HostInGame bool `json:"host_in_game,omitempty"`
 }
 
 // view renders a room for the lobby, resolving every seated ID to the name
@@ -419,10 +428,30 @@ func (s *Server) view(r room.Room) roomView {
 	if v.HostNick == "" {
 		v.HostNick = r.HostID
 	}
-	v.Joinable = v.Free > 0 &&
-		(r.Status == room.StatusOpen || r.Status == room.StatusOpenToNew)
+	v.Joinable = v.Free > 0 && r.Admits()
+
+	// The two statuses the room does not store, because they are observations
+	// rather than decisions (D69, D70). They are derived here, once, so that
+	// every reader - the lobby list, the room screen, the CLI - agrees about
+	// what a room whose host is in a match or has gone quiet looks like.
+	//
+	// A room in its host's grace window stays joinable on purpose: the host
+	// coming back is a join, and it is the only thing that saves the room.
+	v.HostInGame = r.HostInGame
+	switch {
+	case r.HostAway():
+		v.HostAway = true
+		v.Status = statusHostAway
+	case r.HostInGame && r.Status == room.StatusOpen:
+		v.Status = string(room.StatusLocked)
+	}
 	return v
 }
+
+// statusHostAway is a view-only status. It is not a room.Status: the room is
+// still open, and what has happened to it is that nobody is hosting it at
+// this instant.
+const statusHostAway = "host_away"
 
 // freshRelay returns a player's relay latency only while it still describes
 // the connection they have now. A client that stopped reporting leaves its
@@ -659,12 +688,26 @@ func (s *Server) leaveRoom(w http.ResponseWriter, r *http.Request) {
 	// The session decides who this is; the body only suggests it.
 	body.PlayerID = s.actor(r, body.PlayerID)
 	id := r.PathValue("id")
-	if err := s.rooms.Leave(id, body.PlayerID, s.now()); err != nil {
+	closed, err := s.rooms.Leave(id, body.PlayerID, s.now())
+	if err != nil {
 		writeErr(w, statusFor(err), err.Error())
 		return
 	}
 	// Revoking here is what actually removes network access; the room
 	// bookkeeping alone would leave the tunnel up.
+	//
+	// A host leaving ends the room there and then (D70), and everybody else
+	// in it has to lose the room's network with it - their tickets outlive
+	// the room otherwise, and the timer that would have swept them up is the
+	// one that is no longer running.
+	if closed {
+		s.tickets.RevokeRoom(id)
+		s.chat.System(id, s.nickOf(body.PlayerID)+" closed the room", s.now())
+		s.chat.Drop(id)
+		s.log.Info("host left, room closed", "room", id, "player", body.PlayerID)
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+		return
+	}
 	s.tickets.RevokePlayerRoom(body.PlayerID, id)
 	s.chat.System(id, s.nickOf(body.PlayerID)+" left", s.now())
 	s.log.Info("player left", "room", id, "player", body.PlayerID)

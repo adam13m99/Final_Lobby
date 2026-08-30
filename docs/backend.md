@@ -388,6 +388,31 @@ running process — D21), the relay key is generated only when absent, and
 `publish.sh` says out loud that nginx, CoreDNS and the relay are still up
 before it finishes.
 
+## The room watches its host (D69, D70)
+
+Three facts about a room come from outside it, and all three are new enough to
+be worth naming here.
+
+- **`Store.Tick` asks the player registry about every room's host**, through
+  the lookup installed by `WatchHosts` in `cmd/coordinator/main.go`. It runs
+  under the store's lock, so it must stay a lookup and nothing more.
+- **A host in a match locks their room** for as long as Dota is running on
+  their PC. Nobody presses anything - the host is in the game, not in the app.
+  The room's stored `Status` does not change; `view()` reports
+  `locked_in_game`, and `Room.Admits()` and `Room.Move` enforce it. The one
+  override is a host who explicitly reopened the room to new players, which
+  lets people **in** and still does not let seats **move**.
+- **Leaving and vanishing are different events.** `Store.Leave` closes the
+  room outright when the leaver is its host; `Room.SeeHost` starts the D40
+  grace when the host simply stops answering. `Room.Leave` on its own is the
+  second of the two - it vacates a seat and starts the timer - so anything
+  new that wants the first must call `Close`.
+
+The trap: `HostGraceUntil` does double duty. It is the countdown while a room
+is alive and the linger clock once it is dead, which is why `Close` sets it
+rather than leaving it zero. A closed room with a zero grace is swept out of
+the store on the next tick, before anybody has read why it ended.
+
 ## Where to be careful
 
 0. **Ship it.** `./scripts/ship.sh` after the commit. Deploying the server
@@ -404,6 +429,10 @@ before it finishes.
    refuses those and `dota.ValidateArgs` refuses them again. A player who
    could type `+connect` could point their own client somewhere else and then
    report the room as broken (D65).
-8. **Never commit secrets.** `github_token_admin.txt` and
+8. **Never assume a room notices anything about its host.** It cannot see
+   whether they are online or in a match; both arrive through `SeeHost`, from
+   the registry, on a tick. A rule that depends on either belongs beside those
+   two, not in the handler that happens to have noticed (D69, D70).
+9. **Never commit secrets.** `github_token_admin.txt` and
    `mobinhost_server_1.txt` are gitignored; the download key and API token
    live only on the server. Verify before every commit.

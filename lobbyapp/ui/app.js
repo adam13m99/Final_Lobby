@@ -199,6 +199,26 @@ function hueOf(id) {
   return h < 100 ? h : h + 70;
 }
 
+// redraw says whether a panel has to be rebuilt at all (D71).
+//
+// Every list on this screen used to be emptied and refilled on every poll,
+// whether or not anything in it had changed. Two seconds is short enough that
+// it was visible, and it is what the owner reported as the app "glitching": a
+// scrolled list jumped back to the top under the reader, a hovered row lost
+// its highlight, and a click that arrived on the wrong side of a rebuild
+// landed on an element that no longer existed.
+//
+// The chat log has had this guard since it was written, for exactly this
+// reason, and the comment there says so. Everything else has it now. The
+// signature has to name every input the panel draws from, including the ones
+// that are not in its argument - which is why several of them reach into
+// state for the player's own id or for whether this PC is connected.
+function redraw(node, sig) {
+  if (node.dataset.sig === sig) return false;
+  node.dataset.sig = sig;
+  return true;
+}
+
 function avatar(name, id, cls) {
   const e = el("div", "avatar" + (cls ? " " + cls : ""), initials(name));
   // Your own face is always the same green, whoever you are (D68). Everybody
@@ -316,6 +336,7 @@ function renderUpdate(u) {
 // only followed if the server said it was http or https.
 function renderAds(ads) {
   const box = $("banners");
+  if (!redraw(box, JSON.stringify(ads))) return;
   box.textContent = "";
   for (const a of ads) {
     const card = el("div", "ad");
@@ -424,6 +445,11 @@ function renderRooms(rooms) {
   const shown = sortRooms(visible(rooms));
   $("roomcount").textContent = t("lobby.shown", { shown: shown.length, all: rooms.length });
 
+  // Which room is mine and who I am both change what a row looks like, and
+  // neither of them is in the list itself.
+  if (!redraw(box, JSON.stringify([shown, rooms.length, state.room_id, state.player_id]))) {
+    return;
+  }
   box.textContent = "";
   if (!shown.length) {
     // An empty list says so in the middle of its own space, and offers the
@@ -578,12 +604,16 @@ function joinRoom(r) {
 }
 
 function statusClass(status) {
+  if (status === "host_away") return "badge locked";
   if (status === "locked_in_game" || status === "closed") return "badge locked";
   if (status === "open_to_new_players") return "badge replace";
   return "badge";
 }
 
 function statusLabel(status) {
+  // Two statuses the room does not store: the coordinator derives them from
+  // what the host's own machine is doing (D69, D70).
+  if (status === "host_away") return t("room.status.away");
   if (status === "locked_in_game") return t("room.status.locked");
   if (status === "open_to_new_players") return t("room.status.replacing");
   if (status === "closed") return t("room.status.closed");
@@ -597,8 +627,11 @@ function statusBadge(status) {
 // ------------------------------------------------------------------ room
 
 function renderRoom(r) {
-  $("room-face").textContent = "";
-  $("room-face").appendChild(avatar(r.host_nick, r.host_id));
+  const face = $("room-face");
+  if (redraw(face, JSON.stringify([r.host_id, r.host_nick]))) {
+    face.textContent = "";
+    face.appendChild(avatar(r.host_nick, r.host_id));
+  }
   $("room-name").textContent = r.name;
 
   // Who is hosting, how full it is and what the addresses are all moved into
@@ -630,9 +663,17 @@ function renderRoom(r) {
   // about a room: which five you would be joining. The watching seats belong
   // to a side too now (D68): the first two to Radiant, the last two to Dire.
   const box = $("slots");
-  box.textContent = "";
-  box.appendChild(teamColumn("radiant", "room.team.radiant", 0, seated, watching, iAmHost));
-  box.appendChild(teamColumn("dire", "room.team.dire", 5, seated, watching, iAmHost));
+  // Twenty seat cards rebuilt every two seconds is the worst of these: it is
+  // the thing under the pointer while somebody is choosing where to sit. Who
+  // is in them, who I am, and whether the room will accept a seat change at
+  // all are the whole of what a seat draws from.
+  const sig = JSON.stringify([r.members || [], r.status, r.host_id,
+    state.player_id, iAmHost]);
+  if (redraw(box, sig)) {
+    box.textContent = "";
+    box.appendChild(teamColumn("radiant", "room.team.radiant", 0, seated, watching, iAmHost));
+    box.appendChild(teamColumn("dire", "room.team.dire", 5, seated, watching, iAmHost));
+  }
 
   drawStats(r);
   drawAction(r);
@@ -647,6 +688,10 @@ function renderRoom(r) {
 // "10.87.0.7 · 10.87.0.2 · 37 ms" with nothing saying which was which.
 function drawStats(r) {
   const box = $("roomstats");
+  // Four of the five cells come from this PC rather than from the room.
+  const sig = JSON.stringify([r.host_nick, r.seats, state.virtual_ip,
+    state.host_ip, state.connected, state.tunnel, state.relay_ms, state.is_host]);
+  if (!redraw(box, sig)) return;
   box.textContent = "";
 
   const cell = (labelKey, fill) => {
@@ -726,9 +771,12 @@ function drawAction(r) {
     off = true; why = t("room.go.needseat");
   } else if (watching) {
     off = true; why = t("room.go.watching");
-  } else if (r.status === "locked_in_game" && !state.connected) {
-    off = true; why = t("room.go.locked");
   }
+  // A locked room does not stop the nine people already seated in it from
+  // starting Dota, and that is the whole flow: the host presses Create Game,
+  // the room locks because the host is now in a match (D69), and everybody
+  // else presses Join Game. Locking decides who may come in, and they are
+  // already in.
 
   b.textContent = t(key);
   b.disabled = off;
@@ -809,14 +857,24 @@ function segmentValue(id) {
 // needs when the thing they pressed did not work.
 function drawNetBanner() {
   const e = $("netbanner");
-  if (!state.connect_error) {
-    e.hidden = true;
-    e.textContent = "";
+  if (state.connect_error) {
+    e.hidden = false;
+    e.className = "netbanner bad";
+    e.textContent = t("net.failed", { error: state.connect_error });
     return;
   }
-  e.hidden = false;
-  e.className = "netbanner bad";
-  e.textContent = t("net.failed", { error: state.connect_error });
+  // The room is frozen while the host is in a match (D69), and saying so is
+  // the difference between a rule and a screen that has stopped responding.
+  // Second to a failure, which is the more urgent of the two.
+  const r = state.room;
+  if (r && r.host_in_game) {
+    e.hidden = false;
+    e.className = "netbanner";
+    e.textContent = t("room.locked.note");
+    return;
+  }
+  e.hidden = true;
+  e.textContent = "";
 }
 
 // teamColumn draws one side: a heading in that side's colour, how many of
@@ -971,6 +1029,11 @@ function seatPing(member) {
 // presence made the reader work that out for themselves every time.
 function renderFriends(list, why) {
   const box = $("friendlist");
+  // An invitation names a room, and the name comes from the lobby list rather
+  // than from the invitation, so the rooms belong in the signature too.
+  const sig = JSON.stringify([list, why, state.accounts, state.signed_in,
+    (state.rooms || []).map((r) => [r.id, r.name])]);
+  if (!redraw(box, sig)) return;
   box.textContent = "";
 
   if (!list) {
@@ -1309,6 +1372,7 @@ document.addEventListener("keydown", armAudio, { once: true });
 
 function drawTabs() {
   const strip = $("tabstrip");
+  if (!redraw(strip, JSON.stringify([dmTabs, chatTab]))) return;
   // The three fixed tabs live in the markup; only the conversations are
   // drawn, so a redraw every two seconds cannot lose a tab's own state.
   for (const gone of strip.querySelectorAll(".chattab.dm")) gone.remove();
@@ -1524,6 +1588,7 @@ function renderDiag() {
   if (!checks) return;
 
   const box = $("diaglist");
+  if (!redraw(box, JSON.stringify([checks, state.diag_at]))) return;
   box.textContent = "";
   for (const c of checks) {
     const row = el("div", "check " + (c.ok ? "ok" : "bad"));
@@ -1586,6 +1651,7 @@ function renderMod(s) {
 // end it, or hand it to somebody else already in it.
 function renderModRooms(rooms) {
   const box = $("mod-rooms");
+  if (!redraw(box, JSON.stringify(rooms))) return;
   box.textContent = "";
   if (!rooms.length) {
     box.appendChild(el("p", "muted pad", t("mod.rooms.none")));
@@ -1634,6 +1700,7 @@ function renderModRooms(rooms) {
 // can see what everybody else is seeing before adding to it.
 function renderModBanners(ads) {
   const box = $("mod-bannerlist");
+  if (!redraw(box, JSON.stringify(ads))) return;
   box.textContent = "";
   if (!ads.length) {
     box.appendChild(el("p", "muted pad", t("mod.banners.none")));
@@ -1653,6 +1720,7 @@ function renderModBanners(ads) {
 // renderStaff is drawn for the head admin alone (D47).
 function renderStaff(staff) {
   const box = $("mod-staff");
+  if (!redraw(box, JSON.stringify(staff))) return;
   box.textContent = "";
   for (const m of staff) {
     const row = el("div", "logrow");

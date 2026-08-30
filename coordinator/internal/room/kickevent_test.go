@@ -77,7 +77,7 @@ func TestRoomIDsAreNeverReused(t *testing.T) {
 			t.Fatalf("room ID %s was handed out twice", r.ID)
 		}
 		seen[r.ID] = true
-		if err := s.Leave(r.ID, "host", when()); err != nil {
+		if _, err := s.Leave(r.ID, "host", when()); err != nil {
 			t.Fatal(err)
 		}
 		s.Tick(when().Add(2 * HostGracePeriod))

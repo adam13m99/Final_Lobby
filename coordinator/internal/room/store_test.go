@@ -80,12 +80,18 @@ func TestListHidesClosedRooms(t *testing.T) {
 	}
 }
 
+// A host who stopped answering is the case the grace period was written for
+// (D40, D70). Nobody pressed anything: the store notices on its own tick,
+// starts the countdown, and reports the closure once when it expires.
 func TestTickReportsRoomsThatJustClosed(t *testing.T) {
 	s := room.NewStore()
 	_, m, _ := s.Create("h1", "A", t0)
 	_, _ = s.Join(m.RoomID, room.Anyone("p2"), t0)
-	_ = s.Leave(m.RoomID, "h1", t0)
+	s.WatchHosts(func(string) room.HostFacts { return room.HostFacts{} })
 
+	if closed := s.Tick(t0.Add(time.Second)); len(closed) != 0 {
+		t.Fatal("room closed the instant its host went quiet")
+	}
 	if closed := s.Tick(t0.Add(time.Minute)); len(closed) != 0 {
 		t.Fatal("room closed before the grace period expired")
 	}
@@ -103,7 +109,7 @@ func TestTickReportsRoomsThatJustClosed(t *testing.T) {
 func TestClosedRoomIndexIsReused(t *testing.T) {
 	s := room.NewStore()
 	_, first, _ := s.Create("h1", "A", t0)
-	_ = s.Leave(first.RoomID, "h1", t0)
+	_, _ = s.Leave(first.RoomID, "h1", t0)
 	s.Tick(t0.Add(3 * time.Minute))
 	s.Tick(t0.Add(30 * time.Minute)) // past the linger window
 
@@ -166,7 +172,7 @@ func TestMembershipRefusesOutsiders(t *testing.T) {
 	}
 
 	// A player who left must not keep their address.
-	_ = s.Leave(host.RoomID, "h1", t0)
+	_, _ = s.Leave(host.RoomID, "h1", t0)
 	if _, err := s.Membership(host.RoomID, "h1"); !errors.Is(err, room.ErrNotMember) {
 		t.Fatalf("a departed player kept their membership: %v", err)
 	}
@@ -305,5 +311,135 @@ func TestTheHostTakesTheRoomAddressWithThem(t *testing.T) {
 	if again.VirtualIP != mate.VirtualIP {
 		t.Errorf("somebody else's move changed this player's own address from %s to %s",
 			mate.VirtualIP, again.VirtualIP)
+	}
+}
+
+
+// --- the host, watched rather than asked (D69, D70) ----------------------
+
+// The bug the owner reported: they left a room and it was still in the lobby,
+// still open, and they could walk back into it as its host. Leaving on
+// purpose is not the same event as disappearing, and only the second one is
+// what the grace period exists for.
+func TestAHostWhoLeavesClosesTheRoomThereAndThen(t *testing.T) {
+	s := room.NewStore()
+	_, m, _ := s.Create("h1", "A", t0)
+	_, _ = s.Join(m.RoomID, room.Anyone("p2"), t0)
+
+	closed, err := s.Leave(m.RoomID, "h1", t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !closed {
+		t.Fatal("leaving as host did not close the room")
+	}
+	if rooms := s.List(); len(rooms) != 0 {
+		t.Fatalf("the room is still in the lobby: %v", rooms)
+	}
+	if _, err := s.Join(m.RoomID, room.Anyone("h1"), t0.Add(time.Second)); err == nil {
+		t.Fatal("the host walked back into the room they closed")
+	}
+}
+
+// Somebody who is not the host leaves an ordinary seat and nothing else
+// happens - the room and the other nine people are untouched.
+func TestAPlayerLeavingDoesNotCloseTheRoom(t *testing.T) {
+	s := room.NewStore()
+	_, m, _ := s.Create("h1", "A", t0)
+	_, _ = s.Join(m.RoomID, room.Anyone("p2"), t0)
+
+	closed, err := s.Leave(m.RoomID, "p2", t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if closed {
+		t.Fatal("an ordinary player leaving closed the room")
+	}
+	if len(s.List()) != 1 {
+		t.Fatal("the room went away with them")
+	}
+}
+
+// The other half: a host who goes quiet starts the countdown, and coming back
+// inside it saves the room. This is the crash, the dropped line, the laptop
+// that went to sleep.
+func TestAHostWhoComesBackInsideTheGraceSavesTheRoom(t *testing.T) {
+	s := room.NewStore()
+	_, m, _ := s.Create("h1", "A", t0)
+
+	here := false
+	s.WatchHosts(func(string) room.HostFacts { return room.HostFacts{Online: here} })
+
+	s.Tick(t0.Add(time.Second))
+	r, _ := s.Get(m.RoomID)
+	if !r.HostAway() {
+		t.Fatal("nothing noticed the host had gone")
+	}
+
+	here = true
+	s.Tick(t0.Add(30 * time.Second))
+	r, _ = s.Get(m.RoomID)
+	if r.HostAway() {
+		t.Fatal("the host came back and the room kept counting down")
+	}
+	if closed := s.Tick(t0.Add(10 * time.Minute)); len(closed) != 0 {
+		t.Fatal("the room closed under a host who was sitting in it")
+	}
+}
+
+// While the host is in a match nobody may change seat, and nobody new may
+// walk in - whether or not the host remembered to press Lock (D69).
+func TestAHostInAMatchLocksTheRoom(t *testing.T) {
+	s := room.NewStore()
+	_, m, _ := s.Create("h1", "A", t0)
+	_, _ = s.Join(m.RoomID, room.Anyone("p2"), t0)
+
+	playing := false
+	s.WatchHosts(func(string) room.HostFacts {
+		return room.HostFacts{Online: true, InGame: playing}
+	})
+	s.Tick(t0.Add(time.Second))
+	if err := s.Move(m.RoomID, "p2", 7); err != nil {
+		t.Fatalf("a seat move was refused before the match started: %v", err)
+	}
+
+	playing = true
+	s.Tick(t0.Add(2 * time.Second))
+	if err := s.Move(m.RoomID, "p2", 8); !errors.Is(err, room.ErrRoomLocked) {
+		t.Fatalf("moved seat during the host's match: %v", err)
+	}
+	if _, err := s.Join(m.RoomID, room.Anyone("p3"), t0.Add(3*time.Second)); !errors.Is(err, room.ErrRoomLocked) {
+		t.Fatalf("joined a room whose host was in a match: %v", err)
+	}
+
+	// And it lets go again when the match ends. The room outlives the game
+	// (D40): the ten who just played are the ten who want to play again.
+	playing = false
+	s.Tick(t0.Add(time.Minute))
+	if err := s.Move(m.RoomID, "p2", 8); err != nil {
+		t.Fatalf("still locked after the match ended: %v", err)
+	}
+}
+
+// The host's own control still wins where it is meant to. Reopening a running
+// match to new players is how an abandoned slot gets refilled, and it would
+// be useless if being in the match cancelled it.
+func TestReopeningOverridesTheAutomaticLock(t *testing.T) {
+	s := room.NewStore()
+	_, m, _ := s.Create("h1", "A", t0)
+	s.WatchHosts(func(string) room.HostFacts {
+		return room.HostFacts{Online: true, InGame: true}
+	})
+	s.Tick(t0.Add(time.Second))
+
+	if err := s.SetStatus(m.RoomID, "h1", room.StatusOpenToNew, t0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Join(m.RoomID, room.Anyone("p2"), t0.Add(2*time.Second)); err != nil {
+		t.Fatalf("the host reopened the room and nobody could join: %v", err)
+	}
+	// Seats still do not move: the match is running either way.
+	if err := s.Move(m.RoomID, "p2", 9); !errors.Is(err, room.ErrRoomLocked) {
+		t.Fatalf("moved seat mid-match in a reopened room: %v", err)
 	}
 }

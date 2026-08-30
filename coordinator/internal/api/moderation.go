@@ -469,9 +469,16 @@ func (s *Server) evict(playerID string) {
 		if _, _, seated := rm.SlotOf(playerID); !seated {
 			continue
 		}
-		if err := s.rooms.Leave(rm.ID, playerID, s.now()); err != nil {
+		closed, err := s.rooms.Leave(rm.ID, playerID, s.now())
+		if err != nil {
 			s.log.Error("could not remove a sanctioned player from a room",
 				"room", rm.ID, "player", playerID, "err", err)
+			continue
+		}
+		// Sanctioning a host ends their room (D70). Everybody who was playing
+		// in it loses its network, not just the person who was banned.
+		if closed {
+			s.tickets.RevokeRoom(rm.ID)
 			continue
 		}
 		s.tickets.RevokePlayerRoom(playerID, rm.ID)

@@ -520,6 +520,21 @@ expect "and the host can open it again"           '"ok":true'    "$UNLOCK"
 GONE=$(callb POST /api/rooms/leave '{}')
 expect "the second player leaves again"           '"ok":true'    "$GONE"
 
+say ""
+say "=== the host leaving ==="
+# The owner's report, D70: they left a room and it was still sitting in the
+# lobby afterwards, open, and they could walk back into it as its host. The
+# grace period is for a host who disappeared, not for one who pressed Leave.
+HOSTOUT=$(call POST /api/rooms/leave '{}')
+expect "the host can leave their own room"        '"ok":true'    "$HOSTOUT"
+
+sleep 3
+LOBBY=$(call GET "/api/state")
+refuse "and the room goes with them"              "$ROOM_ID"     "$LOBBY"
+
+BACKIN=$(call POST /api/rooms/join "{\"room_id\":\"$ROOM_ID\"}")
+refuse "and nobody can walk back into it"         '"ok":true'    "$BACKIN"
+
 # Left until here because signing out forgets which room this installation
 # was in, and the door checks above need it to still know.
 SIGNOUT=$(call POST /api/auth/signout '{}')

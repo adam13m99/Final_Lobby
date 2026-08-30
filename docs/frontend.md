@@ -354,6 +354,25 @@ an obvious reading would put them:
   `ipam.ObserverSlots` must agree; the coordinator is the one that enforces
   it.
 
+## What a room says about its host
+
+Two of a room's statuses are not stored anywhere - the coordinator derives
+them from what the host's own machine is doing (D69, D70) - and the page reads
+them like any other:
+
+- **`locked_in_game`** now also means "the host is in a match", with
+  `host_in_game` saying which of the two it is. Seats stop being clickable
+  (`canTakeSeat` already refused a locked room) and `drawNetBanner` says so in
+  words, because a screen that has silently stopped responding to clicks is
+  indistinguishable from a broken one.
+- **`host_away`** is a room counting down to closure because its host stopped
+  answering. It is still joinable, and that is deliberate: the host coming
+  back is a join.
+
+The thing not to reintroduce: the room's one button must **not** be disabled
+because the room is locked. The nine people already seated in it are exactly
+the people who now need to press Join Game. Locking decides who may come in.
+
 ## Notifications live in the shell, not the page
 
 `desktop/src/main.rs` polls `/api/state` every five seconds on its own thread
@@ -466,5 +485,12 @@ WIDE=1366 TALL=768 bash scripts/preview.sh small
     it.** State arrives every couple of seconds; a field rewritten mid-word is
     a field that cannot be edited. `#set-opts` is the pattern: write it only
     when `document.activeElement` is something else.
-12. **Never leave a change on this PC.** `./scripts/ship.sh` after the commit
+12. **Never rebuild a panel that has not changed.** `redraw(node, sig)` is
+    the guard and every list on the screen uses it; a container emptied and
+    refilled twice a second loses its scroll position, its hover and the
+    click that was landing on it (D71). Its companion rule is the more
+    dangerous one: **the signature must name every input the panel draws
+    from**, including the ones that are not in its argument. A signature that
+    misses one is a panel that silently stops updating.
+13. **Never leave a change on this PC.** `./scripts/ship.sh` after the commit
     (D62). The owner tests on the live product.

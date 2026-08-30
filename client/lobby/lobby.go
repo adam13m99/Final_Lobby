@@ -48,6 +48,17 @@ type RoomView struct {
 	Joinable bool     `json:"joinable"`
 	Players  []string `json:"players"`
 
+	// The two statuses the coordinator derives rather than stores, from what
+	// the host's own machine is doing (D69, D70). HostInGame is a match
+	// running on the host's PC, which locks the room whether or not the host
+	// remembered to press anything; HostAway is a host who has stopped
+	// answering, and a room that is counting down to closure because of it.
+	//
+	// Status already carries both - it reads "locked_in_game" or
+	// "host_away" - and these say which of the two it is.
+	HostAway   bool `json:"host_away"`
+	HostInGame bool `json:"host_in_game"`
+
 	// Description is the host's own sentence about the room (D42). It is
 	// somebody's free text shown to strangers: render it as text, never as
 	// markup.

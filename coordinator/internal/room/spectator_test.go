@@ -222,13 +222,13 @@ func TestLeavingReleasesEverySeatKind(t *testing.T) {
 		if _, err := join(r.ID, "somebody", when()); err != nil {
 			t.Fatal(err)
 		}
-		if err := s.Leave(r.ID, "somebody", when()); err != nil {
+		if _, err := s.Leave(r.ID, "somebody", when()); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := join(r.ID, "somebody", when()); err != nil {
 			t.Fatalf("seat was not released: %v", err)
 		}
-		if err := s.Leave(r.ID, "somebody", when()); err != nil {
+		if _, err := s.Leave(r.ID, "somebody", when()); err != nil {
 			t.Fatal(err)
 		}
 	}

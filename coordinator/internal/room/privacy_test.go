@@ -271,9 +271,9 @@ func TestTheHostGetsBackIntoTheirOwnRoom(t *testing.T) {
 	if err := s.SetStatus(r.ID, "host", StatusLocked, when()); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Leave(r.ID, "host", when()); err != nil {
-		t.Fatal(err)
-	}
+	// The store's Leave is the host deciding to go, which ends the room
+	// (D70). A crash is the room losing them, which is this.
+	s.rooms[r.ID].Leave("host", when())
 
 	back := when().Add(30 * time.Second)
 	if _, err := s.Join(r.ID, Anyone("host"), back); err != nil {

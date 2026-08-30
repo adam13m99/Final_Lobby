@@ -54,6 +54,31 @@ type Store struct {
 	// written down. It runs while the store's lock is held, so it must be
 	// quick and must not call back into the store.
 	onKick func(KickEvent)
+
+	// hosts, if set, answers what the coordinator knows about a host that a
+	// room cannot see for itself (D69, D70). Like onKick it runs under the
+	// store's lock, so it must be a lookup and nothing more.
+	hosts func(hostID string) HostFacts
+}
+
+// HostFacts is the coordinator's view of one room's host.
+//
+// Online is whether they have been heard from recently enough to still count
+// as present; InGame is whether their own service says Dota is running. Both
+// are things only the player registry knows, and neither can be inferred from
+// room state - which is why they are pushed in rather than looked up.
+type HostFacts struct {
+	Online bool
+	InGame bool
+}
+
+// WatchHosts installs the lookup that Tick uses to observe every host. Nil
+// disables it, which is what a store under test does when it wants to drive
+// the timers by hand.
+func (s *Store) WatchHosts(fn func(hostID string) HostFacts) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.hosts = fn
 }
 
 func NewStore() *Store {
@@ -199,16 +224,31 @@ func (s *Store) JoinAdmin(roomID, playerID string, now time.Time) (Membership, e
 	return adminMembershipFor(r, seat)
 }
 
-// Leave vacates a player's slot.
-func (s *Store) Leave(roomID, playerID string, now time.Time) error {
+// Leave vacates a player's slot. It reports whether that closed the room,
+// which it does when the person leaving was the host (D70): everybody else in
+// there has to lose their network access, and the caller is the only one that
+// can revoke it.
+func (s *Store) Leave(roomID, playerID string, now time.Time) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	r, ok := s.rooms[roomID]
 	if !ok {
-		return ErrNotFound
+		return false, ErrNotFound
+	}
+	if r.Status == StatusClosed {
+		r.Leave(playerID, now)
+		return false, nil
 	}
 	r.Leave(playerID, now)
-	return nil
+	// Somebody pressing Leave room is a decision, and when the person making
+	// it is the host the decision is to end the room (D70). Everything else -
+	// a crash, a dropped line - reaches a room through SeeHost instead, and
+	// gets the grace period D40 describes.
+	if playerID == r.HostID {
+		r.Close(now)
+		return true, nil
+	}
+	return false, nil
 }
 
 // Move changes which playing slot a player sits in, which is how a player
@@ -294,6 +334,14 @@ func (s *Store) Tick(now time.Time) []string {
 	var closed []string
 	for id, r := range s.rooms {
 		was := r.Status
+		// What the coordinator can see and the room cannot: whether the host
+		// is still there, and whether they are in a match (D69, D70). This
+		// runs before the timers, so a host who came back inside the window
+		// stops the countdown on the same tick that notices them.
+		if s.hosts != nil {
+			f := s.hosts(r.HostID)
+			r.SeeHost(f.Online, f.InGame, now)
+		}
 		r.Tick(now)
 		if r.Status == StatusClosed && was != StatusClosed {
 			closed = append(closed, id)

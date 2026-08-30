@@ -1757,3 +1757,133 @@ thing is leaving the room, which has its own button and says so.
 four watching seats and a footer come to about thirty pixels more than a
 1366x768 laptop has, and thirty pixels is enough to hide Leave room
 completely. The boards scroll under it.
+
+---
+
+## D69 - a host in a match locks their own room, without pressing anything
+
+**2026-08-30.** From the owner's live test: *"there should be statuses that
+checks the host, if he is in game then users cant change places and they can
+only leave the room."*
+
+The room already had the right status. `locked_in_game` has existed since T5,
+it stops new players joining and it stops seats moving, and the product rule
+behind it is the owner's own. What it did not have was anybody to press it.
+**The host is the one person in the room who cannot**: at the moment it
+matters they are in Dota, not in this window.
+
+So the coordinator observes it instead. Every client's service already reports
+whether Dota is running on its PC - it launched the game and watches its log -
+and the registry has stored that since D41 for the friends rail. `Store.Tick`
+now folds the host's own flag into their room on every tick, and a room whose
+host is in a match is locked for as long as that is true.
+
+Three consequences, all deliberate:
+
+- **Seats do not move while the host is playing**, for anybody, including the
+  host. Changing team halfway through a match puts a player on the wrong side
+  inside Dota, and nothing here can undo that.
+- **Nobody new joins**, unless the host explicitly reopened the room. That
+  control - `open_to_new_players` - is for refilling a slot somebody
+  abandoned mid-match, and it would be useless if being in the match
+  cancelled it. It overrides the automatic lock for joining and not for
+  moving.
+- **It lets go on its own** when the match ends. The room outlives the game
+  (D40): the ten people who just played are the ten who want to play again.
+
+The status is derived in the view rather than written into the room, so a room
+that is `open` and whose host is in a match reads as `locked_in_game` to every
+client at once - the lobby list, the room screen, the CLI - and reverts with
+no second write to undo.
+
+**What this fixed on the client, and it was not the obvious half.** The room's
+one button used to refuse to work in a locked room for anybody who was not yet
+on its network. That was written when the only way to lock a room was the host
+pressing Lock, and it made the ordinary flow impossible the moment locking
+became automatic: the host presses Create Game, the room locks because they
+are now in a match, and the nine people who were about to press Join Game find
+the button disabled. Locking decides who may **come in**. They are already in.
+
+---
+
+## D70 - a host who leaves closes the room; a host who vanishes gets the minute
+
+**2026-08-30.** From the same live test: *"i left a room but still there was
+the room left on the lobby and i could join it as the host again."*
+
+Exactly right, and it was two bugs wearing each other's clothes.
+
+D40 says a room closes a minute after its host goes, and that minute is the
+host's chance to reconnect and save the match. The implementation started that
+timer in one place only: `Room.Leave`, which is what the Leave room button
+calls. So the two cases were precisely the wrong way round.
+
+- **A host who pressed Leave** got the grace period. Their room stayed in the
+  lobby for a minute, labelled open, joinable, and they could walk straight
+  back into it as its host. That is what the owner saw.
+- **A host who crashed** got nothing at all. Nothing calls `Leave` when a
+  machine goes away, so the timer never started, and the room stayed in the
+  lobby for as long as the coordinator ran. The case D40 was actually written
+  for was the case that never worked.
+
+They are different events and they are separated now.
+
+**Leaving is a decision.** `Store.Leave` closes the room there and then when
+the person leaving is its host: it goes out of the lobby immediately, every
+ticket in it is revoked, and its chat is dropped. Nobody is left staring at a
+room whose host has told them they are done.
+
+**Disappearing is not.** `Store.Tick` asks the player registry, once per tick
+and per room, whether the host has been heard from inside the presence window.
+A host who has not starts the minute; a host who comes back inside it stops
+it, and their seat was never vacated, so there is nothing to reclaim. Ninety
+seconds of total silence ends a room - thirty to be counted absent, sixty of
+grace - which is well inside the sticky-address window, so a host who returns
+keeps their address and the room never noticed.
+
+**A room in its grace window says so.** It reads `host_away` in the lobby and
+in the room screen, drawn as "Host away". It stays joinable on purpose: the
+host coming back **is** a join, and it is the only thing that saves the room.
+
+The cost is that an admin can no longer rescue a room whose host left on
+purpose - `SetHost` refuses a closed room. That is the right way round. The
+escape hatch exists for a host who disappeared, and that case still has its
+minute.
+
+---
+
+## D71 - the page only redraws what changed
+
+**2026-08-30.** From the same live test: *"whenever i type something in chat,
+the app glitches even when i change places in the room."*
+
+Every list on the screen was emptied and refilled on every poll - the lobby,
+the friends rail, the twenty seat cards, the five stat cells, the chat tab
+strip, the announcement strip, the moderator's three tables - whether or not
+anything in them had changed. Twice a second, forever.
+
+Two seconds is short enough to see. A scrolled list jumped back to the top
+under the reader, because emptying a tall container clamps its scroll offset
+and refilling it does not put it back. A hovered row lost its highlight and
+took it again. And a click that arrived on the wrong side of a rebuild landed
+on an element that had ceased to exist half a frame earlier, which is why it
+looked worst exactly when somebody was doing two things at once: typing into
+the chat while moving seat.
+
+The chat log has never had this problem, because `drawLog` has compared a
+signature since it was written and the comment above it says why. That guard
+is now a two-line function every panel uses.
+
+The rule it comes with: **the signature must name every input the panel draws
+from**, not just the argument it was handed. A seat card is drawn from the
+room's members, but also from who this player is and from whether the room
+will accept a seat change at all; a stat cell mostly from this PC rather than
+from the room. A signature that misses one of those is a panel that stops
+updating, which is a worse bug than the one being fixed and a much quieter
+one.
+
+Not everything is guarded, and the line is deliberate: a panel that sets
+`textContent` on an element it did not create is left alone. Writing the same
+string twice is invisible and costs nothing. It is destroying and rebuilding
+subtrees that people are pointing at, scrolling and typing into that had to
+stop.

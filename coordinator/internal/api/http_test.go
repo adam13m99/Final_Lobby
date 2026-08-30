@@ -367,3 +367,82 @@ func TestHostCanManageTheirRoomInQuickSuccession(t *testing.T) {
 		}
 	}
 }
+
+// --- the host, watched rather than asked (D69, D70) ----------------------
+
+// The owner's report: they left a room, and it was still sitting in the lobby
+// afterwards, still open, and they could join it again as its host.
+func TestAHostLeavingTakesTheRoomWithThem(t *testing.T) {
+	h := newHarness(t)
+	_, host := h.post(t, "/v1/rooms", map[string]string{"player_id": "alice"})
+	roomID := host["room_id"].(string)
+	_, bob := h.post(t, "/v1/rooms/"+roomID+"/join", map[string]string{"player_id": "bob"})
+
+	h.post(t, "/v1/rooms/"+roomID+"/leave", map[string]string{"player_id": "alice"})
+
+	_, list := h.get(t, "/v1/rooms")
+	if rooms, _ := list["rooms"].([]any); len(rooms) != 0 {
+		t.Fatalf("the room outlived its host in the lobby: %v", rooms)
+	}
+	if code, _ := h.post(t, "/v1/rooms/"+roomID+"/join",
+		map[string]string{"player_id": "alice"}); code == http.StatusOK {
+		t.Fatal("the host walked back into the room they had just left")
+	}
+	// And everybody who was in it loses the room's network with it, not just
+	// the person who left.
+	if code, _ := h.post(t, "/internal/validate-ticket",
+		map[string]string{"ticket": bob["ticket"].(string)}); code != http.StatusForbidden {
+		t.Fatal("a player kept network access to a room that had closed")
+	}
+}
+
+// A host who stopped answering is the other case, and it is the one D40's
+// grace period was written for: the room says so and keeps counting.
+func TestTheLobbySaysWhenAHostHasGoneQuiet(t *testing.T) {
+	h := newHarness(t)
+	_, host := h.post(t, "/v1/rooms", map[string]string{"player_id": "alice"})
+	roomID := host["room_id"].(string)
+	h.post(t, "/v1/rooms/"+roomID+"/join", map[string]string{"player_id": "bob"})
+
+	h.rooms.WatchHosts(func(string) room.HostFacts { return room.HostFacts{} })
+	h.rooms.Tick(h.now.Add(time.Second))
+
+	_, list := h.get(t, "/v1/rooms")
+	rooms, _ := list["rooms"].([]any)
+	if len(rooms) != 1 {
+		t.Fatalf("the room vanished the moment its host went quiet: %v", rooms)
+	}
+	got := rooms[0].(map[string]any)
+	if got["status"] != "host_away" || got["host_away"] != true {
+		t.Fatalf("status = %v, host_away = %v", got["status"], got["host_away"])
+	}
+}
+
+// A host in a match locks their own room without having to remember to press
+// anything - they are in Dota, not in this window.
+func TestTheLobbySaysWhenTheHostIsInAMatch(t *testing.T) {
+	h := newHarness(t)
+	_, host := h.post(t, "/v1/rooms", map[string]string{"player_id": "alice"})
+	roomID := host["room_id"].(string)
+	h.post(t, "/v1/rooms/"+roomID+"/join", map[string]string{"player_id": "bob"})
+
+	h.rooms.WatchHosts(func(string) room.HostFacts {
+		return room.HostFacts{Online: true, InGame: true}
+	})
+	h.rooms.Tick(h.now.Add(time.Second))
+
+	_, list := h.get(t, "/v1/rooms")
+	got := list["rooms"].([]any)[0].(map[string]any)
+	if got["status"] != "locked_in_game" || got["host_in_game"] != true {
+		t.Fatalf("status = %v, host_in_game = %v", got["status"], got["host_in_game"])
+	}
+	if got["joinable"] != false {
+		t.Fatal("a room whose host is in a match was offered as joinable")
+	}
+	// The seat move is refused at the coordinator, not merely hidden in the
+	// interface: it is the whole of the rule.
+	if code, _ := h.post(t, "/v1/rooms/"+roomID+"/slot",
+		map[string]any{"player_id": "bob", "slot": 7}); code == http.StatusOK {
+		t.Fatal("a player changed seat while the host was in a match")
+	}
+}

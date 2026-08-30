@@ -322,7 +322,7 @@ h3 em { font-style: normal; text-transform: none; letter-spacing: 0; color: var(
 .meRow {
   position: relative; flex: none;
   display: flex; align-items: center; gap: 10px;
-  padding: 14px 13px; border: 0;
+  padding: 6px 13px 8px; border: 0;
   border-block-end: 1px solid var(--line);
   background: linear-gradient(100deg, var(--accent-soft), transparent 72%);
   color: var(--text); font: inherit; text-align: start;
@@ -952,6 +952,7 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
 #rail {
   grid-area: rail;
   display: flex; flex-direction: column; min-height: 0;
+  padding-block-start: 14px;
   background: var(--head-bg);
   border-inline-start: 1px solid var(--line);
 }
@@ -1028,7 +1029,7 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
 .chatdock {
   grid-area: chat; position: relative;
   display: flex; flex-direction: column;
-  height: 212px; margin: 12px 18px 14px;
+  height: 254px; margin: 12px 18px 14px;
   border-radius: var(--r-lg);
   background: var(--panel); box-shadow: var(--ring-line);
   overflow: hidden; transition: height .16s ease;
