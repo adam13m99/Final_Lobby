@@ -832,7 +832,7 @@ function renderRoom(r) {
 function drawStats(r) {
   const box = $("roomstats");
   // Four of the five cells come from this PC rather than from the room.
-  const sig = JSON.stringify([r.host_nick, r.seats, state.virtual_ip,
+  const sig = JSON.stringify([r.host_nick, r.seats, r.game_mode, state.virtual_ip,
     state.host_ip, state.connected, state.tunnel, !!state.relay_ms, state.is_host]);
   if (!redraw(box, sig)) {
     const pill = box.querySelector(".mspill");
@@ -856,6 +856,11 @@ function drawStats(r) {
     v.appendChild(el("span", "", String(r.seats || 0)));
     v.appendChild(el("span", "faint", t("room.stat.of10")));
   });
+  // What game this is. It sits with the room's own facts rather than with
+  // the addresses below it, because it is the second thing anybody asks
+  // about a lobby after who is in it, and because it was previously visible
+  // to exactly one person: the host, inside a dialog.
+  cell("room.stat.mode", (v) => { v.textContent = modeName(r.game_mode); });
   cell("room.stat.you", (v) => {
     v.textContent = state.virtual_ip || t("status.dash");
   });
@@ -928,9 +933,11 @@ function drawAction(r) {
   b.textContent = t(key);
   b.disabled = off;
   b.title = why;
-  b.onclick = off ? null : () => act(() => api("/api/playnow", {
-    mode: Number($("mode").value), team: myTeam(),
-  }));
+  // No mode here. It used to read the host's own dropdown at the moment of
+  // the click, which meant the room's game mode lived in one person's window
+  // and was decided a fraction of a second before Dota started. It belongs to
+  // the room now (D80), and the app asks the coordinator for it.
+  b.onclick = off ? null : () => act(() => api("/api/playnow", { team: myTeam() }));
 }
 
 // The guide strip: the same three steps, one line, closed by default and
@@ -960,6 +967,19 @@ function setGuide(on) {
 }
 
 
+// modeName turns a Dota game mode number into the words for it.
+//
+// The menu in the markup is the only list: every option carries the mode's
+// number and its string key, so this reads the answer out of the same place
+// the host chose it from rather than keeping a second copy that can drift.
+// The numbers are Valve's own DOTA_GameMode values and reach a real command
+// line, which is why protocol/gamemode and this menu are checked against each
+// other by a test rather than by hand.
+function modeName(id) {
+  const opt = $("mode").querySelector('option[value="' + Number(id || 0) + '"]');
+  return opt ? t(opt.dataset.t) : t("status.dash");
+}
+
 // drawDoor fills the host's door controls from the room.
 //
 // The password is never filled in, because the coordinator never sends it
@@ -976,6 +996,12 @@ function drawDoor(r) {
   $("doorpass").placeholder = r.needs_password
     ? t("door.password.keep") : t("door.password.placeholder");
   $("doornow").textContent = t("door.now", { door: t("door." + door) });
+  // The mode the room is actually playing, not whatever this dropdown was
+  // last left on. A host who opens room settings after somebody else's
+  // change - or after a reconnect - must see the room's answer.
+  if (document.activeElement !== $("mode")) {
+    $("mode").value = String(r.game_mode || 1);
+  }
 }
 
 // A segmented control remembers its answer in the markup: which button
@@ -2374,6 +2400,7 @@ $("createform").onsubmit = (e) => {
         privacy: pass ? "password" : door,
         password: pass,
         min_mmr: Number($("newmmr").value) || 0,
+        game_mode: Number($("newmode").value) || 0,
       });
     } catch (err) {
       $("createerr").textContent = err.message;
@@ -2395,6 +2422,13 @@ $("roomsetclose").onclick = () => $("roomsetgate").classList.add("hidden");
 for (const b of $("door").querySelectorAll("button")) {
   b.onclick = () => segment("door", b.dataset.door);
 }
+
+// Saved the moment it changes, with no Save button beside it. The door below
+// has one because a password is typed and a half-typed password must not be
+// sent; a dropdown has no half-chosen state.
+$("mode").onchange = () => act(() => api("/api/rooms/mode", {
+  game_mode: Number($("mode").value),
+}));
 
 $("doorform").onsubmit = (e) => {
   e.preventDefault();

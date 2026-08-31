@@ -524,5 +524,13 @@ WIDE=1366 TALL=768 bash scripts/preview.sh small
     guard that is never true, which is worse than no guard because it looks
     like one. Drop it with `steady` and paint it into a leaf of its own
     (D73).
-16. **Never leave a change on this PC.** `./scripts/ship.sh` after the commit
+16. **Never let a control decide something the room needs to know.** The game
+    mode was a dropdown in the host's own Room settings, read at the instant
+    they clicked the button, stored nowhere and shown to nobody - so the nine
+    people who joined to play it had no way of finding out, and a reconnect
+    forgot it. If two people need to agree on something, it is the room's and
+    it goes through the coordinator; the control on screen only proposes it
+    (D80). The test for it: could somebody else in this room be surprised by
+    what this widget decided?
+17. **Never leave a change on this PC.** `./scripts/ship.sh` after the commit
     (D62). The owner tests on the live product.

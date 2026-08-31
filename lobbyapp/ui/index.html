@@ -666,6 +666,24 @@
         </div>
       </div>
 
+      <label class="field">
+        <span data-t="create.mode"></span>
+        <select id="newmode">
+          <option value="1" data-t="room.mode.ap"></option>
+          <option value="22" data-t="room.mode.rap"></option>
+          <option value="23" data-t="room.mode.turbo"></option>
+          <option value="2" data-t="room.mode.cm"></option>
+          <option value="8" data-t="room.mode.rcm"></option>
+          <option value="16" data-t="room.mode.cd"></option>
+          <option value="3" data-t="room.mode.rd"></option>
+          <option value="4" data-t="room.mode.sd"></option>
+          <option value="5" data-t="room.mode.ar"></option>
+          <option value="18" data-t="room.mode.abd"></option>
+          <option value="20" data-t="room.mode.ardm"></option>
+          <option value="21" data-t="room.mode.mid1v1"></option>
+        </select>
+      </label>
+
       <div class="twoup">
         <label class="field">
           <span data-t="door.mmr"></span>
@@ -749,16 +767,28 @@
         </div>
       </div>
 
+      <!-- The room's game mode, not this window's. It used to be read only
+           when the host pressed the button and shown to nobody, so the nine
+           people who joined for Captains Mode had no way to know. It is
+           saved the moment it changes and it is in the band above every
+           screen in the room. -->
       <label class="field">
         <span data-t="room.mode"></span>
         <select id="mode">
           <option value="1" data-t="room.mode.ap"></option>
+          <option value="22" data-t="room.mode.rap"></option>
+          <option value="23" data-t="room.mode.turbo"></option>
           <option value="2" data-t="room.mode.cm"></option>
+          <option value="8" data-t="room.mode.rcm"></option>
+          <option value="16" data-t="room.mode.cd"></option>
           <option value="3" data-t="room.mode.rd"></option>
           <option value="4" data-t="room.mode.sd"></option>
           <option value="5" data-t="room.mode.ar"></option>
-          <option value="22" data-t="room.mode.rap"></option>
+          <option value="18" data-t="room.mode.abd"></option>
+          <option value="20" data-t="room.mode.ardm"></option>
+          <option value="21" data-t="room.mode.mid1v1"></option>
         </select>
+        <span class="muted small" data-t="room.mode.note"></span>
       </label>
     </div>
     <div class="gate-foot">

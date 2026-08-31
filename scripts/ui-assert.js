@@ -134,6 +134,46 @@ const CHECKS = [
     }
   `],
 
+  // The game mode menu, in the running page (D80). The list is markup so
+  // that every mode is translated like every other label, and a Go test binds
+  // it to protocol/gamemode - but a label that never reached the screen would
+  // pass that test and show a host the raw key. This is the check that the
+  // words arrived.
+  ["both game mode menus show mode names, not keys", `
+    ${STOP}
+    const bad = [];
+    for (const id of ["mode", "newmode"]) {
+      const opts = [...document.getElementById(id).options];
+      if (opts.length !== 12) bad.push("#" + id + " offers " + opts.length + " modes, want 12");
+      for (const o of opts) {
+        if (!o.textContent.trim() || o.textContent.includes(".")) {
+          bad.push("#" + id + " option " + o.value + " reads " + JSON.stringify(o.textContent));
+        }
+      }
+    }
+    const ap = document.getElementById("newmode").querySelector('option[value="1"]');
+    if (!ap || ap.textContent !== "All Pick") bad.push("mode 1 is not All Pick");
+    return ({ ok: bad.length === 0, why: bad.join("; ") })
+  `],
+
+  // The host changes the mode and every other screen in the room is told,
+  // because the mode is the room's rather than this window's. The saving is
+  // the coordinator's job and smoke.sh covers it; what is checked here is
+  // that the band above the seats redraws when the number changes, which the
+  // render guard would otherwise skip.
+  ["changing the game mode redraws the band", `
+    ${STOP}
+    if (!state.room) return ({ ok: true, why: "not in a room in this sandbox" });
+    state.room.game_mode = 1;
+    drawStats(state.room);
+    const before = document.getElementById("roomstats").textContent;
+    state.room.game_mode = 23;
+    drawStats(state.room);
+    const after = document.getElementById("roomstats").textContent;
+    return ({ ok: after.includes("Turbo") && !before.includes("Turbo"),
+       why: "the facts band still reads " + JSON.stringify(after) })
+  `],
+
   ["every dialog can be closed with Escape", `
     ${STOP}
     const gates = ["creategate", "roomsetgate", "invitegate", "profilegate",

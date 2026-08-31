@@ -2,6 +2,8 @@ module lobbybaz/coordinator
 
 go 1.25.0
 
+require lobbybaz/protocol v0.0.0
+
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
@@ -15,3 +17,5 @@ require (
 	modernc.org/memory v1.11.0 // indirect
 	modernc.org/sqlite v1.57.0 // indirect
 )
+
+replace lobbybaz/protocol => ../protocol

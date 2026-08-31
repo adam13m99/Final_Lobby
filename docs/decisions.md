@@ -2427,3 +2427,107 @@ breaks - the match runs on their PC either way - but "Players 9/10" with the
 host in the gallery is a state that did not exist before, and whether the
 lobby should say something about it is a product question, not a technical
 one.
+
+## D80 - the game mode belongs to the room, and Create Game became Start Game
+
+**2026-08-31.** Four things from the owner:
+
+> change "Create Game" to "Start Game"
+> Add gamemode to the host creation options and also add the mode selected by
+> the host to the [facts band]
+> map dota gamemode 1,2,3,4, etc. search and use the actual Mode Name instead
+> of number
+> these modes will be wired to the Start Game, so when host starts the game
+> instead of simple map dota gamemode 1, they get the selected mode
+
+### What was already there, and why it did not count
+
+A game mode dropdown existed. It sat in Room settings, it was read at the
+instant the host clicked the button - `mode: Number($("mode").value)` inside
+the click handler - and it was stored nowhere and shown to nobody.
+
+That is not a room's game mode. It is a number in one person's browser. Nine
+people who joined to play Captains Mode had no way of finding out what they
+had joined; the host's own window was the only thing that remembered, so a
+reconnect forgot it; and nothing but that one click ever read it, which is why
+it survived four months without anybody noticing it was not connected to
+anything.
+
+The mode is a property of the room now. The host sets it when they open the
+room or in Room settings, the coordinator stores it, every screen in the room
+draws it, and the host's own PC asks the coordinator for it at the moment of
+launch rather than trusting the page to say.
+
+### One list, in protocol/
+
+The mode list existed twice before this change - a `map[int]string` in
+`netservice/internal/dota` and six `<option>` elements in `index.html` - and
+they already disagreed: the map had Ability Draft and Turbo, the menu did not;
+the map said "Captain's Mode", the menu said "Captains Mode".
+
+It is `protocol/gamemode` now, and everything reads it: the coordinator
+validates against it, the Windows service builds `gamemode N` from it, the CLI
+prints it, and `lobbyapp/mode_test.go` binds the menu in the markup to it by
+id and by key, because that one cannot be shared - every option is translated
+through the same catalogue as every other label, so the menu has to be markup
+and the service validating a command line has no browser in it.
+
+The IDs are Valve's `DOTA_GameMode` enum and are wire values that reach a real
+Dota command line, taken from
+`SteamDatabase/GameTracking-Dota2/Protobufs/dota_shared_enums.proto`. Twelve of
+the twenty-six are offered: the ones ten people on a host's own listen server
+can actually play. The tutorial, the event modes, the coaches' challenge and
+everything that needs Valve's matchmaking to mean anything are not in a menu
+here, and `TestAModeTheServiceWouldRefuseIsRefusedAtTheDoor` names the tutorial
+specifically.
+
+### Where it is refused
+
+Three rules, all server-side, all with a reason that is not tidiness:
+
+- **A mode we do not offer is refused when it is set**, not when Dota starts.
+  Accepting it would push the failure to the moment the host presses Start
+  Game, where the only thing on screen is "rejected argument".
+- **Not during a match.** The mode is fixed on the command line when Dota
+  starts, so changing it mid-match would change every screen in the room and
+  nothing about the game anybody is in. The room survives the match ending
+  (D40), so a host who wants a different game finishes this one first, which
+  costs them nothing.
+- **Host only**, like the description and the door. Everybody reads it; one
+  person chooses it.
+
+Creating a room is the exception: a mode we do not offer is logged and the
+room opens with the default. Losing somebody's room over a dropdown would be
+the larger surprise, and they can fix it in Room settings a second later.
+
+### The launch reads the room, not the page
+
+`launchDota` no longer takes a mode from the request body. It asks the
+coordinator what the room is playing, and only when this PC is the host -
+a joining client is told an address, not a game, so nobody else pays for the
+round trip.
+
+Asked rather than remembered, because the page's copy is one poll old. Asked
+rather than sent up, because a page can send whatever it likes and "what game
+is this room playing" is not a question one player's PC gets to answer for the
+room. If the coordinator cannot be reached the default is used rather than
+refusing to start: by that point the tunnel is up and the ticket is issued,
+and a coordinator away for a moment should not stop ten people playing.
+
+### This reverses half of D59
+
+D59 recorded, from the owner: *a room does not advertise a game mode - the
+host switches it in Room settings and the app hands it to Dota on launch.*
+
+The half about Room settings stands. The half about not advertising it is
+reversed, by the same owner, for the room's own screen: the mode is in the
+facts band beside Host, Players and the addresses, where everybody in the room
+reads it. **The lobby list still does not carry it** - that surface was not
+asked about and D59's answer for it is untouched.
+
+### Start Game
+
+`room.go.create` reads "Start Game". The word was "Create Game", from
+GameRanger, and it was wrong in the one way that matters: by the time this
+button is live the room is created, the ten of them are sitting in it, and the
+thing about to happen is a match starting.

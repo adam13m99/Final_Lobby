@@ -645,6 +645,57 @@ refuse "seats do not move during a match"         '"ok":true'    "$MIDGAME"
 UNLOCK=$(call POST /api/rooms/status '{"status":"open"}')
 expect "and the host can open it again"           '"ok":true'    "$UNLOCK"
 
+say ""
+say "=== the game the room is playing ==="
+# The owner's request: the host picks a Dota game mode, everybody in the room
+# can see which one, and pressing Start Game starts that one (D80).
+#
+# It already half-existed and that is the interesting part. There was a mode
+# dropdown in room settings, it was read at the instant the host clicked the
+# button, and it was stored nowhere and shown to nobody - so nine people who
+# joined to play Captains Mode had no way of finding out, and the host's own
+# window was the only thing that remembered. The mode belongs to the room now.
+MODESET=$(call POST /api/rooms/mode '{"game_mode":23}')
+expect "the host sets the room's game mode"       '"game_mode":23'      "$MODESET"
+expect "and it comes back with its real name"     '"game_mode_name":"Turbo"' "$MODESET"
+
+# Read from the other player's screen. This is the assertion the feature is
+# actually about: a mode only the host can see is the thing being replaced.
+MATEMODE=$(callb GET "/api/state")
+expect "and everybody else in the room sees it"   '"game_mode":23'      "$MATEMODE"
+
+# A mode the Windows service will not put on a Dota command line has to be
+# refused here, while the host is still looking at the dialog. Accepting it
+# would push the failure to the moment they press Start Game, where the only
+# thing on screen is "rejected argument".
+BADMODE=$(call POST /api/rooms/mode '{"game_mode":10}')
+if printf '%s' "$BADMODE" | grep -q '"ok":true'; then
+  bad "game mode 10 (the tutorial) was accepted; Start Game would fail on it"
+else
+  ok "a mode Dota cannot be started in is refused"
+fi
+
+# Only the host. Everybody in a room can see the mode; one person chooses it.
+MATEMODESET=$(callb POST /api/rooms/mode '{"game_mode":2}')
+if printf '%s' "$MATEMODESET" | grep -q '"ok":true'; then
+  bad "a guest changed the game mode of somebody else's room"
+else
+  ok "and a guest cannot change it"
+fi
+
+# And not during a match: the mode is fixed when Dota starts, so changing it
+# mid-game would change every screen in the room and nothing about the match.
+LOCKED=$(call POST /api/rooms/status '{"status":"locked_in_game"}')
+expect "the host locks the room for a match"      '"ok":true'    "$LOCKED"
+MIDGAME=$(call POST /api/rooms/mode '{"game_mode":2}')
+if printf '%s' "$MIDGAME" | grep -q '"ok":true'; then
+  bad "the game mode changed in the middle of a match"
+else
+  ok "and it cannot be changed once a match is running"
+fi
+REOPEN=$(call POST /api/rooms/status '{"status":"open"}')
+expect "and the room opens again afterwards"      '"ok":true'    "$REOPEN"
+
 GONE=$(callb POST /api/rooms/leave '{}')
 expect "the second player leaves again"           '"ok":true'    "$GONE"
 

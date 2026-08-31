@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"lobbybaz/coordinator/internal/ipam"
+	"lobbybaz/protocol/gamemode"
 )
 
 // Status is the room's admission state.
@@ -118,6 +119,21 @@ type Room struct {
 	HostRelayMillis int
 	HostRelayAt     time.Time
 
+	// GameMode is which Dota game the room is playing, as Valve's own
+	// DOTA_GameMode number (D80). The host chooses it when they open the
+	// room and may change it while nobody is in a match; it is the number
+	// their PC puts on Dota's command line as "gamemode N".
+	//
+	// It is kept on the room rather than in the host's own window because
+	// everybody in the room needs to see it - it is the second thing anybody
+	// asks about a lobby after who is in it - and because the host's window
+	// is not where the decision has to survive a reconnect.
+	//
+	// Zero means a room made before rooms had a mode. gamemode.OrDefault
+	// reads it as All Pick, which is what every such room was already being
+	// launched with.
+	GameMode int
+
 	// Privacy is the door on the room (D41); see privacy.go.
 	Privacy Privacy
 	// MinMMR is the floor a player must declare to be let in. Zero is no
@@ -221,6 +237,7 @@ func NewRoom(id string, index int, hostID string, now time.Time) *Room {
 		Index:       index,
 		HostID:      hostID,
 		Status:      StatusOpen,
+		GameMode:    gamemode.Default,
 		Privacy:     PrivacyPublic,
 		Invites:     make(map[string]time.Time),
 		KickedUntil: make(map[string]time.Time),

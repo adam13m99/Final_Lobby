@@ -78,6 +78,16 @@ type RoomView struct {
 	Privacy       string `json:"privacy"`
 	NeedsPassword bool   `json:"needs_password"`
 	MinMMR        int    `json:"min_mmr"`
+
+	// GameMode is which Dota game the room is playing, as Valve's own
+	// DOTA_GameMode number (D80). GameModeName is its English name, for
+	// anything printing it without a string catalogue of its own.
+	//
+	// The number is the authority. Anything that has translations should
+	// look the mode up in protocol/gamemode and translate the key, not print
+	// this name.
+	GameMode     int    `json:"game_mode"`
+	GameModeName string `json:"game_mode_name"`
 }
 
 // RoomOptions is the door a host wants on a room, at creation or afterwards.
@@ -89,6 +99,9 @@ type RoomOptions struct {
 	Password string
 	// MinMMR is the floor, or zero for none.
 	MinMMR int
+	// GameMode is which Dota game the room is for, as Valve's own
+	// DOTA_GameMode number. Zero leaves it at the default, All Pick.
+	GameMode int
 }
 
 type Client struct {
@@ -255,6 +268,7 @@ func (c *Client) CreateRoomWith(playerID, nick, name string, opt RoomOptions) (*
 		"privacy":   opt.Privacy,
 		"password":  opt.Password,
 		"min_mmr":   opt.MinMMR,
+		"game_mode": opt.GameMode,
 	}, &info)
 	return &info, err
 }
@@ -442,6 +456,16 @@ func (c *Client) ChangePassword(current, next string) (*Account, error) {
 // AcceptTerms records agreement to a version of the terms.
 func (c *Client) AcceptTerms(version string) error {
 	return c.do("POST", "/v1/terms/accept", map[string]string{"version": version}, nil)
+}
+
+// SetGameMode changes which Dota game a room is playing (D80). Host only, and
+// refused while a match is running: the mode is fixed when Dota starts, so
+// changing it mid-match would change every screen and no game.
+func (c *Client) SetGameMode(roomID, playerID string, mode int) (*RoomView, error) {
+	var rv RoomView
+	err := c.do("POST", "/v1/rooms/"+roomID+"/mode",
+		map[string]any{"player_id": playerID, "game_mode": mode}, &rv)
+	return &rv, err
 }
 
 // Describe sets the host's sentence about their room (D42). Only the host may.

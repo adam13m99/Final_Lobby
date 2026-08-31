@@ -539,6 +539,15 @@ the store on the next tick, before anybody has read why it ended.
    and a dead network were the same event for three minutes and then reported
    themselves as an expiry. Say it out loud, and name the cause in whatever
    reaches the player's screen.
-15. **Never commit secrets.** `github_token_admin.txt` and
+15. **Never keep a second list of anything the wire carries.** The Dota game
+   modes lived in a `map[int]string` in the service and in six `<option>`
+   elements in the markup, and had already drifted apart in both directions
+   before anybody looked: modes the service knew and the menu did not, and one
+   mode spelled two ways. It is `protocol/gamemode` now, and everything reads
+   it - the coordinator validating, the service building the command line, the
+   CLI printing, and a test in `lobbyapp` binding the menu to it (D80). Where
+   a list genuinely cannot be shared, bind the copies with a test that names
+   the entries rather than counting them.
+16. **Never commit secrets.** `github_token_admin.txt` and
    `mobinhost_server_1.txt` are gitignored; the download key and API token
    live only on the server. Verify before every commit.

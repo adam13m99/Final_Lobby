@@ -16,6 +16,7 @@ import (
 	"strings"
 	"unicode"
 
+	"lobbybaz/protocol/gamemode"
 	"lobbybaz/protocol/launch"
 )
 
@@ -24,17 +25,14 @@ var (
 	ErrBadPath = errors.New("dota: rejected executable path")
 )
 
-// gameModes are the Dota 2 game mode IDs we expose.
-var gameModes = map[int]string{
-	1: "All Pick", 2: "Captain's Mode", 3: "Random Draft",
-	4: "Single Draft", 5: "All Random", 18: "Ability Draft",
-	22: "Ranked All Pick", 23: "Turbo",
-}
-
 // GameModeName returns the display name for a mode ID.
+//
+// The list itself is protocol/gamemode, not this file. It used to be a map
+// here, and a second copy of it lived in the interface: a mode the menu
+// offered and this map did not know was a room whose host pressed Start Game
+// and was told "rejected argument".
 func GameModeName(id int) (string, bool) {
-	name, ok := gameModes[id]
-	return name, ok
+	return gamemode.Name(id)
 }
 
 var validTeams = map[string]bool{"good": true, "bad": true, "spec": true}
@@ -123,7 +121,7 @@ func BuildHostArgs(nick string, gameMode int, team string) ([]string, error) {
 	if err := validateNick(nick); err != nil {
 		return nil, err
 	}
-	if _, ok := gameModes[gameMode]; !ok {
+	if !gamemode.Valid(gameMode) {
 		return nil, fmt.Errorf("%w: unknown game mode %d", ErrBadArg, gameMode)
 	}
 	if !validTeams[team] {

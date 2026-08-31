@@ -22,6 +22,7 @@ import (
 	"lobbybaz/coordinator/internal/room"
 	"lobbybaz/coordinator/internal/social"
 	"lobbybaz/coordinator/internal/ticket"
+	"lobbybaz/protocol/gamemode"
 )
 
 // Server wires the room store and ticket store behind HTTP.
@@ -238,6 +239,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /v1/rooms/{id}/status", s.signedIn(s.limitManage, s.setStatus))
 	mux.HandleFunc("POST /v1/rooms/{id}/privacy", s.signedIn(s.limitManage, s.setPrivacy))
 	mux.HandleFunc("POST /v1/rooms/{id}/description", s.signedIn(s.limitManage, s.setDescription))
+	mux.HandleFunc("POST /v1/rooms/{id}/mode", s.signedIn(s.limitManage, s.setGameMode))
 	mux.HandleFunc("POST /v1/rooms/{id}/invite", s.signedIn(s.limitManage, s.invite))
 	mux.HandleFunc("POST /v1/rooms/{id}/spectate", s.signedIn(s.limitJoin, s.spectateRoom))
 	mux.HandleFunc("POST /v1/rooms/{id}/connect", s.signedIn(s.limitRead, s.connectRoom))
@@ -346,6 +348,16 @@ type roomView struct {
 	MinMMR        int    `json:"min_mmr,omitempty"`
 	// Description is the host's own sentence about the room (D42).
 	Description string `json:"description,omitempty"`
+	// GameMode is which Dota game the room is playing, as Valve's own
+	// DOTA_GameMode number (D80), and GameModeName is its English name.
+	//
+	// Both, deliberately. The number is the authority - it is what reaches
+	// the command line - and the desktop app translates it through its own
+	// string catalogue rather than printing the name. The name is here for
+	// everything that has no catalogue: the CLI, the logs, and any client
+	// built against this API later.
+	GameMode     int    `json:"game_mode,omitempty"`
+	GameModeName string `json:"game_mode_name,omitempty"`
 	// HostRelayMillis is the *host's* round trip to the relay, not the
 	// reader's. Anything displaying it must say so: a player who reads it as
 	// their own ping will blame the wrong thing when a game plays badly.
@@ -378,9 +390,11 @@ func (s *Server) view(r room.Room) roomView {
 		Privacy:         string(r.Privacy),
 		NeedsPassword:   r.HasPassword(),
 		MinMMR:          r.MinMMR,
+		GameMode:        gamemode.OrDefault(r.GameMode),
 		HostRelayMillis: r.HostRelayMillis,
 		Members:         make([]memberView, 0, len(r.Slots)),
 	}
+	v.GameModeName, _ = gamemode.Name(v.GameMode)
 	known := s.players.Lookup(r.Occupants())
 
 	sumMMR, rated := 0, 0
@@ -546,6 +560,9 @@ func (s *Server) createRoom(w http.ResponseWriter, r *http.Request) {
 		Privacy  string `json:"privacy"`
 		Password string `json:"password"`
 		MinMMR   int    `json:"min_mmr"`
+		// GameMode is which Dota game this room is for (D80). Zero is All
+		// Pick, which is what a room that did not say has always played.
+		GameMode int `json:"game_mode"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -574,6 +591,17 @@ func (s *Server) createRoom(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "could not issue ticket")
 		return
+	}
+	// The mode travels with the creation for the same reason the door does:
+	// people read a room's mode before they join it, and a room that spends
+	// its first seconds claiming All Pick collects players who wanted All
+	// Pick. A mode we do not offer is not worth losing the room over - the
+	// room keeps the default and the host can change it in room settings.
+	if body.GameMode != 0 {
+		if err := s.rooms.SetGameMode(m.RoomID, body.PlayerID, body.GameMode); err != nil {
+			s.log.Warn("room created with a game mode we do not offer",
+				"room", m.RoomID, "mode", body.GameMode, "err", err)
+		}
 	}
 	if body.Description != "" {
 		// A failure here is not worth undoing the room over: the host gets

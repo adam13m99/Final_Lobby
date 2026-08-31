@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"lobbybaz/coordinator/internal/room"
+	"lobbybaz/protocol/gamemode"
 )
 
 // Friends answers whether two people are friends.
@@ -172,6 +173,46 @@ func (s *Server) setDescription(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeErr(w, statusFor(err), err.Error())
 		return
+	}
+	writeJSON(w, http.StatusOK, s.view(rm))
+}
+
+// setGameMode changes which Dota game a room is playing (D80). Host only.
+//
+// It sits beside the door handlers because it is the same shape - the host
+// changing something about the room that everybody outside it reads before
+// deciding whether to come in - and it answers with the whole room view for
+// the same reason they do: the caller's next act is to redraw the room, and
+// making it ask again is a redraw with the old mode still in it.
+func (s *Server) setGameMode(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		PlayerID string `json:"player_id"`
+		GameMode int    `json:"game_mode"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	body.PlayerID = s.actor(r, body.PlayerID)
+	if body.PlayerID == "" {
+		writeErr(w, http.StatusBadRequest, "player_id is required")
+		return
+	}
+	roomID := r.PathValue("id")
+	if err := s.rooms.SetGameMode(roomID, body.PlayerID, body.GameMode); err != nil {
+		if err == room.ErrBadGameMode {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeErr(w, statusFor(err), err.Error())
+		return
+	}
+	rm, err := s.rooms.Get(roomID)
+	if err != nil {
+		writeErr(w, statusFor(err), err.Error())
+		return
+	}
+	if name, ok := gamemode.Name(body.GameMode); ok {
+		s.chat.System(roomID, "The host set the game mode to "+name, s.now())
 	}
 	writeJSON(w, http.StatusOK, s.view(rm))
 }

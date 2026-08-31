@@ -280,6 +280,7 @@ there; this is the summary.
 | T34 the lease the service could not renew (D77) | **done** — every match was ending three minutes in: renewal sat behind a session the Windows service has never had. Route fixed, the reason now names its cause, the banner speaks to the player, and a lost tunnel reconnects itself |
 | T35 the download that could not finish (D78) | **done** — a 15s server-wide write timeout was cutting every download of the 13 MB installer that took longer than 15s, which on a domestic link is all of them. The installer gets its own deadline; the updater resumes instead of restarting |
 | T36 the gallery is a seat like any other (D79) | **done** — anybody in a room may move into a watching seat and back, the host included; watchers now hold an address from the same pool as players so the move never touches the tunnel; the room's three actions moved into the facts panel |
+| T37 the game mode belongs to the room (D80) | **done** — twelve real Dota modes with their real names, in one list in `protocol/gamemode` that the coordinator, the service, the CLI and the menu in the markup are all bound to; the host picks one when they open the room or in Room settings, everybody in the room sees it in the facts band, and Start Game launches **that** mode instead of a hardcoded All Pick |
 
 **The interface was redesigned on 2026-08-25** at the owner's request: the
 old one was flat, grey and mostly empty space. What changed, beyond colour
@@ -589,7 +590,10 @@ list without an answer from them.
 
 **Answered 2026-08-26** (D59), all by the owner reviewing the adopted design:
 a room does **not** advertise a game mode — the host switches it in Room
-settings and the app hands it to Dota on launch; there is **no** Watch button,
+settings and the app hands it to Dota on launch (**half reversed 2026-08-31,
+D80**: the mode is chosen at creation as well as in Room settings, and the
+room's own screen shows it to everybody in the room. The **lobby list** still
+does not carry it, which is the part of this answer that stands); there is **no** Watch button,
 permanently — a room is joinable or full, and in game or open, and there is no
 fifth thing to offer; regions and Steam links are **not** wanted; per-player
 ping, last-seen times and the online / in-a-room / in-game statuses **are**,

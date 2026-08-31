@@ -33,6 +33,7 @@ import (
 	"lobbybaz/client/lobby"
 	"lobbybaz/client/session"
 	"lobbybaz/protocol/crypto"
+	"lobbybaz/protocol/gamemode"
 	"lobbybaz/protocol/ipc"
 	"lobbybaz/protocol/wire"
 )
@@ -63,6 +64,9 @@ func main() {
 		err = cmdStatus()
 	case "play":
 		err = cmdPlay(args)
+	case "modes":
+		cmdModes()
+		return
 	case "lock":
 		err = cmdStatusChange("locked_in_game")
 	case "open":
@@ -99,6 +103,7 @@ func usage() {
   disconnect                       take it down
   status                           show room and tunnel state
   play        [-mode N] [-team good|bad]   launch Dota 2 into this room
+  modes                                    list the Dota game modes and their IDs
   lock                             host: close the room, match starting
   open                             host: reopen for a replacement player
   kick NAME                        host: remove a player for 5 minutes
@@ -360,7 +365,7 @@ func cmdStatus() error {
 
 func cmdPlay(args []string) error {
 	fs := flag.NewFlagSet("play", flag.ExitOnError)
-	mode := fs.Int("mode", 1, "Dota game mode ID (1 = All Pick, 23 = Turbo)")
+	mode := fs.Int("mode", gamemode.Default, "Dota game mode ID; run \"lobbycli modes\" for the list")
 	team := fs.String("team", "good", "good, bad or spec")
 	_ = fs.Parse(args)
 
@@ -375,7 +380,7 @@ func cmdPlay(args []string) error {
 	req := ipc.Request{
 		Op:       ipc.OpLaunch,
 		Nick:     cfg.Nick,
-		GameMode: *mode,
+		GameMode: gamemode.OrDefault(*mode),
 		Team:     *team,
 	}
 	if cfg.IsHost {
@@ -573,4 +578,14 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n-1] + "…"
+}
+
+// cmdModes prints the game modes, so nobody has to guess a number.
+//
+// The desktop app offers these as a menu; here they are numbers, because this
+// is the tool used on a bare test PC with no window open.
+func cmdModes() {
+	for _, m := range gamemode.Modes {
+		fmt.Printf("  %-3d %s\n", m.ID, m.Name)
+	}
 }

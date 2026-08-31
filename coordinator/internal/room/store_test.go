@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"lobbybaz/coordinator/internal/room"
+	"lobbybaz/protocol/gamemode"
 )
 
 func TestCreateSeatsHostAtTheDeterministicAddress(t *testing.T) {
@@ -718,5 +719,78 @@ func TestAModeratorCannotSitDownAndPlay(t *testing.T) {
 	}
 	if err := s.Move(r.ID, "mod", 5, false); err == nil {
 		t.Fatal("a moderator gave up the reserved seat to take a playing one")
+	}
+}
+
+// --- the room's game mode (D80) -------------------------------------------
+
+// The mode is the room's, not the host's window's. It has to survive being
+// set, be readable by everybody, and refuse anybody who is not the host - the
+// same three rules as the description, because it is the same kind of fact.
+func TestOnlyTheHostSetsTheGameMode(t *testing.T) {
+	s := room.NewStore()
+	now := time.Now()
+	_, host, err := s.Create("host", "a room", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := roomOf(t, s, host.RoomID).GameMode; got != gamemode.Default {
+		t.Fatalf("a new room plays mode %d, want the default %d", got, gamemode.Default)
+	}
+	if _, err := s.Join(host.RoomID, room.Anyone("guest"), now); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetGameMode(host.RoomID, "guest", 23); err == nil {
+		t.Error("a guest changed the game mode of somebody else's room")
+	}
+	if err := s.SetGameMode(host.RoomID, "host", 23); err != nil {
+		t.Fatalf("the host could not set the game mode: %v", err)
+	}
+	if got := roomOf(t, s, host.RoomID).GameMode; got != 23 {
+		t.Errorf("the room plays mode %d, want 23 (Turbo)", got)
+	}
+}
+
+// A mode the service will not launch must be refused where the host can be
+// told about it, not accepted here and rejected on a command line ten minutes
+// later when they press Start Game.
+func TestAModeWeDoNotOfferIsRefused(t *testing.T) {
+	s := room.NewStore()
+	_, host, err := s.Create("host", "a room", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []int{0, 7, 10, 999, -1} {
+		if err := s.SetGameMode(host.RoomID, "host", bad); !errors.Is(err, room.ErrBadGameMode) {
+			t.Errorf("game mode %d was accepted (err = %v); the service would refuse it", bad, err)
+		}
+	}
+	if got := roomOf(t, s, host.RoomID).GameMode; got != gamemode.Default {
+		t.Errorf("a refused mode still changed the room to %d", got)
+	}
+}
+
+// The mode is fixed when Dota starts. Changing it during a match would change
+// what every screen in the room says and nothing about the game anybody is
+// in, so the room refuses while the host is playing.
+func TestTheGameModeCannotChangeDuringAMatch(t *testing.T) {
+	s := room.NewStore()
+	now := time.Now()
+	_, host, err := s.Create("host", "a room", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetStatus(host.RoomID, "host", room.StatusLocked, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetGameMode(host.RoomID, "host", 23); !errors.Is(err, room.ErrRoomLocked) {
+		t.Fatalf("the game mode changed mid-match (err = %v)", err)
+	}
+	// And once the match is over the room is still there and still theirs.
+	if err := s.SetStatus(host.RoomID, "host", room.StatusOpen, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetGameMode(host.RoomID, "host", 23); err != nil {
+		t.Fatalf("the game mode could not be changed after the match: %v", err)
 	}
 }

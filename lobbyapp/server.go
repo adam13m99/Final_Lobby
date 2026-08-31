@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -18,6 +19,7 @@ import (
 	"lobbybaz/client/build"
 	"lobbybaz/client/lobby"
 	"lobbybaz/client/session"
+	"lobbybaz/protocol/gamemode"
 	"lobbybaz/protocol/ipc"
 	"lobbybaz/protocol/launch"
 )
@@ -149,6 +151,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /api/update", s.guard(s.applyUpdate))
 	mux.HandleFunc("POST /api/rooms/describe", s.guard(s.describeRoom))
 	mux.HandleFunc("POST /api/rooms/privacy", s.guard(s.setPrivacy))
+	mux.HandleFunc("POST /api/rooms/mode", s.guard(s.setGameMode))
 	mux.HandleFunc("POST /api/rooms/invite", s.guard(s.inviteToRoom))
 	mux.HandleFunc("POST /api/friends", s.guard(s.friendAction))
 	mux.HandleFunc("POST /api/friends/messages", s.guard(s.conversation))
@@ -673,6 +676,7 @@ func (s *server) createRoom(w http.ResponseWriter, r *http.Request) {
 		Privacy  string `json:"privacy"`
 		Password string `json:"password"`
 		MinMMR   int    `json:"min_mmr"`
+		GameMode int    `json:"game_mode"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -685,6 +689,7 @@ func (s *server) createRoom(w http.ResponseWriter, r *http.Request) {
 		Privacy:  body.Privacy,
 		Password: body.Password,
 		MinMMR:   body.MinMMR,
+		GameMode: body.GameMode,
 	})
 	if err != nil {
 		fail(w, err.Error())
@@ -739,6 +744,34 @@ func (s *server) setPrivacy(w http.ResponseWriter, r *http.Request) {
 		Password: body.Password,
 		MinMMR:   body.MinMMR,
 	})
+	if err != nil {
+		fail(w, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, got)
+}
+
+// setGameMode changes which Dota game the room is playing (D80). Host only,
+// enforced by the coordinator.
+//
+// The mode belongs to the room and not to this window. That is the whole
+// point of the round trip: it used to be a dropdown in the host's own room
+// settings that nobody else could see and nothing else read, so the nine
+// people who had joined to play Captains Mode had no way of knowing and the
+// host's own PC was the only thing that remembered.
+func (s *server) setGameMode(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		GameMode int `json:"game_mode"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	cfg := s.snapshot()
+	if cfg.RoomID == "" {
+		fail(w, "you are not in a room")
+		return
+	}
+	got, err := s.api().SetGameMode(cfg.RoomID, cfg.PlayerID, body.GameMode)
 	if err != nil {
 		fail(w, err.Error())
 		return
@@ -1024,7 +1057,6 @@ func (s *server) disconnect(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) play(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Mode int    `json:"mode"`
 		Team string `json:"team"`
 	}
 	if !decode(w, r, &body) {
@@ -1032,7 +1064,7 @@ func (s *server) play(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
-	role, err := s.launchDota(ctx, body.Mode, body.Team)
+	role, err := s.launchDota(ctx, body.Team)
 	if err != nil {
 		fail(w, err.Error())
 		return
@@ -1051,7 +1083,6 @@ func (s *server) play(w http.ResponseWriter, r *http.Request) {
 // and the failure would look like a broken room rather than a race.
 func (s *server) playNow(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Mode int    `json:"mode"`
 		Team string `json:"team"`
 	}
 	if !decode(w, r, &body) {
@@ -1082,7 +1113,7 @@ func (s *server) playNow(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	role, err := s.launchDota(ctx, body.Mode, body.Team)
+	role, err := s.launchDota(ctx, body.Team)
 	if err != nil {
 		fail(w, err.Error())
 		return
@@ -1131,20 +1162,17 @@ func statusOnce(parent context.Context) (ipc.Response, error) {
 //
 // The service will not start the process itself: it runs as LocalSystem in
 // session 0, which has no desktop and no GPU. It validates, we start.
-func (s *server) launchDota(ctx context.Context, mode int, team string) (string, error) {
+func (s *server) launchDota(ctx context.Context, team string) (string, error) {
 	cfg := s.snapshot()
 	if cfg.RoomID == "" {
 		return "", errors.New("Join a room first.")
-	}
-	if mode == 0 {
-		mode = 1
 	}
 	if team == "" {
 		team = "good"
 	}
 
-	req := ipc.Request{Op: ipc.OpLaunch, Nick: cfg.Nick, GameMode: mode, Team: team,
-		Options: cfg.LaunchOptions}
+	req := ipc.Request{Op: ipc.OpLaunch, Nick: cfg.Nick, GameMode: s.roomMode(cfg),
+		Team: team, Options: cfg.LaunchOptions}
 	if cfg.IsHost {
 		req.Role = "host"
 	} else {
@@ -1167,6 +1195,36 @@ func (s *server) launchDota(ctx context.Context, mode int, team string) (string,
 	}
 	_ = cmd.Process.Release()
 	return req.Role, nil
+}
+
+// roomMode is which Dota game to start: the room's, asked of the coordinator
+// at the moment of launch (D80).
+//
+// It is asked rather than remembered, and asked here rather than sent up from
+// the page, because the mode belongs to the room. The page has a copy from
+// its last poll and the host may have changed it since; more to the point, a
+// page can send whatever it likes, and "what game is this room playing" is
+// not a question this PC gets to answer for the room.
+//
+// Only the host's command line carries a mode at all - a joining client is
+// told an address, not a game - so nobody else pays for the round trip.
+//
+// If the coordinator cannot be reached the default is used rather than
+// refusing to start. By this point the tunnel is up and the ticket is
+// issued; a coordinator that has gone away for a moment should not stop ten
+// people playing, and All Pick is what the room was playing before it could
+// choose.
+func (s *server) roomMode(cfg *session.Config) int {
+	if !cfg.IsHost {
+		return gamemode.Default
+	}
+	rv, err := s.api().GetRoom(cfg.RoomID)
+	if err != nil {
+		log.Printf("could not read the room's game mode, starting %d: %v",
+			gamemode.Default, err)
+		return gamemode.Default
+	}
+	return gamemode.OrDefault(rv.GameMode)
 }
 
 // --- update -------------------------------------------------------------

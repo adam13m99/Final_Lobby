@@ -5,10 +5,12 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
 	"lobbybaz/netservice/internal/dota"
+	"lobbybaz/protocol/gamemode"
 )
 
 func TestBuildHostArgs(t *testing.T) {
@@ -72,6 +74,35 @@ func TestRejectsBadTeam(t *testing.T) {
 func TestRejectsUnknownGameMode(t *testing.T) {
 	if _, err := dota.BuildHostArgs("P", 999, "good"); !errors.Is(err, dota.ErrBadArg) {
 		t.Fatal("game mode 999 accepted; want rejection")
+	}
+}
+
+// Every mode the interface offers must survive the command-line builder and
+// the second gate behind it (D80).
+//
+// The list used to be a map in launch.go and a second copy of it lived in the
+// interface, so a mode could be offered in the host's menu and rejected here,
+// and the only way to find out was a host pressing Start Game and being told
+// "rejected argument". There is one list now. This test is what stops a second
+// one growing back: put any allowlist of mode IDs in BuildHostArgs and it
+// fails with every mode that list forgot, by name.
+func TestEveryModeInTheMenuCanActuallyBeLaunched(t *testing.T) {
+	for _, m := range gamemode.Modes {
+		args, err := dota.BuildHostArgs("Player1", m.ID, "good")
+		if err != nil {
+			t.Errorf("%s (%d) is in the menu but will not build: %v", m.Name, m.ID, err)
+			continue
+		}
+		want := "gamemode " + strconv.Itoa(m.ID)
+		if joined := strings.Join(args, " "); !strings.Contains(joined, want) {
+			t.Errorf("%s (%d) built %q, which does not contain %q", m.Name, m.ID, joined, want)
+		}
+		if err := dota.ValidateArgs(args); err != nil {
+			t.Errorf("%s (%d) built args our own validator refuses: %v", m.Name, m.ID, err)
+		}
+		if name, ok := dota.GameModeName(m.ID); !ok || name != m.Name {
+			t.Errorf("GameModeName(%d) = %q, %v; want %q", m.ID, name, ok, m.Name)
+		}
 	}
 }
 

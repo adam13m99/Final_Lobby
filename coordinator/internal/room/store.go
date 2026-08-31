@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"lobbybaz/coordinator/internal/ipam"
+	"lobbybaz/protocol/gamemode"
 )
 
 var (
@@ -547,6 +548,37 @@ func (s *Store) SetDescription(roomID, actorID, text string) error {
 		return ErrNotHost
 	}
 	r.Description = text
+	return nil
+}
+
+// ErrBadGameMode is returned when somebody asks for a mode we do not offer.
+var ErrBadGameMode = errors.New("room: that is not a game mode we offer")
+
+// SetGameMode records which Dota game the room is playing (D80). Host only.
+//
+// It is refused while a match is running, and the reason is not tidiness: the
+// mode is baked into the command line when Dota starts, so changing it during
+// a match would change what every screen in the room says the room is playing
+// without changing the match anybody is in. A host who wants a different game
+// finishes this one first - which costs nothing, because the room survives the
+// match ending and the ten of them are still sitting there.
+func (s *Store) SetGameMode(roomID, actorID string, mode int) error {
+	if !gamemode.Valid(mode) {
+		return ErrBadGameMode
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r, ok := s.rooms[roomID]
+	if !ok {
+		return ErrNotFound
+	}
+	if actorID != r.HostID {
+		return ErrNotHost
+	}
+	if r.locked() {
+		return ErrRoomLocked
+	}
+	r.GameMode = mode
 	return nil
 }
 
