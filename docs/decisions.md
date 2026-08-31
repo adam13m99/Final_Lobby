@@ -2614,3 +2614,131 @@ at the end of a sentence.
 It does break the "three places, one idea" pattern from D68, where your seat,
 your name and your room all wore the accent. Two of the three still do. The
 owner asked for the third by colour.
+
+## D82 - one person, one room, and the review that found four more
+
+**2026-08-31.** From the owner, off the live build:
+
+> 1- i can create multiple rooms, which is not correct.
+> 2- a user can only make one room at a time.
+> 3- a user can only join one room at a time.
+> 4- review all the relations and logics and inspect the different flows, so
+> bugs like this wont exist and are found.
+
+### Why nothing caught it
+
+Every function was correct about the room it was handed. `Room.Join` refused a
+second seat in the same room; `Store` refused a room id that did not exist;
+the interface refused a second *join*, and had done since D68 - the Join
+button on every row goes grey with "you are already in a room".
+
+Nothing owned the sentence **"a person is in one room"**, so nothing enforced
+it, and Create was the one door that had never had a guard put on it by hand.
+
+That is the whole shape of the bug, and it is why item 4 was the right thing
+to ask for. This was not a broken function. It was a rule with no home.
+
+### The damage was not a stray row
+
+A room closes when its **host** goes offline (D40, D70). That is a fact about
+a person, checked against the player registry - so a host with two rooms is
+online for both, and the one they walked away from **never closes**. It sits
+in the lobby looking joinable, takes players, and leaves them waiting for
+somebody who is never coming. The lobby had a permanent haunted room in it for
+every time anybody pressed Create twice.
+
+### RoomOf, derived and never indexed
+
+`Store.RoomOf(playerID)` is the sentence, and it scans the open rooms rather
+than keeping a map from player to room.
+
+A map would be a second record of a fact the rooms already hold, kept in step
+by hand across Create, three kinds of join, Leave, Kick, Close, the host's
+grace window and the sweep that deletes a room outright. It would drift, and
+it would drift the way an address derived from a seat drifted (D74) and the
+way a game mode kept in one window drifted (D80): silently, on the path
+nobody remembered to update.
+
+The cost is paid only when somebody opens or enters a room - never on a poll,
+never per packet. At the 2048-room ceiling it is a few tens of thousands of
+string compares.
+
+A host inside their grace window is still in their room, deliberately: they
+still hold the seat and the address every client is connecting to, the room is
+alive and still theirs for the next minute, and the thing they should be doing
+is going back to it. When the window closes the room does too, and they are
+free on the same tick.
+
+### An app must never be told only "no"
+
+The refusal names the room. Without that, somebody whose own window has lost
+track - a cleared session, a reinstall, a crash between joining and saving -
+is told "you are already in another room", cannot see which, and cannot get
+out of it.
+
+So `sync` now answers `in_room_id`: the room the **server** has this player in.
+The app takes that answer over its own belief, and takes the whole membership
+with it rather than the id alone - `Refresh` mints a fresh ticket for somebody
+a room already holds a seat for, so the adopted room is one that can actually
+be connected to rather than one that merely appears on screen.
+
+It is only ever adopted, never used to clear: an empty answer to a request
+that crossed a join in flight would throw somebody out of the room they just
+entered. And the guard against that race is exactness rather than a timer -
+adopt only if the app still believes what it believed when it asked.
+
+### The four the review turned up
+
+Item 4, done as invariants rather than as functions. Each is a sentence that
+must hold across every path, in `coordinator/internal/room/audit_test.go`.
+
+**A room could be handed over half way.** `SetHost` moved `HostSlot` and left
+`HostWatching` behind. Those two are one fact - which array the number indexes
+- and they are read on exactly one path, the expensive one: a host whose PC
+dies comes back to "the seat they left". So a room handed from a watching host
+to a playing one would put its new host, on their next crash, in the gallery
+of the match running on their own machine.
+
+**A host could kick themselves.** It emptied their seat, dropped the address
+every client was connecting to, started the grace countdown and barred them
+from their own room for a minute - four things nobody asked for, from one
+misdirected click. Leave is the way out and it ends the room deliberately.
+
+**Anybody could read any room's chat.** Writing into a room you are not in has
+been refused since the chat was built, with the comment "anyone who learns a
+room ID can heckle a match they are not part of". Reading was not - and every
+room's id is in the lobby list handed to every client on every poll, so
+"learns a room ID" was one field away for anyone signed in. `sync` handed over
+the conversation, including whatever a host had just typed to let their
+friends in. The room stays visible; the conversation inside it does not.
+
+**The same scan existed three times.** `whereabouts`, for the friends rail,
+was a third hand-written copy - and it copied every Room in the process to
+answer a question about a string. It calls `RoomOf` now.
+
+Two things were checked and found sound, and are pinned so they stay that way:
+every seated person holds exactly one address and no two hold the same one
+across every seat move, leave and rejoin; and the host always holds an address,
+so `hostAddr` can always say where the room is reached.
+
+### One thing this review found that is not fixed
+
+**`Store.JoinAdmin` has no caller.** The reserved moderator seat outside the
+ten playing slots is a product rule, it is built, it is tested - and no route
+reaches it. It is the recurring shape of bug in this repository, which is a
+tested subsystem the interface cannot get to, and it is left alone here on
+purpose: what a moderator entering a room should be able to see and do is a
+product question, not an engineering one, and it is with the owner.
+
+Note that the one-room rule applies to that seat too, so when it is built, a
+moderator will have to leave their own room to go and moderate another.
+That is worth the owner knowing before it is designed.
+
+### The smoke check that was deleted
+
+The chat leak was covered in `smoke.sh` first, and the check passed against
+the unfixed server: the app throws its own copy of a room's conversation away
+the moment it leaves the room, so nothing at the app's own door can see what
+the coordinator sent. It was deleted rather than kept, and the reason is in
+`smoke.sh` where the check used to be. The api-package test talks to the
+coordinator directly and does fail without the guard.

@@ -710,6 +710,52 @@ fi
 REOPEN=$(call POST /api/rooms/status '{"status":"open"}')
 expect "and the room opens again afterwards"      '"ok":true'    "$REOPEN"
 
+say ""
+say "=== one person, one room ==="
+# The owner's report: "i can create multiple rooms, which is not correct. a
+# user can only make one room at a time. a user can only join one room at a
+# time." (D82.)
+#
+# Nothing in the coordinator knew where a person was. Rooms knew who was in
+# them and refused a second seat in the *same* room, but no question could be
+# asked of the store as a whole, so a second room was an ordinary operation on
+# a room that had never heard of the first.
+#
+# The damage was worse than a stray row in the lobby: a room dies when its
+# *host* goes offline, which is a fact about a person, not a room. A host with
+# two rooms is online for both, so the abandoned one never closed - it sat
+# there looking joinable and took players who then waited for somebody who was
+# never coming.
+SECOND=$(call POST /api/rooms/create '{"name":"Second Room"}')
+if printf '%s' "$SECOND" | grep -q '"ok":true'; then
+  bad "a player who is already hosting a room opened a second one"
+else
+  ok "a player already in a room cannot open a second"
+fi
+
+# And the refusal names the room they are in, so the app can take them back to
+# it. Without that, somebody whose own window has lost track is told "you are
+# already in another room" and has no way to find out which.
+BSECOND=$(callb POST /api/rooms/create '{"name":"Also Second"}')
+if printf '%s' "$BSECOND" | grep -q '"ok":true'; then
+  bad "a seated player opened a room of their own"
+else
+  ok "and neither can somebody sitting in somebody else's"
+fi
+
+# The escape from the dead end: the coordinator always knows where somebody
+# is, and says so on every poll, so the app can put itself right without the
+# person having to know anything went wrong.
+WHERE=$(call GET "/api/state")
+expect "and the server says which room it has us in" "$ROOM_ID" "$WHERE"
+
+# Reading a room's chat, which was the other half of D82, is deliberately NOT
+# checked here. It cannot be: the app throws its own copy of the conversation
+# away the moment it leaves a room, so an app-level check passes whatever the
+# coordinator sends - it was written, watched passing on the unfixed server,
+# and deleted. TestYouCannotReadTheChatOfARoomYouAreNotIn in the api package
+# talks to the coordinator directly and does fail without the guard.
+
 GONE=$(callb POST /api/rooms/leave '{}')
 expect "the second player leaves again"           '"ok":true'    "$GONE"
 
@@ -723,7 +769,12 @@ expect "the host can leave their own room"        '"ok":true'    "$HOSTOUT"
 
 sleep 3
 LOBBY=$(call GET "/api/state")
-refuse "and the room goes with them"              "$ROOM_ID"     "$LOBBY"
+# The lobby list, not the whole reply. Grepping the entire state blob for a
+# room id also matches the friends rail, which is fetched on a slower clock
+# than the lobby and is allowed to be a few seconds stale - so the assertion
+# was reading a cache and calling it the lobby.
+LOBBYROOMS=$(printf '%s' "$LOBBY" | python -c "import sys,json;print(' '.join(r['id'] for r in (json.load(sys.stdin).get('rooms') or [])))")
+refuse "and the room goes with them"              "$ROOM_ID"     "$LOBBYROOMS"
 
 BACKIN=$(call POST /api/rooms/join "{\"room_id\":\"$ROOM_ID\"}")
 refuse "and nobody can walk back into it"         '"ok":true'    "$BACKIN"

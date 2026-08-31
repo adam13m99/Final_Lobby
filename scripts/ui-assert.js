@@ -230,6 +230,31 @@ const CHECKS = [
     return ({ ok: bad.length === 0, why: bad.join("; ") })
   `],
 
+  // One person, one room (D82). The Join button on every row already said so;
+  // Create did not, so the interface was enforcing half a rule and the
+  // coordinator was enforcing none of it.
+  ["Create room is switched off while you are in one", `
+    ${STOP}
+    const was = state.room_id;
+    state.room_id = "";
+    renderRooms(state.rooms);
+    const free = !document.getElementById("btn-create").disabled;
+    state.room_id = (state.rooms[0] || {}).id || "r-test";
+    renderRooms(state.rooms);
+    const btn = document.getElementById("btn-create");
+    const shut = btn.disabled && !!btn.title;
+    // And pressing it anyway takes you to the room you are in rather than
+    // opening a dialog the coordinator will refuse.
+    openCreate();
+    const dialog = !document.getElementById("creategate").classList.contains("hidden");
+    state.room_id = was;
+    renderRooms(state.rooms);
+    return ({ ok: free && shut && !dialog,
+       why: "in no room the button is " + (free ? "live" : "off") +
+            ", in a room it is " + (shut ? "off with a reason" : "still live") +
+            (dialog ? ", and it opened the dialog anyway" : "") })
+  `],
+
   ["every dialog can be closed with Escape", `
     ${STOP}
     const gates = ["creategate", "roomsetgate", "invitegate", "profilegate",

@@ -525,6 +525,7 @@ function drawSortHeads() {
 
 function renderRooms(rooms) {
   const box = $("roomlist");
+  drawCreateButton();
   const shown = sortRooms(visible(rooms));
   $("roomcount").textContent = t("lobby.shown", { shown: shown.length, all: rooms.length });
 
@@ -555,6 +556,8 @@ function renderRooms(rooms) {
       acts.appendChild(clear);
     }
     const make = el("button", "primary", t("lobby.create"));
+    make.disabled = !!state.room_id;
+    make.title = state.room_id ? t("room.join.busy") : "";
     make.onclick = openCreate;
     acts.appendChild(make);
     none.appendChild(acts);
@@ -720,6 +723,17 @@ function pingCell(r) {
 // The last column: one button, and a dot saying whether a match is running
 // in there. The dot is the only thing on the row that can be read without
 // looking directly at it.
+// One person, one room (D82). Opening one is refused by the coordinator when
+// you are already in another, so the button that would be refused is switched
+// off - and it says the same thing the Join buttons on every row already said,
+// because it is the same rule and the interface was only ever enforcing half
+// of it.
+function drawCreateButton() {
+  const b = $("btn-create");
+  b.disabled = !!state.room_id;
+  b.title = state.room_id ? t("room.join.busy") : "";
+}
+
 function roomActions(r) {
   const acts = el("div", "room-actions");
   const mine = r.id === state.room_id;
@@ -2364,6 +2378,11 @@ $("profileform").onsubmit = async (e) => {
 // The door is chosen before the room exists (D41). A room opened public and
 // locked a second later is a second in which anybody can walk in.
 function openCreate() {
+  // Belt and braces: the button is switched off above, but a keyboard, a
+  // stale render or a second window can still get here. Going to the room
+  // they are already in is a better answer than a dialog that will be
+  // refused.
+  if (state.room_id) { show("room"); return; }
   if (needName("namegate.why.create")) return;
   $("createerr").textContent = "";
   $("roomname").value = "";

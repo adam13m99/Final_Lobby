@@ -210,13 +210,16 @@ func (s *Server) friendView(id string) friendView {
 // whereabouts finds which room somebody is in, so "join my friend" is one
 // click. Whether they are *playing* is a separate question, answered by their
 // own service - see friendView.
+// whereabouts is which room somebody is in, for the friends rail.
+//
+// It was a third hand-written copy of that scan - after the one the store now
+// owns and the one that had to be written to enforce one person per room
+// (D82) - and it copied every Room in the process to answer a question about
+// a string. The store's own RoomOf is the single answer; three of them was
+// how the platform ended up unable to say the thing at all.
 func (s *Server) whereabouts(id string) string {
-	for _, rm := range s.rooms.List() {
-		if _, _, seated := rm.SlotOf(id); seated {
-			return rm.ID
-		}
-	}
-	return ""
+	where, _ := s.rooms.RoomOf(id)
+	return where
 }
 
 // befriend covers request, accept, decline, remove, block and unblock. They

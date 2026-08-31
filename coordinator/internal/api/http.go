@@ -598,6 +598,13 @@ func (s *Server) createRoom(w http.ResponseWriter, r *http.Request) {
 
 	_, m, err := s.rooms.Create(body.PlayerID, body.Name, s.now())
 	if err != nil {
+		// One person, one room (D82). Anything else here is the coordinator
+		// being out of room indexes, which is a capacity problem rather than
+		// the caller's mistake.
+		if errors.Is(err, room.ErrAlreadyInAnotherRoom) {
+			s.refuse(w, body.PlayerID, err)
+			return
+		}
 		writeErr(w, http.StatusServiceUnavailable, err.Error())
 		return
 	}
@@ -683,7 +690,7 @@ func (s *Server) joinRoom(w http.ResponseWriter, r *http.Request) {
 	}
 	m, err := s.rooms.Join(id, s.applicant(r, rm, body.PlayerID, body.Password), s.now())
 	if err != nil {
-		writeErr(w, statusFor(err), err.Error())
+		s.refuse(w, body.PlayerID, err)
 		return
 	}
 	info, err := s.issue(m, body.PlayerID)
@@ -912,7 +919,8 @@ func statusFor(err error) int {
 	case errors.Is(err, room.ErrRoomFull),
 		errors.Is(err, room.ErrSlotTaken):
 		return http.StatusConflict
-	case errors.Is(err, room.ErrAlreadyJoined):
+	case errors.Is(err, room.ErrAlreadyJoined),
+		errors.Is(err, room.ErrAlreadyInAnotherRoom):
 		return http.StatusConflict
 	}
 	if code, ok := doorStatus(err); ok {
@@ -936,6 +944,26 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+// refuse answers a failed room operation, and names the room the caller is
+// already in when that is why it failed (D82).
+//
+// The id is asked of the store rather than parsed out of the error, because
+// the store is the thing that knows and a parsed id is a second copy of a
+// fact that can be wrong. Without it the app can only say "you are already in
+// a room" to somebody whose own window has forgotten which one - which is a
+// dead end, and the interface is the half that has to get out of it.
+func (s *Server) refuse(w http.ResponseWriter, playerID string, err error) {
+	if errors.Is(err, room.ErrAlreadyInAnotherRoom) {
+		where, _ := s.rooms.RoomOf(playerID)
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"error":   "you are already in another room",
+			"room_id": where,
+		})
+		return
+	}
+	writeErr(w, statusFor(err), err.Error())
 }
 
 func writeErr(w http.ResponseWriter, code int, msg string) {

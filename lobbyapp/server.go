@@ -522,6 +522,40 @@ func (s *server) pull(cfg *session.Config, out map[string]any) {
 	if resp.Room != nil {
 		out["room"] = resp.Room
 	}
+	// One person, one room, and the coordinator is the thing that knows which
+	// (D82). If it names a room this app is not showing, take its answer.
+	//
+	// This is the escape from a dead end rather than a nicety. A session
+	// cleared, a reinstall, a crash between joining and saving, and the app
+	// believes it is in no room while the server has it seated - so every
+	// attempt to open or join one is refused with "you are already in another
+	// room" and the person cannot see which, or get out.
+	//
+	// Only ever adopted, never used to clear: an empty answer to a request
+	// that crossed a join in flight would throw somebody out of the room they
+	// just entered. Room-gone and being-removed are handled below, where the
+	// answer is about the room the client actually asked about.
+	//
+	// The guard is exactness rather than a timer: adopt only if this app
+	// still believes what it believed when it asked. If the player joined or
+	// left while the request was in the air, the answer is about a question
+	// nobody is asking any more, and the next poll settles it.
+	if resp.RoomID != "" && resp.RoomID != req.RoomID && s.snapshot().RoomID == req.RoomID {
+		// The whole membership, not just the id. Adopting the id alone would
+		// show the room and leave the app with no ticket, no addresses and no
+		// idea whether it is the host - a room on screen that cannot be
+		// connected to. Refresh is the call that exists for exactly this:
+		// a fresh ticket for somebody the room already holds a seat for.
+		if info, err := s.api().Refresh(resp.RoomID, cfg.PlayerID); err == nil {
+			s.storeRoom(info)
+			out["room_id"] = resp.RoomID
+			out["room_adopted"] = true
+			log.Printf("the server has us in room %s; adopting it", resp.RoomID)
+		} else {
+			log.Printf("the server has us in room %s but would not re-issue: %v",
+				resp.RoomID, err)
+		}
+	}
 	if resp.RoomGone && cfg.RoomID != "" {
 		// The host left, or the coordinator restarted. Do not strand the
 		// player on a screen for a room that no longer exists.

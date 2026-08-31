@@ -538,5 +538,12 @@ WIDE=1366 TALL=768 bash scripts/preview.sh small
     mode lived at the end of it. Anything a player scans the lobby *for* goes
     in its own `flex: none` element beside the status badge, or into the row's
     own colour (D81).
-18. **Never leave a change on this PC.** `./scripts/ship.sh` after the commit
+18. **Never let the interface be the only place a rule lives, and never let
+    it enforce half of one.** The Join button had said "you are already in a
+    room" since D68 while the coordinator allowed it, and the Create button
+    beside it said nothing at all - so the rule was enforced in one place, on
+    one of its two doors, by the half of the system a player can bypass
+    (D82). The server enforces; the interface stops offering what would be
+    refused, on **every** door.
+19. **Never leave a change on this PC.** `./scripts/ship.sh` after the commit
     (D62). The owner tests on the live product.

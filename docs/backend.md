@@ -555,6 +555,18 @@ the store on the next tick, before anybody has read why it ended.
    instead (D81). A room has three seating areas. Anything true of a *person*
    is looked up from their id, not from wherever the loop happened to find
    them.
-17. **Never commit secrets.** `github_token_admin.txt` and
+17. **Never leave a rule about the platform to the objects it constrains.**
+   Every room correctly refused a second seat in *itself*; nothing owned "a
+   person is in one room", so Create never enforced it and one player could
+   leave permanent haunted rooms in the lobby (D82). When a rule spans
+   objects, it belongs to the store, and the question it rests on gets a name
+   - `Store.RoomOf` - so the next caller finds it instead of writing a third
+   copy of the scan.
+18. **Never guard writing without guarding reading.** Posting into a room you
+   are not in was refused from the start; reading that room's chat was not,
+   and every room id is in the lobby list handed to every client on every
+   poll (D82). Whenever a check exists on one direction of a channel, ask out
+   loud what the other direction returns.
+19. **Never commit secrets.** `github_token_admin.txt` and
    `mobinhost_server_1.txt` are gitignored; the download key and API token
    live only on the server. Verify before every commit.

@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/netip"
 	"strings"
 	"sync"
@@ -17,6 +18,10 @@ var (
 	ErrNoRoomIndexes = errors.New("room: no free room index")
 	ErrNotFound      = errors.New("room: no such room")
 	ErrNotMember     = errors.New("room: not in that room")
+	// ErrAlreadyInAnotherRoom is one person trying to be in two places (D82).
+	// Distinct from ErrAlreadyJoined, which is the same room twice and is
+	// harmless; this one is the rule.
+	ErrAlreadyInAnotherRoom = errors.New("room: you are already in another room")
 )
 
 // Membership is what a player needs in order to connect.
@@ -114,6 +119,14 @@ func (s *Store) Create(hostID, name string, now time.Time) (*Room, Membership, e
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// One person, one room (D82). Without this a player could open a second
+	// room and walk away from the first, and the first would never close: a
+	// room dies when its *host* goes offline, which is a fact about a person
+	// rather than about a room, and that person is online for both.
+	if err := s.elsewhere(hostID, ""); err != nil {
+		return nil, Membership{}, err
+	}
+
 	index, ok := s.freeIndexLocked()
 	if !ok {
 		return nil, Membership{}, ErrNoRoomIndexes
@@ -138,6 +151,62 @@ func (s *Store) Create(hostID, name string, now time.Time) (*Room, Membership, e
 	return r, m, nil
 }
 
+// RoomOf reports which room somebody is seated in, playing, watching or
+// moderating (D82).
+//
+// **Derived, never indexed.** A map from player to room would be a second
+// record of a fact the rooms already hold, kept in step by hand across every
+// path that seats or unseats anybody - Create, three kinds of join, Leave,
+// Kick, Close, the host's grace window, and the sweep that deletes a room
+// outright. That map drifting is the same shape of bug as an address derived
+// from a seat (D74) or a mode kept in one person's window (D80), and it would
+// drift the same way: silently, on the path nobody remembered.
+//
+// The cost is a scan of the open rooms, and it is paid only when somebody
+// opens or enters one - never on a poll, never per packet. At the 2048-room
+// ceiling that is a few tens of thousands of string compares, which is
+// nothing next to being wrong.
+//
+// A closed room holds nobody: it lingers for a few minutes so people can read
+// why it ended, and pinning its members to it for that long would be a rule
+// outliving the thing it is about.
+func (s *Store) RoomOf(playerID string) (string, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.roomOfLocked(playerID)
+}
+
+func (s *Store) roomOfLocked(playerID string) (string, bool) {
+	if playerID == "" {
+		return "", false
+	}
+	for id, r := range s.rooms {
+		if r.Status == StatusClosed {
+			continue
+		}
+		if _, _, seated := r.SlotOf(playerID); seated {
+			return id, true
+		}
+	}
+	return "", false
+}
+
+// elsewhere refuses somebody who is already sitting in a different room.
+//
+// A host whose machine dropped is still in theirs, and that is deliberate:
+// SeeHost starts the grace timer and touches nothing else, so they still hold
+// the seat and the address every other client is sending to. Their room is
+// alive and still theirs for the next minute, and the thing they should be
+// doing is going back to it - which is why the refusal names the room rather
+// than only saying no. When the window closes the room closes with it, and
+// they are free on the same tick.
+func (s *Store) elsewhere(playerID, wanted string) error {
+	if where, in := s.roomOfLocked(playerID); in && where != wanted {
+		return fmt.Errorf("%w: %s", ErrAlreadyInAnotherRoom, where)
+	}
+	return nil
+}
+
 func (s *Store) freeIndexLocked() (int, bool) {
 	for i := 0; i < ipam.MaxRooms; i++ {
 		if _, taken := s.indexes[i]; !taken {
@@ -152,6 +221,9 @@ func (s *Store) Join(roomID string, who Applicant, now time.Time) (Membership, e
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if err := s.elsewhere(who.ID, roomID); err != nil {
+		return Membership{}, err
+	}
 	r, ok := s.rooms[roomID]
 	if !ok {
 		return Membership{}, ErrNotFound
@@ -198,6 +270,9 @@ func (s *Store) JoinObserver(roomID string, who Applicant, now time.Time) (Membe
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if err := s.elsewhere(who.ID, roomID); err != nil {
+		return Membership{}, err
+	}
 	r, ok := s.rooms[roomID]
 	if !ok {
 		return Membership{}, ErrNotFound
@@ -213,6 +288,9 @@ func (s *Store) JoinAdmin(roomID, playerID string, now time.Time) (Membership, e
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if err := s.elsewhere(playerID, roomID); err != nil {
+		return Membership{}, err
+	}
 	r, ok := s.rooms[roomID]
 	if !ok {
 		return Membership{}, ErrNotFound

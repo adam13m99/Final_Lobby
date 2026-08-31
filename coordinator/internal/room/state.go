@@ -660,6 +660,15 @@ func (r *Room) Kick(actorID, targetID string, now time.Time) error {
 	if actorID != r.HostID {
 		return ErrNotHost
 	}
+	// A host kicking themselves is not a way to leave, and it used to be
+	// allowed (D82). It would empty their seat, drop the address every client
+	// in the room is connecting to, start the grace countdown and bar them
+	// from their own room for a minute - four things nobody asked for, from
+	// one misdirected click. Leave is the way out, and it ends the room
+	// deliberately (D70).
+	if targetID == r.HostID {
+		return ErrNotMemberOfRoom
+	}
 	r.Leave(targetID, now)
 	if r.KickCount == nil {
 		r.KickCount = make(map[string]int)
@@ -730,6 +739,15 @@ func (r *Room) SetHost(newHostID string) (moved []string, err error) {
 
 	r.HostID = newHostID
 	r.HostSlot = slot
+	// Both halves, or the room remembers a slot number against the wrong
+	// array (D82). HostSlot indexes the teams or the gallery and HostWatching
+	// says which; handing a room from a host who was watching to one who is
+	// playing used to move the number and leave the flag behind. It shows up
+	// on one path and it is the expensive one - a host whose PC dies comes
+	// back to "the seat they left", read from these two - so the new host
+	// would come back to the gallery of the match running on their own
+	// machine.
+	r.HostWatching = false
 
 	// The room has a host again, so it is no longer counting down to closure.
 	r.HostGraceUntil = time.Time{}

@@ -282,6 +282,7 @@ there; this is the summary.
 | T36 the gallery is a seat like any other (D79) | **done** — anybody in a room may move into a watching seat and back, the host included; watchers now hold an address from the same pool as players so the move never touches the tunnel; the room's three actions moved into the facts panel |
 | T37 the game mode belongs to the room (D80) | **done** — twelve real Dota modes with their real names, in one list in `protocol/gamemode` that the coordinator, the service, the CLI and the menu in the markup are all bound to; the host picks one when they open the room or in Room settings, everybody in the room sees it in the facts band, and Start Game launches **that** mode instead of a hardcoded All Pick |
 | T38 the watching host, and the lobby row (D81) | **done** — a host who moved into the gallery started being called by their account id on every screen in the room; fixed. A watching seat is now a side of its own: the host still starts the match and goes in with `+jointeam spec`, so all ten playing slots stay for players, and everybody else watching gets **Watch Game**. Every lobby row names its game mode, and the room you are in is the green row instead of a row saying "You are here" |
+| T39 one person, one room, and the review (D82) | **done** — nothing owned the sentence "a person is in one room", so Create never enforced it and an abandoned room never closed: a room dies when its *host* goes offline, and a host with two rooms is online for both. `Store.RoomOf` is that sentence, derived rather than indexed; the refusal names the room and `sync` answers `in_room_id` so an app that has lost track repairs itself. The review the owner asked for found four more: a room handed over with `HostWatching` left behind, a host able to kick themselves, **any player able to read any room's chat**, and a third copy of the same scan |
 
 **The interface was redesigned on 2026-08-25** at the owner's request: the
 old one was flat, grey and mostly empty space. What changed, beyond colour
@@ -566,6 +567,13 @@ list without an answer from them.
 
 ## Open questions
 
+0. **What can a moderator do inside a room?** `Store.JoinAdmin` seats a
+   moderator in the reserved seat outside the ten playing slots — a product
+   rule from the start, built and tested — and **no route reaches it** (found
+   by the D82 review, 2026-08-31). What a moderator should see and be able to
+   do once inside is a product decision, and it is with the owner. Note that
+   the one-room rule applies to that seat too: as things stand a moderator
+   would have to leave their own room to go and moderate another.
 1. **Can a new player take over an abandoned slot in a running Dota LAN match?**
    Reconnecting your own dropped player works; a different person filling the
    slot is unverified. The dynamic room flow depends on it. Answered by Task 16.

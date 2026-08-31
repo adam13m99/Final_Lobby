@@ -85,6 +85,17 @@ type syncResponse struct {
 	Room     *roomView     `json:"room,omitempty"`
 	RoomGone bool          `json:"room_gone,omitempty"`
 	Seated   bool          `json:"seated"`
+	// RoomID is the room the *server* has this player seated in, empty if
+	// none (D82). The client sends the room it believes it is in; this is the
+	// answer, and the client is expected to take it.
+	//
+	// It exists because "you are already in another room" is a dead end for
+	// anybody whose own window has lost track - a cleared session, a
+	// reinstall, a crash between joining and saving. The server always knows;
+	// there is no reason for the app ever to be lost, and every reason not to
+	// leave the escape route to a person who cannot see the state they are
+	// stuck in.
+	RoomID string `json:"in_room_id"`
 
 	LobbyChat   []chat.Message `json:"lobby_chat,omitempty"`
 	LobbyCursor uint64         `json:"lobby_cursor"`
@@ -130,6 +141,7 @@ func (s *Server) sync(w http.ResponseWriter, r *http.Request) {
 		Online:     s.players.Online(OnlineWindow, s.now()),
 		ServerTime: s.now(),
 	}
+	out.RoomID, _ = s.rooms.RoomOf(body.PlayerID)
 	if p, ok := s.players.Get(body.PlayerID); ok {
 		out.Player = p
 	} else {
@@ -159,8 +171,20 @@ func (s *Server) sync(w http.ResponseWriter, r *http.Request) {
 			v := s.view(rm)
 			out.Room = &v
 			_, _, out.Seated = rm.SlotOf(body.PlayerID)
-			out.RoomChat = s.chat.Since(body.RoomID, body.RoomCursor)
-			out.RoomCursor = cursorAfter(body.RoomCursor, out.RoomChat)
+			// Only people in a room read what is said in it (D82). Writing
+			// has been guarded since the chat was built - "anyone who learns
+			// a room ID can heckle a match they are not part of" - and
+			// reading was not, which is the same objection and the larger
+			// half of it. Every room's id is in the lobby list handed to
+			// every client on every poll, so claiming one costs nothing.
+			//
+			// The room itself stays visible: a room in the lobby is meant to
+			// be looked at by people deciding whether to join it. What they
+			// do not get is the conversation inside it.
+			if out.Seated {
+				out.RoomChat = s.chat.Since(body.RoomID, body.RoomCursor)
+				out.RoomCursor = cursorAfter(body.RoomCursor, out.RoomChat)
+			}
 		}
 	}
 	writeJSON(w, http.StatusOK, out)

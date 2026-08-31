@@ -74,6 +74,12 @@ type SyncResponse struct {
 	Room     *RoomView  `json:"room"`
 	RoomGone bool       `json:"room_gone"`
 	Seated   bool       `json:"seated"`
+	// RoomID is the room the *server* has this player in, empty if none
+	// (D82). It is the answer to the question the request asks, and the
+	// client is expected to take it over its own belief: one person is in one
+	// room, the coordinator is the thing that knows which, and an app that
+	// disagrees is an app that cannot open a room and cannot say why.
+	RoomID string `json:"in_room_id"`
 
 	LobbyChat   []ChatMessage `json:"lobby_chat"`
 	LobbyCursor uint64        `json:"lobby_cursor"`
