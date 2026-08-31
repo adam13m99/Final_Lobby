@@ -283,6 +283,7 @@ there; this is the summary.
 | T37 the game mode belongs to the room (D80) | **done** — twelve real Dota modes with their real names, in one list in `protocol/gamemode` that the coordinator, the service, the CLI and the menu in the markup are all bound to; the host picks one when they open the room or in Room settings, everybody in the room sees it in the facts band, and Start Game launches **that** mode instead of a hardcoded All Pick |
 | T38 the watching host, and the lobby row (D81) | **done** — a host who moved into the gallery started being called by their account id on every screen in the room; fixed. A watching seat is now a side of its own: the host still starts the match and goes in with `+jointeam spec`, so all ten playing slots stay for players, and everybody else watching gets **Watch Game**. Every lobby row names its game mode, and the room you are in is the green row instead of a row saying "You are here" |
 | T39 one person, one room, and the review (D82) | **done** — nothing owned the sentence "a person is in one room", so Create never enforced it and an abandoned room never closed: a room dies when its *host* goes offline, and a host with two rooms is online for both. `Store.RoomOf` is that sentence, derived rather than indexed; the refusal names the room and `sync` answers `in_room_id` so an app that has lost track repairs itself. The review the owner asked for found four more: a room handed over with `HostWatching` left behind, a host able to kick themselves, **any player able to read any room's chat**, and a third copy of the same scan |
+| T40 no grace, and the notices that hid each other (D83, D84, D85) | **done** — a host who leaves, quits or drops now closes their room on the spot: `HostGracePeriod`, `HostGraceUntil`, `HostSeenAway`, `Room.Tick`, `HostAway()`, the `host_away` status and the whole host-returning branch of `Room.Join` are gone, and every ending goes through `Room.Close`. The only delay left is detection — thirty seconds of silence before a host counts as offline. Both notice bugs were one cause each: four notices shared one CSS grid area and were painted on top of one another, and an error from a button lived in the variable the two-second poll overwrites. A moderator leaves the room they are in to go and moderate another, which is the owner's answer and the behaviour the one-room rule already had |
 
 **The interface was redesigned on 2026-08-25** at the owner's request: the
 old one was flat, grey and mostly empty space. What changed, beyond colour
@@ -571,9 +572,10 @@ list without an answer from them.
    moderator in the reserved seat outside the ten playing slots — a product
    rule from the start, built and tested — and **no route reaches it** (found
    by the D82 review, 2026-08-31). What a moderator should see and be able to
-   do once inside is a product decision, and it is with the owner. Note that
-   the one-room rule applies to that seat too: as things stand a moderator
-   would have to leave their own room to go and moderate another.
+   do once inside is a product decision, and it is still with the owner.
+   *Half of this is answered:* the one-room rule applies to the staff seat
+   too, and the owner has confirmed it should — **a moderator leaves the room
+   they are in to go and moderate another** (D85, 2026-08-31).
 1. **Can a new player take over an abandoned slot in a running Dota LAN match?**
    Reconnecting your own dropped player works; a different person filling the
    slot is unverified. The dynamic room flow depends on it. Answered by Task 16.

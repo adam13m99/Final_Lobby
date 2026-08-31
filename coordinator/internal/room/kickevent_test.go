@@ -80,6 +80,6 @@ func TestRoomIDsAreNeverReused(t *testing.T) {
 		if _, err := s.Leave(r.ID, "host", when()); err != nil {
 			t.Fatal(err)
 		}
-		s.Tick(when().Add(2 * HostGracePeriod))
+		s.Tick(when().Add(2 * ClosedRoomLinger))
 	}
 }

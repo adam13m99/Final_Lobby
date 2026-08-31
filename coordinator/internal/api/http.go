@@ -366,14 +366,9 @@ type roomView struct {
 	HostRelayMillis int `json:"host_relay_ms,omitempty"`
 	// Players is the bare ID list the first CLI was written against.
 	Players []string `json:"players"`
-	// HostAway is set while the room is counting down to closure because its
-	// host stopped answering (D70). The room is still there and the host can
-	// still come back; saying nothing and drawing it as a normal open room is
-	// how somebody joins a room that vanishes ten seconds later.
-	HostAway bool `json:"host_away,omitempty"`
 	// HostInGame is the coordinator's own observation that the host is in a
-	// match (D69). The status below already reads locked_in_game because of
-	// it; this says which of the two reasons it is.
+	// match (D69). Status reads locked_in_game because of it; this says that
+	// the reason was the match rather than the host closing the door.
 	HostInGame bool `json:"host_in_game,omitempty"`
 }
 
@@ -469,28 +464,22 @@ func (s *Server) view(r room.Room) roomView {
 	}
 	v.Joinable = v.Free > 0 && r.Admits()
 
-	// The two statuses the room does not store, because they are observations
-	// rather than decisions (D69, D70). They are derived here, once, so that
-	// every reader - the lobby list, the room screen, the CLI - agrees about
-	// what a room whose host is in a match or has gone quiet looks like.
+	// The one status the room does not store, because it is an observation
+	// rather than a decision (D69). It is derived here, once, so that every
+	// reader - the lobby list, the room screen, the CLI - agrees about what a
+	// room whose host is in a match looks like.
 	//
-	// A room in its host's grace window stays joinable on purpose: the host
-	// coming back is a join, and it is the only thing that saves the room.
+	// There was a second, host_away, for a room counting down because its
+	// host had gone quiet. Nothing counts down any more: a host the
+	// coordinator cannot see closes the room on that tick (D84), so the state
+	// it described has stopped existing, and a reader who saw it would be
+	// looking at a room that was already gone.
 	v.HostInGame = r.HostInGame
-	switch {
-	case r.HostAway():
-		v.HostAway = true
-		v.Status = statusHostAway
-	case r.HostInGame && r.Status == room.StatusOpen:
+	if r.HostInGame && r.Status == room.StatusOpen {
 		v.Status = string(room.StatusLocked)
 	}
 	return v
 }
-
-// statusHostAway is a view-only status. It is not a room.Status: the room is
-// still open, and what has happened to it is that nobody is hosting it at
-// this instant.
-const statusHostAway = "host_away"
 
 // freshRelay returns a player's relay latency only while it still describes
 // the connection they have now. A client that stopped reporting leaves its

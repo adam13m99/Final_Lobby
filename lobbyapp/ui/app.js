@@ -62,10 +62,10 @@ async function act(fn) {
   busy = true;
   try {
     await fn();
-    banner("");
+    report("");
     await refresh();
   } catch (e) {
-    banner(e.message);
+    report(e.message);
   } finally {
     busy = false;
   }
@@ -83,7 +83,33 @@ async function act(fn) {
 // sentence is a new problem and comes back up.
 let bannerShut = "";
 
+// Two different things want that one strip, and only one of them is about
+// something the person just did (D83).
+//
+// `standing` is a condition the app keeps rediscovering by itself: the service
+// is down, the tunnel tore, the room is gone. render() rewrites it on every
+// poll, and writing an empty one means something - the condition ended.
+//
+// `report` is the reply to a button somebody just pressed. It used to live in
+// the same place, so a poll that found nothing wrong wiped it about two
+// seconds after it appeared, which is the whole of "some errors are not shown
+// properly". A report is cleared by the next action, never by a poll.
+let standingMsg = "", standingRetry = false, reportMsg = "";
+
+function report(msg) {
+  reportMsg = msg || "";
+  paintBanner();
+}
+
 function banner(msg, retry) {
+  standingMsg = msg || "";
+  standingRetry = !!retry;
+  paintBanner();
+}
+
+function paintBanner() {
+  const msg = reportMsg || standingMsg;
+  const retry = !reportMsg && standingRetry;
   const b = $("banner");
   if (!msg) {
     bannerShut = "";
@@ -343,10 +369,19 @@ function render() {
     ? (s.tunnel_error_key ? t(s.tunnel_error_key) : s.tunnel_error)
     : "";
   const trouble = s.service_error || s.coordinator_error || tunnelTrouble ||
-    (s.room_gone ? t("err.room_gone") : "") ||
-    (s.removed ? t("err.removed") : "") ||
     (s.build_warning || "");
   banner(trouble, !!tunnelTrouble && trouble === tunnelTrouble);
+
+  // The room closing under you, and being removed from one, are events rather
+  // than conditions: the app is told once, on one poll, and never again. They
+  // used to be written into the standing strip alongside the conditions
+  // above, which meant the most important sentence the app can say - the room
+  // you were sitting in is gone - was on screen for about two seconds and
+  // then wiped by the next poll finding nothing wrong (D83). They go through
+  // the same channel as a failed button now, and stay until the person does
+  // something.
+  if (s.room_gone) report(t("err.room_gone"));
+  if (s.removed) report(t("err.removed"));
 
   // Terms that changed after somebody signed up are terms they have not
   // agreed to. Shown only where all three facts are known: signed in, a
@@ -764,16 +799,16 @@ function joinRoom(r) {
 }
 
 function statusClass(status) {
-  if (status === "host_away") return "badge locked";
   if (status === "locked_in_game" || status === "closed") return "badge locked";
   if (status === "open_to_new_players") return "badge replace";
   return "badge";
 }
 
 function statusLabel(status) {
-  // Two statuses the room does not store: the coordinator derives them from
-  // what the host's own machine is doing (D69, D70).
-  if (status === "host_away") return t("room.status.away");
+  // One status the room does not store: the coordinator derives it from what
+  // the host's own machine is doing (D69). There was a second, "Host away",
+  // for a room counting down because its host had gone quiet - since D84 that
+  // room is closed instead, and there is nothing left to label.
   if (status === "locked_in_game") return t("room.status.locked");
   if (status === "open_to_new_players") return t("room.status.replacing");
   if (status === "closed") return t("room.status.closed");
@@ -1486,7 +1521,7 @@ async function loadConversation(send) {
     dmLogs[id] = out.messages || [];
     if (dmOpen() === id) drawLog();
   } catch (e) {
-    banner(e.message);
+    report(e.message);
   }
 }
 
@@ -1895,7 +1930,7 @@ function renderModRooms(rooms) {
 
     const hand = el("button", "tiny", t("mod.host.give"));
     hand.onclick = () => {
-      if (!pick.value) { banner(t("mod.host.nobody")); return; }
+      if (!pick.value) { report(t("mod.host.nobody")); return; }
       const why = window.prompt(t("mod.reason.ask"));
       if (!why) return;
       act(() => api("/api/admin/rooms/host",
@@ -1964,10 +1999,10 @@ async function lookUp(username) {
       const got = await api("/api/admin/labels");
       modLabels = got.labels || [];
     }
-    banner("");
+    report("");
   } catch (e) {
     modRecord = null;
-    banner(e.message);
+    report(e.message);
   }
   renderRecord();
 }
@@ -2198,7 +2233,7 @@ $("modsanctionform").onsubmit = (e) => {
   e.preventDefault();
   if (!modRecord) return;
   const reason = $("mod-reason").value.trim();
-  if (!reason) { banner(t("mod.reason.required")); return; }
+  if (!reason) { report(t("mod.reason.required")); return; }
   act(async () => {
     await api("/api/admin/sanction", {
       target_id: modRecord.player_id,
@@ -2215,7 +2250,7 @@ $("modbannerform").onsubmit = (e) => {
   e.preventDefault();
   const title = $("ban-title").value.trim();
   const body = $("ban-body").value.trim();
-  if (!title && !body) { banner(t("mod.banner.empty")); return; }
+  if (!title && !body) { report(t("mod.banner.empty")); return; }
   act(async () => {
     await api("/api/admin/banners", {
       title: title,
@@ -2340,7 +2375,7 @@ $("passform").onsubmit = async (e) => {
       next: $("pw-new").value,
     });
     $("passgate").classList.add("hidden");
-    banner(t("pass.done"));
+    report(t("pass.done"));
     await refresh();
   } catch (err) {
     $("passerr").textContent = err.message;
@@ -2430,8 +2465,11 @@ $("createform").onsubmit = (e) => {
         game_mode: Number($("newmode").value) || 0,
       });
     } catch (err) {
+      // Said once, inside the dialog the person is looking at. Rethrowing
+      // would also raise the top strip, behind the overlay, where it would sit
+      // unread until the dialog closed and then read as a fresh failure.
       $("createerr").textContent = err.message;
-      throw err;
+      return;
     }
     $("creategate").classList.add("hidden");
     show("room");
@@ -2667,7 +2705,7 @@ $("termsok").onclick = () => {
   act(async () => {
     await api("/api/auth/terms", { version: state.terms_version });
     shutTerms();
-    banner(t("terms.accepted"));
+    report(t("terms.accepted"));
   });
 };
 
@@ -2837,7 +2875,7 @@ async function refresh() {
     }
     render();
   } catch (e) {
-    banner(t("err.dead", { error: e.message }));
+    report(t("err.dead", { error: e.message }));
   }
 }
 

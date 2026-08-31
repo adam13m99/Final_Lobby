@@ -357,7 +357,7 @@ an obvious reading would put them:
 ## What a room says about its host
 
 Two of a room's statuses are not stored anywhere - the coordinator derives
-them from what the host's own machine is doing (D69, D70) - and the page reads
+them from what the host's own machine is doing (D69) - and the page reads
 them like any other:
 
 - **`locked_in_game`** now also means "the host is in a match", with
@@ -365,9 +365,11 @@ them like any other:
   (`canTakeSeat` already refused a locked room) and `drawNetBanner` says so in
   words, because a screen that has silently stopped responding to clicks is
   indistinguishable from a broken one.
-- **`host_away`** is a room counting down to closure because its host stopped
-  answering. It is still joinable, and that is deliberate: the host coming
-  back is a join.
+- There was a second, **`host_away`**, for a room counting down because its
+  host had stopped answering. It is gone with the grace period (D84): a host
+  the coordinator cannot see closes the room, so the room a reader would have
+  seen labelled that way is `closed`. Do not reintroduce the label without
+  reintroducing the state.
 
 The thing not to reintroduce: the room's one button must **not** be disabled
 because the room is locked. The nine people already seated in it are exactly

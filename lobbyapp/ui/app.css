@@ -365,7 +365,13 @@ h3 em { font-style: normal; text-transform: none; letter-spacing: 0; color: var(
 
 /* --------------------------------------------------------------- strips */
 
-#banners, #banner, #update, #termsmoved { grid-area: strip; }
+/* One column for every notice, most urgent first (D83).
+   These four were each given `grid-area: strip` directly. Grid stacks items
+   sharing an area, so they were painted over one another - measured at
+   top=66 h=50 for three of them, the same fifty pixels - and whichever was
+   drawn last won. An error raised while an update was offered could not be
+   seen at all. They flow now. */
+#strips { grid-area: strip; display: flex; flex-direction: column; min-width: 0; }
 #banners:empty { display: none; }
 
 .strip { display: flex; gap: 8px; padding: 12px 18px 0; overflow-x: auto; }

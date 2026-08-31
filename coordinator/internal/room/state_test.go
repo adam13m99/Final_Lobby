@@ -172,26 +172,30 @@ func TestPlayerWhoLeftMayRejoinImmediately(t *testing.T) {
 	}
 }
 
-// D40: one minute, not two. GameRanger's behaviour but friendlier - a room
-// whose host has genuinely gone should not hold nine people staring at it.
-func TestHostDepartureClosesRoomAfterOneMinute(t *testing.T) {
+// D84: the host goes, the room goes, on the same call. It was two minutes,
+// then one; it is now none, because the owner watched what a countdown
+// actually does to the nine people left in the room - they cannot tell
+// whether waiting is worth it, so they wait.
+func TestHostDepartureClosesTheRoomAtOnce(t *testing.T) {
 	r := newRoom(t)
 	_, _ = r.Join(room.Anyone("p2"), t0)
 	r.Leave("host-1", t0)
 
-	r.Tick(t0.Add(30 * time.Second))
-	if r.Status == room.StatusClosed {
-		t.Fatal("room closed before the 1-minute grace expired")
-	}
-	r.Tick(t0.Add(time.Minute + time.Second))
 	if r.Status != room.StatusClosed {
-		t.Fatalf("status = %q, want Closed after grace expiry", r.Status)
+		t.Fatalf("status = %q, want Closed the instant the host left", r.Status)
+	}
+	if !r.ClosedAt.Equal(t0) {
+		t.Errorf("ClosedAt = %v, want %v", r.ClosedAt, t0)
+	}
+	// And it stays shut. Nobody walks back into it, the host least of all.
+	if _, err := r.Join(room.Anyone("host-1"), t0.Add(time.Second)); !errors.Is(err, room.ErrRoomClosed) {
+		t.Errorf("the host rejoined a closed room (err = %v)", err)
 	}
 }
 
-// D40: the host's absence is the only thing that ends a room. A match
-// finishing leaves everyone where they are, because the ten people who just
-// played are usually the ten who want to play again.
+// D40, and still true under D84: the host's absence is the only thing that
+// ends a room. A match finishing leaves everyone where they are, because the
+// ten people who just played are usually the ten who want to play again.
 func TestAFinishedMatchLeavesTheRoomAlone(t *testing.T) {
 	r := newRoom(t)
 	_, _ = r.Join(room.Anyone("p2"), t0)
@@ -199,10 +203,13 @@ func TestAFinishedMatchLeavesTheRoomAlone(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// An hour of match, then nothing happens to the room on its own.
+	// An hour of match, with the host present throughout, and nothing happens
+	// to the room on its own.
 	for i := 1; i <= 60; i++ {
-		r.Tick(t0.Add(time.Duration(i) * time.Minute))
+		r.SeeHost(true, true, t0.Add(time.Duration(i)*time.Minute))
 	}
+	// The match ends. The host is still here; so is everybody else.
+	r.SeeHost(true, false, t0.Add(time.Hour))
 	if r.Status == room.StatusClosed {
 		t.Fatal("the room closed while its host was still present")
 	}
@@ -216,43 +223,6 @@ func TestAFinishedMatchLeavesTheRoomAlone(t *testing.T) {
 	}
 	if _, err := r.Join(room.Anyone("p3"), t0.Add(time.Hour)); err != nil {
 		t.Fatalf("a new player could not join the reopened room: %v", err)
-	}
-}
-
-func TestHostReturnWithinGraceSavesRoom(t *testing.T) {
-	r := newRoom(t)
-	r.Leave("host-1", t0)
-	if _, err := r.Join(room.Anyone("host-1"), t0.Add(30*time.Second)); err != nil {
-		t.Fatalf("host could not reclaim room: %v", err)
-	}
-	r.Tick(t0.Add(3 * time.Minute))
-	if r.Status == room.StatusClosed {
-		t.Fatal("room closed despite the host returning within grace")
-	}
-}
-
-func TestHostReturnsToSlotZeroSoTheAddressIsUnchanged(t *testing.T) {
-	r := newRoom(t)
-	_, _ = r.Join(room.Anyone("p2"), t0)
-	r.Leave("host-1", t0)
-	slot, err := r.Join(room.Anyone("host-1"), t0.Add(10*time.Second))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if slot != 0 {
-		t.Fatalf("returning host got slot %d, want 0 - clients are already "+
-			"connecting to the slot 0 address", slot)
-	}
-}
-
-func TestLockedRoomStillAdmitsTheReturningHost(t *testing.T) {
-	r := newRoom(t)
-	_, _ = r.Join(room.Anyone("p2"), t0)
-	_ = r.SetStatus("host-1", room.StatusLocked, t0)
-	r.Leave("host-1", t0)
-
-	if _, err := r.Join(room.Anyone("host-1"), t0.Add(20*time.Second)); err != nil {
-		t.Fatalf("host locked out of their own match: %v", err)
 	}
 }
 
@@ -363,31 +333,6 @@ func TestTheHostMayGoAndWatch(t *testing.T) {
 	}
 	if slot, kind, _ := r.SlotOf("host-1"); kind != room.SeatPlayer || slot != 4 {
 		t.Fatalf("host is at %v/%d, want player seat 4", kind, slot)
-	}
-}
-
-// A host who crashed comes back to the seat they were in, not to the lowest
-// free one - their address is derived from it, and in the meantime somebody
-// else may have taken the seat they started in.
-func TestAReturningHostReclaimsTheirOwnSeat(t *testing.T) {
-	r := newRoom(t)
-	if err := r.Move("host-1", 6, false); err != nil {
-		t.Fatal(err)
-	}
-	r.Join(room.Anyone("p2"), t0)
-	r.Leave("host-1", t0)
-	if r.HostGraceUntil.IsZero() {
-		t.Fatal("the host left and no grace timer started")
-	}
-	slot, err := r.Join(room.Anyone("host-1"), t0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if slot != 6 {
-		t.Errorf("the host came back to slot %d, want 6", slot)
-	}
-	if !r.HostGraceUntil.IsZero() {
-		t.Error("the host is back and the room is still counting down")
 	}
 }
 

@@ -1,6 +1,7 @@
 package room
 
 import (
+	"errors"
 	"testing"
 	"time"
 )
@@ -262,21 +263,31 @@ func TestNonsenseSettingsAreRefused(t *testing.T) {
 	}
 }
 
-// A host who crashed mid-match is not asked for their own room's password,
-// and is not measured against their own room's MMR floor.
-func TestTheHostGetsBackIntoTheirOwnRoom(t *testing.T) {
+// A host who crashed mid-match does not come back to the room - there is no
+// room to come back to (D84).
+//
+// This test used to assert the opposite, and the reasoning was sound while a
+// grace existed: the host was not asked for their own password, was not
+// measured against their own MMR floor, and could walk through a locked door
+// into the match running on their own PC. All of that hung on the room still
+// being there a few seconds later, and it no longer is.
+func TestTheHostCannotReclaimTheRoomTheyDroppedOutOf(t *testing.T) {
 	s := NewStore()
 	r, _, _ := s.Create("host", "test", when())
 	_ = s.SetPrivacy(r.ID, "host", PrivacyPassword, "open sesame", 9000, when())
 	if err := s.SetStatus(r.ID, "host", StatusLocked, when()); err != nil {
 		t.Fatal(err)
 	}
-	// The store's Leave is the host deciding to go, which ends the room
-	// (D70). A crash is the room losing them, which is this.
+	// Losing the host - a crash, a cut line - rather than the host deciding
+	// to go. Both end the room now; this is the one nobody pressed.
 	s.rooms[r.ID].Leave("host", when())
 
+	if s.rooms[r.ID].Status != StatusClosed {
+		t.Fatalf("status = %q, want closed the moment the host was lost",
+			s.rooms[r.ID].Status)
+	}
 	back := when().Add(30 * time.Second)
-	if _, err := s.Join(r.ID, Anyone("host"), back); err != nil {
-		t.Fatalf("the host could not reclaim their own room: %v", err)
+	if _, err := s.Join(r.ID, Anyone("host"), back); !errors.Is(err, ErrRoomClosed) {
+		t.Fatalf("the host walked back into a closed room (err = %v)", err)
 	}
 }

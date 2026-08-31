@@ -193,13 +193,11 @@ func (s *Store) roomOfLocked(playerID string) (string, bool) {
 
 // elsewhere refuses somebody who is already sitting in a different room.
 //
-// A host whose machine dropped is still in theirs, and that is deliberate:
-// SeeHost starts the grace timer and touches nothing else, so they still hold
-// the seat and the address every other client is sending to. Their room is
-// alive and still theirs for the next minute, and the thing they should be
-// doing is going back to it - which is why the refusal names the room rather
-// than only saying no. When the window closes the room closes with it, and
-// they are free on the same tick.
+// Since D84 nobody is held here by a room they cannot get back to: the tick
+// that notices a host has gone closes their room, and roomOfLocked does not
+// count a closed room, so everybody in it is free on that same tick. The
+// refusal still names the room rather than only saying no, because the
+// ordinary case is somebody who simply forgot they were sitting in one.
 func (s *Store) elsewhere(playerID, wanted string) error {
 	if where, in := s.roomOfLocked(playerID); in && where != wanted {
 		return fmt.Errorf("%w: %s", ErrAlreadyInAnotherRoom, where)
@@ -284,6 +282,17 @@ func (s *Store) JoinObserver(roomID string, who Applicant, now time.Time) (Membe
 }
 
 // JoinAdmin seats a moderator in the reserved area outside the gallery.
+//
+// **A moderator has to leave their own room to go and moderate another** -
+// the owner's answer, 2026-08-31 (D85). The one-room rule below is not an
+// oversight that the staff seat should have been excused from: a moderator
+// sitting in two rooms is a person the lobby cannot describe, and the seat is
+// there so that a full match and a full gallery can never keep them out, not
+// so that they can be in two places.
+//
+// So the refusal a moderator gets here is the right answer and not a bug to
+// route around. It names the room they are in, which is what the app needs to
+// offer them the one action that helps: go back and leave it.
 func (s *Store) JoinAdmin(roomID, playerID string, now time.Time) (Membership, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -420,13 +429,12 @@ func (s *Store) Tick(now time.Time) []string {
 			f := s.hosts(r.HostID)
 			r.SeeHost(f.Online, f.InGame, now)
 		}
-		r.Tick(now)
 		if r.Status == StatusClosed && was != StatusClosed {
 			closed = append(closed, id)
 		}
 		// Keep a closed room around briefly so players see why it ended,
 		// then release its index for reuse.
-		if r.Status == StatusClosed && now.After(r.HostGraceUntil.Add(5*time.Minute)) {
+		if r.Status == StatusClosed && now.After(r.ClosedAt.Add(ClosedRoomLinger)) {
 			delete(s.rooms, id)
 			delete(s.indexes, r.Index)
 		}

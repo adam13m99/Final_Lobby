@@ -255,6 +255,76 @@ const CHECKS = [
             (dialog ? ", and it opened the dialog anyway" : "") })
   `],
 
+  // Bug one (D83). All four notices used to be handed `grid-area: strip`
+  // directly, and grid stacks what shares an area: three of them measured
+  // top=66 h=50, the same fifty pixels, and only the last one drawn could be
+  // read. Raise every notice at once and insist they are still four
+  // rectangles.
+  ["notices stack down the page instead of on top of each other", `
+    ${STOP}
+    banner("Could not reach the coordinator: connection timed out", true);
+    renderUpdate({ version: "2026.09.01-0900", ready: true });
+    renderAds([{ id: "b1", title: "Maintenance", body: "Relay restarts at 02:00." }]);
+    document.getElementById("termsmoved").classList.remove("hidden");
+    const box = (id) => document.getElementById(id).getBoundingClientRect();
+    const ids = ["banner", "termsmoved", "update", "banners"];
+    const bad = [];
+    for (const id of ids) {
+      if (box(id).height < 8) bad.push(id + " is not on screen");
+    }
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        const a = box(ids[i]), b = box(ids[j]);
+        if (a.bottom > b.top + 1 && b.bottom > a.top + 1) {
+          bad.push(ids[i] + " and " + ids[j] + " overlap");
+        }
+      }
+    }
+    // And the whole column is above the stage, not printed over the lobby.
+    if (box("banners").bottom > box("stage").top + 1) bad.push("the notices sit over the stage");
+    return ({ ok: bad.length === 0, why: bad.join("; ") })
+  `],
+
+  // Bug two (D83). An error raised by something the person pressed used to
+  // live in the same variable render() rewrites on every poll, so a poll that
+  // found nothing wrong - about two seconds later - wiped it. The person saw a
+  // flash and no explanation.
+  ["an error from something you did survives the next poll", `
+    ${STOP}
+    delete state.service_error; delete state.coordinator_error;
+    delete state.tunnel_error; delete state.room_gone;
+    delete state.removed; delete state.build_warning;
+    report("room: that slot is taken");
+    const up = () => {
+      const b = document.getElementById("banner");
+      return b.classList.contains("hidden") ? "" : b.textContent;
+    };
+    const shown = up().indexOf("that slot is taken") >= 0;
+    render();
+    render();
+    const survived = up().indexOf("that slot is taken") >= 0;
+    // The next thing you do clears it - it is a reply, not a condition.
+    report("");
+    const cleared = up() === "";
+
+    // The same for the room closing under you, which is the one the owner
+    // actually loses: it arrives on a single poll and is never repeated, so
+    // if the poll after it can wipe it, nobody ever reads it.
+    state.room_gone = true;
+    render();
+    delete state.room_gone;
+    render();
+    render();
+    const gone = up().indexOf(t("err.room_gone")) >= 0;
+    report("");
+
+    return ({ ok: shown && survived && cleared && gone,
+      why: (shown ? "" : "it never appeared; ") +
+           (survived ? "" : "a poll wiped it; ") +
+           (cleared ? "" : "the next action did not clear it; ") +
+           (gone ? "" : "the room closing under you was wiped by the next poll") })
+  `],
+
   ["every dialog can be closed with Escape", `
     ${STOP}
     const gates = ["creategate", "roomsetgate", "invitegate", "profilegate",

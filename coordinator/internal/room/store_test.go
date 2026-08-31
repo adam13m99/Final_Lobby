@@ -82,28 +82,22 @@ func TestListHidesClosedRooms(t *testing.T) {
 	}
 }
 
-// A host who stopped answering is the case the grace period was written for
-// (D40, D70). Nobody pressed anything: the store notices on its own tick,
-// starts the countdown, and reports the closure once when it expires.
+// A host who stopped answering ends the room on the tick that notices (D84).
+// Nobody pressed anything, and the store has to report the closure exactly
+// once, because that report is what revokes the relay tickets.
 func TestTickReportsRoomsThatJustClosed(t *testing.T) {
 	s := room.NewStore()
 	_, m, _ := s.Create("h1", "A", t0)
 	_, _ = s.Join(m.RoomID, room.Anyone("p2"), t0)
 	s.WatchHosts(func(string) room.HostFacts { return room.HostFacts{} })
 
-	if closed := s.Tick(t0.Add(time.Second)); len(closed) != 0 {
-		t.Fatal("room closed the instant its host went quiet")
-	}
-	if closed := s.Tick(t0.Add(time.Minute)); len(closed) != 0 {
-		t.Fatal("room closed before the grace period expired")
-	}
-	closed := s.Tick(t0.Add(3 * time.Minute))
+	closed := s.Tick(t0.Add(time.Second))
 	if len(closed) != 1 || closed[0] != m.RoomID {
 		t.Fatalf("closed = %v, want [%s]", closed, m.RoomID)
 	}
 	// Reporting it twice would revoke tickets for an already-dead room over
 	// and over.
-	if again := s.Tick(t0.Add(4 * time.Minute)); len(again) != 0 {
+	if again := s.Tick(t0.Add(2 * time.Second)); len(again) != 0 {
 		t.Fatalf("room reported closed twice: %v", again)
 	}
 }
@@ -112,7 +106,6 @@ func TestClosedRoomIndexIsReused(t *testing.T) {
 	s := room.NewStore()
 	_, first, _ := s.Create("h1", "A", t0)
 	_, _ = s.Leave(first.RoomID, "h1", t0)
-	s.Tick(t0.Add(3 * time.Minute))
 	s.Tick(t0.Add(30 * time.Minute)) // past the linger window
 
 	_, second, err := s.Create("h2", "B", t0.Add(31*time.Minute))
@@ -366,30 +359,38 @@ func TestAPlayerLeavingDoesNotCloseTheRoom(t *testing.T) {
 	}
 }
 
-// The other half: a host who goes quiet starts the countdown, and coming back
-// inside it saves the room. This is the crash, the dropped line, the laptop
-// that went to sleep.
-func TestAHostWhoComesBackInsideTheGraceSavesTheRoom(t *testing.T) {
+// The other half: a host who goes quiet ends the room on the tick that
+// notices (D84). This is the crash, the dropped line, the laptop that went to
+// sleep - nobody presses anything, so if the tick did not close it, nothing
+// would.
+//
+// The tick must also report the room, or its tickets are never revoked and
+// the relay keeps carrying traffic for a room that no longer exists.
+func TestAHostWhoGoesQuietEndsTheRoomOnThatTick(t *testing.T) {
 	s := room.NewStore()
 	_, m, _ := s.Create("h1", "A", t0)
 
-	here := false
+	here := true
 	s.WatchHosts(func(string) room.HostFacts { return room.HostFacts{Online: here} })
 
-	s.Tick(t0.Add(time.Second))
-	r, _ := s.Get(m.RoomID)
-	if !r.HostAway() {
-		t.Fatal("nothing noticed the host had gone")
-	}
-
-	here = true
-	s.Tick(t0.Add(30 * time.Second))
-	r, _ = s.Get(m.RoomID)
-	if r.HostAway() {
-		t.Fatal("the host came back and the room kept counting down")
-	}
+	// Present: nothing happens, however long it goes on.
 	if closed := s.Tick(t0.Add(10 * time.Minute)); len(closed) != 0 {
 		t.Fatal("the room closed under a host who was sitting in it")
+	}
+
+	here = false
+	closed := s.Tick(t0.Add(10*time.Minute + time.Second))
+	if len(closed) != 1 || closed[0] != m.RoomID {
+		t.Fatalf("the tick reported %v closed, want just %s", closed, m.RoomID)
+	}
+	r, _ := s.Get(m.RoomID)
+	if r.Status != room.StatusClosed {
+		t.Fatalf("status = %q, want closed on the tick that lost the host", r.Status)
+	}
+	// Reported once. A room that closed on one tick must not be reported
+	// again on the next, or every revocation runs forever.
+	if again := s.Tick(t0.Add(10*time.Minute + 2*time.Second)); len(again) != 0 {
+		t.Fatalf("the same room closed twice: %v", again)
 	}
 }
 
@@ -541,34 +542,40 @@ func TestAddressesAreUniqueAndReleasedOnLeaving(t *testing.T) {
 	}
 }
 
-// A host who crashed has to come back to the address nine other clients are
-// already sending to. The grace window is exactly the period in which their
-// address must not be given to anybody else.
-func TestAHostKeepsTheirAddressThroughTheGraceWindow(t *testing.T) {
+// The host's address is theirs while they are seated, whatever else moves.
+//
+// This used to be a test about the grace window - the period in which a
+// crashed host's address had to be kept for them. There is no such period any
+// more (D84): a host who drops takes the room with them, so nobody is left
+// pointing at an address that is coming back. What is still worth pinning is
+// the rest of D74, which is what the address rule was always for: a host who
+// changes seat keeps their address, and every other client in the room keeps
+// pointing at it.
+func TestAHostKeepsTheirAddressAcrossASeatChange(t *testing.T) {
 	s := room.NewStore()
 	_, host, _ := s.Create("h1", "A", t0)
 	if _, err := s.Join(host.RoomID, room.Anyone("p2"), t0); err != nil {
 		t.Fatal(err)
 	}
 
-	s.WatchHosts(func(string) room.HostFacts { return room.HostFacts{} })
-	s.Tick(t0.Add(time.Second))
+	if err := s.Move(host.RoomID, "h1", 7, false); err != nil {
+		t.Fatal(err)
+	}
 
+	back, err := s.Membership(host.RoomID, "h1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if back.VirtualIP != host.VirtualIP {
+		t.Fatalf("the host's address moved from %s to %s when they changed seat",
+			host.VirtualIP, back.VirtualIP)
+	}
 	mate, err := s.Membership(host.RoomID, "p2")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if mate.HostIP != host.VirtualIP {
-		t.Fatalf("the room's address moved to %s while its host was away", mate.HostIP)
-	}
-
-	// Somebody else joining during the grace must not be handed it.
-	other, err := s.Join(host.RoomID, room.Anyone("p3"), t0.Add(2*time.Second))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if other.VirtualIP == host.VirtualIP {
-		t.Fatalf("a new player was given the absent host's address %s", other.VirtualIP)
+		t.Fatalf("the room's host address moved to %s under a seated host", mate.HostIP)
 	}
 }
 
@@ -686,25 +693,6 @@ func TestAFullRoomAndAFullGalleryAllGetAddresses(t *testing.T) {
 	}
 	if len(seen) != 14 {
 		t.Fatalf("seated %d people with distinct addresses, want 14", len(seen))
-	}
-}
-
-// A host whose PC died while they were watching comes back to watching. The
-// grace window must not quietly put them on a team.
-func TestAWatchingHostComesBackToWatching(t *testing.T) {
-	rm := newRoom(t)
-	if err := rm.Move("host-1", 2, true); err != nil {
-		t.Fatal(err)
-	}
-	rm.Leave("host-1", t0)
-	rm.HostGraceUntil = t0.Add(time.Minute)
-
-	if _, err := rm.Join(room.Anyone("host-1"), t0); err != nil {
-		t.Fatalf("the host could not come back: %v", err)
-	}
-	slot, kind, seated := rm.SlotOf("host-1")
-	if !seated || kind != room.SeatObserver || slot != 2 {
-		t.Fatalf("the host came back to %v seat %d, want observer seat 2", kind, slot)
 	}
 }
 

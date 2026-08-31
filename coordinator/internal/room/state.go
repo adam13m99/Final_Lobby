@@ -44,16 +44,24 @@ const (
 )
 
 const (
-	// HostGracePeriod is how long a room survives without its host. It
-	// doubles as the host's window to reconnect and save the match.
+	// There is no host grace period. A room ends the moment its host is
+	// gone, however they went: pressing Leave room, quitting the app, or
+	// dropping off the network (D84, replacing D40's one minute and the two
+	// minutes before that).
 	//
-	// One minute since D40. It was two, and the owner asked for GameRanger's
-	// behaviour "but more friendly": a room whose host has genuinely gone
-	// should not hold nine people staring at it for two minutes, and a host
-	// who is coming back is back inside sixty seconds. It sits well inside
-	// the 120-second sticky-address window, so a host who returns in time
-	// keeps their address and the room never noticed they were away.
-	HostGracePeriod = 1 * time.Minute
+	// The owner asked for this directly, having watched the alternative: nine
+	// people sitting in a room whose host is not coming back, with no way to
+	// tell whether waiting is worth it. A host who does come back opens a new
+	// room in a couple of seconds, and the people who wanted to play with
+	// them are still in the lobby.
+	//
+	// What survives is not a grace but a detection floor: the coordinator
+	// concludes a host is offline only after api.OnlineWindow of silence, so
+	// a blip shorter than that never reaches this file at all.
+	//
+	// ClosedRoomLinger is how long a closed room stays readable afterwards,
+	// so the people in it are told why it ended rather than finding it gone.
+	ClosedRoomLinger = 5 * time.Minute
 
 	// KickBlockFirst is how long the first kick from a room bars somebody.
 	//
@@ -192,7 +200,11 @@ type Room struct {
 	// means nothing.
 	KickCount map[string]int
 
-	HostGraceUntil time.Time
+	// ClosedAt is when this room ended, and is zero while it is open. It is
+	// bookkeeping only: the store keeps a closed room for ClosedRoomLinger so
+	// its members can read why it closed, then releases the index for reuse.
+	// Nothing decides anything from it.
+	ClosedAt time.Time
 
 	// HostInGame is the coordinator's own observation that the host's copy of
 	// Dota is running (D69). It is not set by anybody in the room: the host's
@@ -203,11 +215,6 @@ type Room struct {
 	// because the host is the one person who cannot press Lock at the moment
 	// it matters: they are in Dota, not in this window.
 	HostInGame bool
-
-	// HostSeenAway is whether the last observation said the host had stopped
-	// talking to the coordinator. Kept so the grace timer is started once,
-	// on the transition, rather than pushed forward on every tick.
-	HostSeenAway bool
 }
 
 // locked reports whether the room is shut to new players and to seat changes.
@@ -319,51 +326,22 @@ func (r *Room) Join(who Applicant, now time.Time) (int, error) {
 		return 0, err
 	}
 
-	// The host reclaiming their own room during the grace window is always
-	// allowed, even while the room is locked - otherwise a host who crashed
-	// mid-match would be locked out of the match they are running. They are
-	// also not asked for their own room's password.
-	isHostReturning := playerID == r.HostID && !r.HostGraceUntil.IsZero()
-	if r.locked() && !isHostReturning {
+	// There is no host-returning case any more (D84). A host who dropped used
+	// to have a minute to walk back into their own room - locked or not,
+	// without the password, onto the exact seat they left. That whole path
+	// went with the grace: by the time they reconnect the room is closed, and
+	// what they do is open another one.
+	if r.locked() {
 		return 0, ErrRoomLocked
 	}
-	if !isHostReturning {
-		if err := r.knock(who); err != nil {
-			return 0, err
-		}
+	if err := r.knock(who); err != nil {
+		return 0, err
 	}
 
-	// A host who crashed comes back to the seat they left, not to the lowest
-	// free one - and not to a different kind of seat either. Somebody who was
-	// watching their own room when their PC died comes back to the gallery
-	// (D79); coming back onto a team would be the app deciding they are
-	// playing.
-	//
-	// The seat may be gone: it is emptied when they drop, and the room goes on
-	// without them. Then they take whatever is free, below.
-	if isHostReturning {
-		if r.HostWatching && r.HostSlot < len(r.Observers) && r.Observers[r.HostSlot] == "" {
-			r.Observers[r.HostSlot] = playerID
-			r.takeAddress(playerID)
-			r.HostGraceUntil = time.Time{}
-			return r.HostSlot, nil
-		}
-		if !r.HostWatching && r.Slots[r.HostSlot] == "" {
-			r.Slots[r.HostSlot] = playerID
-			r.takeAddress(playerID)
-			r.HostGraceUntil = time.Time{}
-			return r.HostSlot, nil
-		}
-	}
 	for i := range r.Slots {
 		if r.Slots[i] == "" {
 			r.Slots[i] = playerID
 			r.takeAddress(playerID)
-			if isHostReturning {
-				r.HostGraceUntil = time.Time{}
-				r.HostSlot = i
-				r.HostWatching = false
-			}
 			return i, nil
 		}
 	}
@@ -561,12 +539,13 @@ func (r *Room) Move(playerID string, seat int, watching bool) error {
 	return nil
 }
 
-// Leave vacates a player's seat, whichever kind it is. If the host leaves,
-// the grace timer starts.
+// Leave vacates a player's seat, whichever kind it is. **If the host leaves,
+// the room closes** - here, on this call, with no timer (D84).
 //
-// This is the room losing somebody, not somebody deciding to go. A host who
-// pressed Leave room is a different event and closes the room outright - see
-// Close, and Store.Leave, which is the door that tells the two apart (D70).
+// The two ways a host could go used to be told apart carefully: pressing
+// Leave room closed the room, dropping off the network started a countdown.
+// They end in the same place now, so the difference has stopped mattering to
+// the room, even though Store.Leave still knows which one happened.
 func (r *Room) Leave(playerID string, now time.Time) {
 	for _, group := range [][]string{r.Slots[:], r.Observers[:], r.Admins[:]} {
 		for i := range group {
@@ -576,31 +555,29 @@ func (r *Room) Leave(playerID string, now time.Time) {
 		}
 	}
 	// Getting up is the one thing that releases an address (D74). A seat move
-	// does not, and neither does the host's grace window: a host who crashed
-	// has to come back to the address every other client is already sending
-	// to, and this is what keeps it theirs while they are gone.
+	// does not: the ticket somebody is holding stays correct across a change
+	// of team and across a move into the gallery.
 	r.dropAddress(playerID)
 	if playerID == r.HostID {
-		r.HostGraceUntil = now.Add(HostGracePeriod)
+		r.Close(now)
 	}
 }
 
-// Close ends the room now, with no grace.
+// Close ends the room.
 //
-// **A host who leaves on purpose closes their room** (D70). The grace in D40
-// is for a host who disappeared - a crash, a dropped line, a laptop that went
-// to sleep - and it is the window in which they can come back. A host who
-// pressed Leave room did not disappear and is not coming back, and the bug
-// this fixes is what the owner saw: they left, and the room was still in the
-// lobby, still labelled open, and they could walk straight back into it as
-// its host.
+// Every way a room can end comes through here: the host pressed Leave room,
+// the host's app quit, the host's machine dropped off the network, an admin
+// shut it. There is no other ending, and no delay in any of them (D84).
 //
-// HostGraceUntil doubles as the clock the store lingers a dead room by, so
-// closing has to set it or the room is swept away before anybody reads why
-// it ended.
+// ClosedAt has to be set, or the store cannot tell when to stop keeping the
+// room and would sweep it on the next tick, before anybody in it read why it
+// ended. Closing twice keeps the first time, which is the true one.
 func (r *Room) Close(now time.Time) {
+	if r.Status == StatusClosed {
+		return
+	}
 	r.Status = StatusClosed
-	r.HostGraceUntil = now
+	r.ClosedAt = now
 }
 
 // Admits reports whether the room would take a new player at this instant.
@@ -618,40 +595,22 @@ func (r *Room) Admits() bool {
 // cannot see for itself: whether they are still talking to us, and whether
 // their copy of Dota is running.
 //
-// This is what starts the host grace in practice. Until D70 the timer was
-// only ever started by the host pressing Leave room, so a host who crashed -
-// the case D40 was written for - left a room that never closed at all, and a
-// host who left politely left one that stayed joinable for a minute. The two
-// were exactly the wrong way round.
+// **A host the coordinator can no longer see closes the room, on this call**
+// (D84). This is the only place a crash, a power cut or a cut line is noticed
+// at all - nobody presses anything - so if the room did not close here it
+// would never close.
+//
+// Whether the host is really gone is judged before this, in the API layer:
+// online is false only after api.OnlineWindow of silence. A room does not
+// close because one heartbeat was late.
 func (r *Room) SeeHost(online, inGame bool, now time.Time) {
 	if r.Status == StatusClosed {
 		return
 	}
 	r.HostInGame = inGame
-
-	if online {
-		r.HostSeenAway = false
-		// Back inside the window: the room stops counting down. A host who
-		// returns to a seat has saved their room, which is the whole purpose
-		// of the grace.
-		if _, _, seated := r.SlotOf(r.HostID); seated {
-			r.HostGraceUntil = time.Time{}
-		}
-		return
+	if !online {
+		r.Close(now)
 	}
-	if !r.HostSeenAway {
-		r.HostSeenAway = true
-		if r.HostGraceUntil.IsZero() {
-			r.HostGraceUntil = now.Add(HostGracePeriod)
-		}
-	}
-}
-
-// HostAway reports whether this room is counting down to closure because its
-// host is not there. The lobby says so rather than offering the room as
-// though nothing were wrong.
-func (r *Room) HostAway() bool {
-	return r.Status != StatusClosed && !r.HostGraceUntil.IsZero()
 }
 
 // Kick removes a player and bars them for an interval that grows each time
@@ -692,18 +651,6 @@ func (r *Room) SetStatus(actorID string, s Status, now time.Time) error {
 
 // Tick advances time-based transitions. Call it on a scheduler.
 //
-// The host's absence is the only thing that ends a room. A match finishing
-// does nothing here, on purpose (D40): the ten people who just played are
-// usually the ten who want to play again, and closing the room around them
-// treats the end of a game as a failure to recover from.
-func (r *Room) Tick(now time.Time) {
-	if r.Status == StatusClosed {
-		return
-	}
-	if !r.HostGraceUntil.IsZero() && now.After(r.HostGraceUntil) {
-		r.Status = StatusClosed
-	}
-}
 
 // SetHost moves the room to a new host.
 //
@@ -748,8 +695,5 @@ func (r *Room) SetHost(newHostID string) (moved []string, err error) {
 	// would come back to the gallery of the match running on their own
 	// machine.
 	r.HostWatching = false
-
-	// The room has a host again, so it is no longer counting down to closure.
-	r.HostGraceUntil = time.Time{}
 	return nil, nil
 }

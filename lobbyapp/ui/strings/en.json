@@ -31,7 +31,6 @@
   "room.join.busy": "Leave your current room first",
   "room.join.closed": "This room is not accepting players",
   "room.status.open": "Open",
-  "room.status.away": "Host away",
   "room.locked.note": "The host is in a match. Seats are fixed until it ends - you can still leave the room.",
   "room.status.locked": "In game",
   "room.status.replacing": "Needs a player",

@@ -396,9 +396,14 @@ func TestAHostLeavingTakesTheRoomWithThem(t *testing.T) {
 	}
 }
 
-// A host who stopped answering is the other case, and it is the one D40's
-// grace period was written for: the room says so and keeps counting.
-func TestTheLobbySaysWhenAHostHasGoneQuiet(t *testing.T) {
+// A host who stopped answering is the other case, and since D84 it ends the
+// room rather than labelling it.
+//
+// This used to assert a host_away status on a room that was still listed and
+// still joinable. The owner asked for the opposite: a room whose host is gone
+// should not be in the lobby at all, because every second it is there is a
+// second somebody spends deciding whether to join it.
+func TestAHostWhoGoesQuietTakesTheRoomOutOfTheLobby(t *testing.T) {
 	h := newHarness(t)
 	_, host := h.post(t, "/v1/rooms", map[string]string{"player_id": "alice"})
 	roomID := host["room_id"].(string)
@@ -408,13 +413,14 @@ func TestTheLobbySaysWhenAHostHasGoneQuiet(t *testing.T) {
 	h.rooms.Tick(h.now.Add(time.Second))
 
 	_, list := h.get(t, "/v1/rooms")
-	rooms, _ := list["rooms"].([]any)
-	if len(rooms) != 1 {
-		t.Fatalf("the room vanished the moment its host went quiet: %v", rooms)
+	if rooms, _ := list["rooms"].([]any); len(rooms) != 0 {
+		t.Fatalf("a room whose host has gone is still in the lobby: %v", rooms)
 	}
-	got := rooms[0].(map[string]any)
-	if got["status"] != "host_away" || got["host_away"] != true {
-		t.Fatalf("status = %v, host_away = %v", got["status"], got["host_away"])
+	// But it is still readable by the people who were in it, so bob is told
+	// what happened rather than finding a 404.
+	_, got := h.get(t, "/v1/rooms/"+roomID)
+	if got["status"] != "closed" {
+		t.Fatalf("status = %v, want closed", got["status"])
 	}
 }
 

@@ -118,8 +118,10 @@ the predecessor platform. Reasons are in `docs/decisions.md`.
 
 ## Product rules (owner decisions — ask, never assume)
 
-- Host leaves or crashes: the room closes after a **1-minute** grace that
-  doubles as the host's chance to reconnect (D40, revised from two minutes).
+- Host leaves, quits or drops off the network: the room closes **at once,
+  with no grace** (D84, revised from D40's one minute and the two before it).
+  The only delay is detection — thirty seconds of silence before the
+  coordinator calls a host offline — and that is not a window to come back in.
   **The match ending does nothing to the room** — the players stay together,
   which is the normal case: ten people finish and want to play again.
 - Kicked player: barred from that room for **1 minute, then 3, 5, 7** —
@@ -128,7 +130,10 @@ the predecessor platform. Reasons are in `docs/decisions.md`.
 - Player who left voluntarily: may rejoin freely.
 - While a room is `Locked - In Game`, **no new player may join** until the host
   explicitly reopens it to new players.
-- Admins hold a reserved **spectator** slot outside the ten playing slots.
+- Admins hold a reserved **spectator** slot outside the ten playing slots,
+  and one person is in one room at a time (D82) — so **a moderator leaves the
+  room they are in to go and moderate another** (D85). The staff seat is about
+  capacity, not about being in two places.
 - MMR is self-declared, changeable once per week.
 - Terms accepted at install, recorded against the account.
 

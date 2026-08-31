@@ -616,6 +616,11 @@ a name generated at install, a determined person reinstalls with a clean count.
 
 **Owner decision**, replacing the earlier two-minute rule.
 
+> **The grace period is gone — see D84 (2026-08-31).** A host who leaves or
+> drops closes the room immediately. The half of this decision that still
+> stands, and stands more firmly than ever, is the other half: the match
+> ending does nothing to the room.
+
 - Host leaves, times out or crashes: the room closes after **one minute**.
 - The match ending does **nothing** to the room. The players stay together.
 
@@ -2742,3 +2747,163 @@ the moment it leaves the room, so nothing at the app's own door can see what
 the coordinator sent. It was deleted rather than kept, and the reason is in
 `smoke.sh` where the check used to be. The api-package test talks to the
 coordinator directly and does fail without the guard.
+
+## D83 - the notices stopped sitting on top of each other
+
+**2026-08-31.** From the owner, off the live build:
+
+> - review and inspect the postions and overlapping of the notfications and
+>   errors. (bug one)
+> - some errors are not shown properly (bug two)
+
+Two reports, and they turned out to be two different faults that produce the
+same experience: something goes wrong and the person is not told.
+
+### Bug one: four notices in one grid area
+
+The shell is a CSS grid with a single `strip` row between the header and the
+stage. Four elements were each given `grid-area: strip` directly:
+
+- `#banner`, the error and trouble strip,
+- `#termsmoved`, the terms-have-changed prompt,
+- `#update`, the new-version prompt,
+- `#banners`, the staff announcements.
+
+Grid stacks items that share an area. Measured in the running page with every
+notice raised at once:
+
+```
+termsmoved top=66 h=50 | banners top=54 h=62 | banner top=66 h=50 | update top=66 h=50
+```
+
+Three of them occupy the identical fifty pixels. The one drawn last wins, and
+the others are behind it, invisible and still taking clicks nowhere. An error
+raised while an update was available could not be read at all - which is also
+half of bug two, from a completely different cause.
+
+They are wrapped in one `#strips` flex column now, ordered most urgent first:
+error, terms, update, announcements. `uicheck` raises all four and asserts
+that no two rectangles intersect and that the column is above the stage.
+
+### Bug two: a poll erased what you had just been told
+
+`render()` runs on every poll, about twice a second, and ended with:
+
+```js
+banner(trouble, ...)   // trouble is "" when nothing is wrong
+```
+
+`act()` - which every button goes through - reported failures into the same
+place:
+
+```js
+catch (e) { banner(e.message); }
+```
+
+So an error from something the person had just pressed lived in the variable
+that the next poll overwrote. Two seconds later it was gone. The person saw a
+flash of red and no explanation, and the app looked like it had ignored them.
+
+The strip now has two sources and they do not overwrite each other:
+
+- **standing** - the condition the app keeps rediscovering by itself: the
+  service is down, the tunnel tore, the room is gone. Rewritten every poll,
+  and an empty one means the condition ended.
+- **report** - the reply to something somebody pressed. Cleared by the next
+  action, never by a poll.
+
+`report` wins when both are set, because it is the more recent answer to the
+more specific question. `uicheck` raises a report, polls twice, and asserts it
+is still on screen.
+
+### And the create dialog said it twice
+
+`createform`'s submit handler wrote the failure into the dialog's own error
+line **and** rethrew it, so `act` raised the top strip as well - behind the
+dialog overlay, where it could not be seen until the dialog closed, and then
+read as a fresh unexplained failure. It reports once now, in the dialog the
+person is looking at.
+
+## D84 - a host who goes takes the room with them, immediately
+
+**2026-08-31.** From the owner:
+
+> if a host leaves a room or gets discounnected, the room should be forced
+> closed, no grace time.
+
+This reverses D40's grace period, which was two minutes, then one.
+
+### What the grace was for, and why it goes
+
+The argument for it was reconnection: a host whose PC crashed mid-match could
+be back inside a minute, and the room, the addresses and the nine people in it
+would still be there. It was real, and it worked.
+
+What it cost is what the owner has been watching: nine people in a room with a
+host who is not coming back, unable to tell the difference between that and a
+host who is. They wait, because leaving might be premature. A minute of that
+is a long time, and the *usual* case is not the crash - it is somebody who
+closed the app.
+
+A host who does come back opens another room in a couple of seconds, and the
+people who wanted to play with them are still in the lobby. That is the trade,
+and the owner made it.
+
+### What it means in the code
+
+Everything a room can die of goes through `Room.Close` now, with no timer:
+
+- the host presses Leave room - already immediate since D70,
+- the host's app quits or their machine drops - `SeeHost` closes on the tick
+  that notices, where it used to start a countdown,
+- an admin shuts the room.
+
+Gone with it: `HostGracePeriod`, `HostGraceUntil`, `HostSeenAway`,
+`Room.Tick` (which existed only to expire the grace), `Room.HostAway()`, the
+`host_away` view status and its badge, and the whole host-returning branch in
+`Room.Join` - a host used to be readmitted to a locked room, without the
+password, onto the exact seat they left. None of that has anything to reach
+any more.
+
+`HostGraceUntil` did double duty as the clock the store lingered a dead room
+by, and that job is real and stays: a closed room is kept for
+`ClosedRoomLinger` (five minutes) so its members can read why it ended rather
+than finding it gone. It is called `ClosedAt` now, which is what it always
+meant.
+
+### The one delay that is left, and it is not a grace
+
+The coordinator concludes a host is offline after `api.OnlineWindow` of
+silence - thirty seconds. A room does not close because one heartbeat was
+late, and a blip shorter than that never reaches the room at all. That is a
+detection floor, not a grace: nothing is waiting for the host to come back,
+the coordinator simply does not yet know they have gone.
+
+**The owner should know the number.** Thirty seconds of silence, then the room
+closes on the next tick. Lowering it makes a brief hiccup on a domestic line
+kill a healthy room; the number can be changed, and it is a product call.
+
+## D85 - a moderator leaves the room they are in to go and moderate
+
+**2026-08-31.** From the owner, answering the question D82 left open:
+
+> yes a moderator should leave their room to moderate
+
+This confirms the behaviour the one-room rule already produced rather than
+changing it, and it is written down because the alternative reading is the
+tempting one: the moderator seat is *reserved*, outside the ten playing slots,
+so that a full match and a full gallery can never keep staff out - and it is
+easy to argue from there that staff should be exempt from one-room too.
+
+They are not. A moderator sitting in two rooms is a person the lobby cannot
+describe: the friends rail, the Join buttons and the sync response all answer
+"which room is this person in" with one string. The seat is about capacity,
+not about being in two places.
+
+So `Store.JoinAdmin` refusing a seated moderator is the answer and not a bug
+to route around. The refusal names the room they are in, which is what the app
+needs in order to offer them the one action that helps.
+
+Half of D82's open question is still open: **what a moderator can see and do
+once they are inside a room** is undecided, and `JoinAdmin` still has no
+caller.

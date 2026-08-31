@@ -173,13 +173,21 @@
 <!-- Terms that changed after somebody signed up are terms they have not
      agreed to. This says so where it cannot be missed, and offers both
      halves: read them, then accept them. -->
-<div id="termsmoved" class="banner warn hidden">
-  <span data-t="terms.changed"></span>
-  <button class="tiny primary" id="termsread" data-t="terms.readaccept"></button>
+<!-- Every notice the app can raise, in one column, most urgent first (D83).
+     They used to be four separate children of the same single-row grid area,
+     which in CSS Grid means they were painted on top of one another: three of
+     them sat at the identical rectangle. So an error raised while an update
+     was offered was invisible - which is both halves of what the owner
+     reported, one cause. -->
+<div id="strips">
+  <div id="banner" class="banner hidden"></div>
+  <div id="termsmoved" class="banner warn hidden">
+    <span data-t="terms.changed"></span>
+    <button class="tiny primary" id="termsread" data-t="terms.readaccept"></button>
+  </div>
+  <div id="update" class="banner update hidden"></div>
+  <div id="banners" class="strip"></div>
 </div>
-<div id="banners" class="strip"></div>
-<div id="banner" class="banner hidden"></div>
-<div id="update" class="banner update hidden"></div>
 
 <main id="stage">
 

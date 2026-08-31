@@ -482,16 +482,20 @@ be worth naming here.
   `locked_in_game`, and `Room.Admits()` and `Room.Move` enforce it. The one
   override is a host who explicitly reopened the room to new players, which
   lets people **in** and still does not let seats **move**.
-- **Leaving and vanishing are different events.** `Store.Leave` closes the
-  room outright when the leaver is its host; `Room.SeeHost` starts the D40
-  grace when the host simply stops answering. `Room.Leave` on its own is the
-  second of the two - it vacates a seat and starts the timer - so anything
-  new that wants the first must call `Close`.
+- **Leaving and vanishing end the same way.** Since D84 there is no grace of
+  any kind: `Store.Leave` closes the room when the leaver is its host, and
+  `Room.SeeHost` closes it on the tick that finds the host gone. Every ending
+  goes through `Room.Close`, and nothing waits.
 
-The trap: `HostGraceUntil` does double duty. It is the countdown while a room
-is alive and the linger clock once it is dead, which is why `Close` sets it
-rather than leaving it zero. A closed room with a zero grace is swept out of
-the store on the next tick, before anybody has read why it ended.
+The trap: the only delay left is not in this package. The coordinator calls a
+host offline after `api.OnlineWindow` (thirty seconds) of silence, so a room
+outlives its host by up to that plus one tick. That is detection, not grace -
+do not add a second one here to "smooth" it.
+
+The other trap: `Room.ClosedAt` must be set when a room closes. It is the
+clock the store lingers a dead room by (`ClosedRoomLinger`, five minutes), so
+a closed room with a zero `ClosedAt` is swept out on the next tick, before
+anybody has read why it ended.
 
 ## Where to be careful
 
