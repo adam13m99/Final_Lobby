@@ -27,6 +27,12 @@ USER_HOST=$(grep -o 'ssh [^ ]*' "$SERVER_FILE" | awk '{print $2}')
 PASS=$(grep -i '^password:' "$SERVER_FILE" | sed 's/^[Pp]assword:[[:space:]]*//' | tr -d '\r\n')
 HOST="${USER_HOST#*@}"
 
+# Never pipe anything into this script. plink forwards its own stdin to the
+# remote command, so `yes | ./scripts/ship.sh` hands every ssh_run below an
+# endless stream and plink segfaults - at a different step each run, which is
+# what makes it look like a flaky server rather than a shell mistake. The room
+# check in ship.sh needs no answer when the server has no rooms open, and
+# `< /dev/null` is the right way to run it unattended.
 ssh_run() {
   "$PLINK" -ssh -batch -hostkey "$HOSTKEY" "$USER_HOST" -pw "$PASS" "$@"
 }
