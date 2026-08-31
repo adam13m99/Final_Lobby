@@ -57,7 +57,10 @@ The rungs inside `verify.sh` — `check`, `smoke`, `uicheck`, `chatcheck`,
 `scripts/verify.sh` says in one line what each proves and why it exists. Three
 things stay outside it because no machine can grade them: `preview.sh` and
 `try.sh`, which produce pictures and a window for a person to look at, and
-`live.sh`, which talks to the real server.
+`live.sh`, which is the whole product at one fixed address that reloads itself
+as you edit. **None of the three touches the live server** — every one of them
+is loopback, on a throwaway database. Only `deploy.sh`, `publish.sh` and
+`ship.sh` reach `87.107.110.199`.
 
 Finishing a task means: `bash scripts/verify.sh` green, `STATE.md` updated,
 one commit naming the task number, pushed via `./scripts/git-sync.sh push`,
