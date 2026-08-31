@@ -2531,3 +2531,86 @@ asked about and D59's answer for it is untouched.
 GameRanger, and it was wrong in the one way that matters: by the time this
 button is live the room is created, the ten of them are sitting in it, and the
 thing about to happen is a match starting.
+
+## D81 - the watching host: their name, their side, and the green row
+
+**2026-08-31.** Four things from the owner, straight off a live build:
+
+> when i move to observers, the "Host / Arman Mcc" turns to
+> "Host / a_3427029f79090d91d0de7c18"
+> yes the lobby list show each room's selected mode
+> the observers are not counted in the 9/10, so the +1 space left should be the
+> one that is one dire or radiant, the host can make the game as observer,
+> jointeam -spec was the command i guess
+> remove the "You are here" and replace it with a green colored highlighted
+> room inside the lobby, for the room that the user is in
+
+Three of the four are consequences of D79 that D79 did not follow through.
+
+### The host's name
+
+`view` read the host's name inside its loop over the **playing** slots:
+
+```go
+if m.IsHost { v.HostNick = m.Nick }
+```
+
+True for as long as a host had to be in one. D79 let them sit in the gallery,
+and from that moment the loop never ran for them, `HostNick` stayed empty, and
+the room fell through to a fallback written for a different case entirely - a
+host inside their grace window, seated nowhere, where the account id really is
+better than nothing. So the owner moved to watch and every screen in the room
+started calling them `a_3427029f79090d91d0de7c18`.
+
+The name is now looked up from the host's id directly, whichever seat they are
+in, and the fallback stays for the case it was written for. The gallery seat
+also carries `IsHost` now, which it never did - so the host's watching seat is
+drawn as the host's rather than as an anonymous watcher's.
+
+### `+jointeam spec`
+
+The owner is right about the command and right about why it matters.
+
+A host's PC runs the listen server whether or not they are playing on it. But
+`myTeam()` put anybody it could not place on Radiant, so a host who sat down to
+watch still started Dota **as a player** - occupying one of the ten playing
+slots in a match they were not in. Nine people, and a tenth place taken by
+somebody spectating.
+
+A watching seat is a side of its own now: `myTeam()` returns `spec`, and the
+button is live for a watcher instead of switched off. The host in the gallery
+still starts the match, because their machine is still the server; everybody
+else in the gallery gets **Watch Game** and joins with the same `+jointeam
+spec`. All ten playing slots stay for the ten people who came to play, which
+is the whole point and the answer to the question D79 left open.
+
+`validTeams` already accepted `spec`. The interface was the only thing that
+never sent it.
+
+### The mode in the lobby list
+
+D80 put the mode on every room and drew it inside the room. The owner has now
+asked for it in the lobby list too - which reverses the second half of D59
+completely, so that answer is now spent.
+
+It is its own element beside the status badge rather than one more entry in
+the run-on meta line, and the reason is in the CSS the line already carries:
+that line *is allowed to run out of space and be cut*. A mode somebody is
+scanning the lobby for cannot be the thing that gets cut.
+
+`sandbox.sh` now seeds its three rooms with three different modes. Seeding
+them all with the default would let a lobby that printed one room's mode
+against every row pass every check that looks at the list.
+
+### The green row
+
+"You are here" was a span at the end of the meta line - the one that is
+allowed to be cut. The row is green instead: a green wash, a green edge, a
+green room name. Green rather than the accent because green is already this
+app's word for *on, and yours* - the network dot, the OPEN badge, your own
+status - and because it answers the question from across the screen instead of
+at the end of a sentence.
+
+It does break the "three places, one idea" pattern from D68, where your seat,
+your name and your room all wore the accent. Two of the three still do. The
+owner asked for the third by colour.

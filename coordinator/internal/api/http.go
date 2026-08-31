@@ -433,6 +433,7 @@ func (s *Server) view(r room.Room) roomView {
 			m := memberView{
 				PlayerID:  id,
 				Slot:      seat,
+				IsHost:    id == r.HostID,
 				Spectator: true,
 				Seat:      string(group.kind),
 				Nick:      id,
@@ -449,6 +450,19 @@ func (s *Server) view(r room.Room) roomView {
 	}
 	if rated > 0 {
 		v.AvgMMR = sumMMR / rated
+	}
+	// The host's name, whichever seat they are in.
+	//
+	// It used to be read out of the loop over the playing slots, which was
+	// true only while the host had to be in one. A host who moved into the
+	// gallery (D79) fell straight through to the fallback below, so the room
+	// stopped saying "Host - Arman Mcc" and started saying "Host -
+	// a_3427029f79090d91d0de7c18" on every screen in it (D81).
+	//
+	// The fallback stays for the case it was written for: a host in their
+	// grace window is in no seat at all, and their id is better than nothing.
+	if p, ok := known[r.HostID]; ok && p.Nick != "" {
+		v.HostNick = p.Nick
 	}
 	if v.HostNick == "" {
 		v.HostNick = r.HostID

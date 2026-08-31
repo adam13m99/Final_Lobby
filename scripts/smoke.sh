@@ -590,6 +590,20 @@ else
   bad "the host went to watch and the room's address moved from $HOSTIP_BEFORE to $HOSTIP_AFTER"
 fi
 
+# And the room still knows who the host is (D81). The host's name was read
+# out of the loop over the playing slots, which was true only while the host
+# had to be in one - so the moment they moved into the gallery every screen in
+# the room stopped saying "Host - Smoke Tester" and started saying
+# "Host - a_3427029f79090d91d0de7c18". Read it from the other player's view,
+# because that is where nine people would have seen it.
+WATCHINGHOST=$(callb GET "/api/state")
+WATCHINGNICK=$(printf '%s' "$WATCHINGHOST" | grep -o '"host_nick":"[^"]*"' | head -1 | cut -d'"' -f4)
+if [ "$WATCHINGNICK" = "Smoke Tester" ]; then
+  ok "and the room still calls the host by their name"
+else
+  bad "the host went to watch and the room started calling them $WATCHINGNICK"
+fi
+
 HOSTBACK=$(call POST /api/rooms/slot '{"slot":0,"watching":false}')
 expect "and the host can sit back down"           '"ok":true'    "$HOSTBACK"
 

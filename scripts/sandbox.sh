@@ -137,9 +137,12 @@ sandbox_seed() {
   as "$SD" POST /v1/me '{"mmr":5400}' >/dev/null
 
   local r1 r2
-  r1=$(as "$SA" POST /v1/rooms '{"name":"Ranked 5v5 - no feeders","privacy":"public","min_mmr":3000}')
-  r2=$(as "$SB" POST /v1/rooms '{"name":"Casual all pick, everyone welcome","privacy":"public"}')
-  as "$SC" POST /v1/rooms '{"name":"Turbo - quick games","privacy":"password","password":"hunter2"}' >/dev/null
+  # Three rooms, three different game modes (D80). Seeding them all with the
+  # default would let a lobby that prints one room's mode against every row
+  # pass every check that looks at the list.
+  r1=$(as "$SA" POST /v1/rooms '{"name":"Ranked 5v5 - no feeders","privacy":"public","min_mmr":3000,"game_mode":2}')
+  r2=$(as "$SB" POST /v1/rooms '{"name":"Casual all pick, everyone welcome","privacy":"public","game_mode":1}')
+  as "$SC" POST /v1/rooms '{"name":"Turbo - quick games","privacy":"password","password":"hunter2","game_mode":23}' >/dev/null
   RID1=$(printf '%s' "$r1" | jfield room_id)
   RID2=$(printf '%s' "$r2" | jfield room_id)
 

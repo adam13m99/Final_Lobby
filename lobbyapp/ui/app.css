@@ -664,16 +664,19 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
 .friend.clickable:focus-visible {
   outline: none; box-shadow: inset 0 0 0 2px rgba(145,132,217,.45);
 }
-/* The room you are already in, marked the same way your own seat and your
-   own name are: an accent wash and a gradient edge (D68). Three places, one
-   idea - "this one is yours". */
-.room.here { background: linear-gradient(96deg, rgba(145,132,217,.12), transparent 58%); }
-.room.here:hover { background: linear-gradient(96deg, rgba(145,132,217,.20), transparent 58%); }
+/* The room you are already in, in green (D81). It carried the accent wash
+   until now, matching your own seat and your own name, with the words "You
+   are here" at the end of its meta line - a line that is allowed to run out
+   of space and be cut. The colour says it instead, from across the screen,
+   and green rather than the accent because green is already this app's word
+   for "on, and yours": the network dot, the OPEN badge, your own status. */
+.room.here { background: linear-gradient(96deg, rgba(127,220,171,.13), transparent 58%); }
+.room.here:hover { background: linear-gradient(96deg, rgba(127,220,171,.21), transparent 58%); }
 .room.here::before {
   content: ""; position: absolute; inset-block: 0; inset-inline-start: 0; width: 2px;
-  background: linear-gradient(to bottom, transparent, var(--accent), transparent);
+  background: linear-gradient(to bottom, transparent, var(--good), transparent);
 }
-.room-meta .here { color: var(--accent-lit); }
+.room.here .room-name { color: var(--good); }
 
 .room-who { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .room-name {
@@ -683,6 +686,13 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
 /* One line under the name carrying everything else about the room. It is
    allowed to run out of space and be cut; the name is not. */
 .room-meta { display: flex; align-items: center; gap: 6px; min-width: 0; }
+/* Which Dota game the room is playing (D81). Beside the status badge and,
+   like it, never allowed to be cut: it is one of the three things somebody
+   scanning the lobby is choosing on. */
+.room-mode {
+  flex: none; font-size: 10.5px; font-weight: 500; letter-spacing: .03em;
+  color: var(--text2); white-space: nowrap;
+}
 .room-meta .rest {
   font-size: 11.5px; color: var(--dim);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;

@@ -548,6 +548,13 @@ the store on the next tick, before anybody has read why it ended.
    CLI printing, and a test in `lobbyapp` binding the menu to it (D80). Where
    a list genuinely cannot be shared, bind the copies with a test that names
    the entries rather than counting them.
-16. **Never commit secrets.** `github_token_admin.txt` and
+16. **Never read a fact about a member out of the loop over one seating
+   area.** The host's name was read inside the loop over the playing slots,
+   which was true only while a host had to be in one; the day they could sit
+   in the gallery, every screen in the room started showing their account id
+   instead (D81). A room has three seating areas. Anything true of a *person*
+   is looked up from their id, not from wherever the loop happened to find
+   them.
+17. **Never commit secrets.** `github_token_admin.txt` and
    `mobinhost_server_1.txt` are gitignored; the download key and API token
    live only on the server. Verify before every commit.

@@ -174,6 +174,62 @@ const CHECKS = [
        why: "the facts band still reads " + JSON.stringify(after) })
   `],
 
+  // A watching seat is a side of its own (D81). The host in the gallery still
+  // starts the match - their PC is the server either way - and both they and
+  // everybody else watching go in with +jointeam spec, which is what leaves
+  // all ten playing slots for players. Before this, the button was simply
+  // switched off for anybody watching.
+  ["a watcher goes into the match on the spectator side", `
+    ${STOP}
+    show("room");
+    if (!state.room) return ({ ok: true, why: "not in a room in this sandbox" });
+    const me = (state.room.members || []).find((m) => m.player_id === state.player_id);
+    if (!me) return ({ ok: true, why: "not seated in this sandbox" });
+    const was = { spectator: me.spectator, slot: me.slot };
+    me.spectator = false; me.slot = 7;
+    const dire = myTeam();
+    me.spectator = true; me.slot = 0;
+    const spec = myTeam();
+    drawAction(state.room);
+    const btn = document.getElementById("btn-step");
+    const live = !btn.disabled && !!btn.onclick;
+    me.spectator = was.spectator; me.slot = was.slot;
+    return ({ ok: dire === "bad" && spec === "spec" && live,
+       why: "seat 7 gives " + dire + ", the gallery gives " + spec +
+            ", and the button is " + (live ? "live" : "switched off for a watcher") })
+  `],
+
+  // The room you are in is the green row now, not a row with "You are here"
+  // written at the end of a line that is allowed to be cut (D81). And every
+  // row says which Dota game it is playing (D80, D81).
+  ["your own room is the green row, and every row names its game", `
+    ${STOP}
+    renderRooms(state.rooms);
+    const rows = [...document.querySelectorAll("#roomlist [data-room]")];
+    if (!rows.length) return ({ ok: false, why: "no rooms in the sandbox lobby" });
+    const bad = [];
+    for (const row of rows) {
+      const mode = row.querySelector(".room-mode");
+      if (!mode || !mode.textContent.trim()) bad.push("a row names no game mode");
+      if (row.textContent.includes("You are here")) bad.push("a row still says You are here");
+    }
+    const mine = rows.find((n) => n.dataset.room === state.room_id);
+    if (state.room_id) {
+      if (!mine) bad.push("the room I am in is not in the list");
+      else if (!mine.classList.contains("here")) bad.push("the room I am in is not marked");
+    }
+    const marked = rows.filter((n) => n.classList.contains("here")).length;
+    if (marked > 1) bad.push(marked + " rows are marked as mine");
+    // The sandbox seeds three rooms with three different modes, so a lobby
+    // printing one room's mode against every row fails here rather than
+    // looking correct.
+    const modes = new Set(rows.map((n) => (n.querySelector(".room-mode") || {}).textContent));
+    if (rows.length > 1 && modes.size < 2) {
+      bad.push("every row reads " + [...modes][0] + "; the seeded rooms play different games");
+    }
+    return ({ ok: bad.length === 0, why: bad.join("; ") })
+  `],
+
   ["every dialog can be closed with Escape", `
     ${STOP}
     const gates = ["creategate", "roomsetgate", "invitegate", "profilegate",

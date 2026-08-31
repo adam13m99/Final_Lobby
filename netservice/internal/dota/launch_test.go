@@ -71,6 +71,34 @@ func TestRejectsBadTeam(t *testing.T) {
 	}
 }
 
+// A host who is watching their own room still runs the listen server, and
+// goes into it on Dota's spectator side (D81). That is what leaves all ten
+// playing slots for the ten people who came to play: without it the host
+// occupies one of them to host a match they are not in.
+func TestAWatchingHostStartsTheMatchAsASpectator(t *testing.T) {
+	args, err := dota.BuildHostArgs("Arman", 23, "spec")
+	if err != nil {
+		t.Fatalf("a host cannot start their own room as a spectator: %v", err)
+	}
+	joined := strings.Join(args, " ")
+	for _, want := range []string{"+sv_lan 1", "+map dota", "gamemode 23", "+jointeam spec"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("host args missing %q; got %q", want, joined)
+		}
+	}
+	if err := dota.ValidateArgs(args); err != nil {
+		t.Errorf("a spectating host's args failed our own validation: %v", err)
+	}
+	// And a watcher who is not the host joins the same way.
+	cargs, err := dota.BuildClientArgs("Bob", netip.MustParseAddr("10.87.0.2"), "spec")
+	if err != nil {
+		t.Fatalf("a watcher cannot join to spectate: %v", err)
+	}
+	if joined := strings.Join(cargs, " "); !strings.Contains(joined, "+jointeam spec") {
+		t.Errorf("a watcher's args do not put them on the spectator side; got %q", joined)
+	}
+}
+
 func TestRejectsUnknownGameMode(t *testing.T) {
 	if _, err := dota.BuildHostArgs("P", 999, "good"); !errors.Is(err, dota.ErrBadArg) {
 		t.Fatal("game mode 999 accepted; want rejection")

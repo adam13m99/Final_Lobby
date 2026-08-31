@@ -633,16 +633,22 @@ function roomCard(r) {
   // for it. It is allowed to run out of room and be cut; the name is not.
   const meta = el("div", "room-meta");
   meta.appendChild(statusBadge(r.status));
+  // What game this room is playing, beside whether it is open (D81). It is
+  // its own element rather than one more entry in the run-on line below,
+  // because that line is allowed to run out of space and be cut - and a mode
+  // somebody is scanning for must not be the thing that gets cut.
+  meta.appendChild(el("div", "room-mode", modeName(r.game_mode)));
   const bits = [r.host_nick];
   if (r.description) bits.push(r.description);
   if (r.needs_password) bits.push(t("lobby.door.password"));
   if (r.privacy === "friends") bits.push(t("lobby.door.friends"));
   if (r.privacy === "invite") bits.push(t("lobby.door.invite"));
   meta.appendChild(el("span", "rest", bits.join(" · ")));
-  // "You are here" is not one more fact on the list: it is the answer to the
-  // only question that separates this row from the others, so it is said in
-  // the accent and last, where the eye stops.
-  if (mine) meta.appendChild(el("span", "here", t("lobby.youarehere")));
+  // The room you are in used to say "You are here" at the end of its meta
+  // line. It is the green row now (D81) - the whole row answers the question,
+  // in the colour this app already uses for "this is on and it is yours", and
+  // it answers it from across the screen instead of at the end of a line that
+  // might have been cut.
   about.appendChild(meta);
   who.appendChild(about);
   card.appendChild(who);
@@ -912,17 +918,19 @@ function drawAction(r) {
   const mine = (r.members || []).find((m) => m.player_id === state.player_id);
   const watching = mine && mine.spectator;
 
-  let key = state.is_host ? "room.go.create" : "room.go.join";
+  // A watching seat is a seat, and Dota has a spectator side to sit on
+  // (D81). The host in the gallery still starts the match - their PC is the
+  // server whether or not they are playing on it - and everybody else in the
+  // gallery goes in to watch. Both arrive with +jointeam spec, which is what
+  // leaves all ten playing slots for players.
+  let key = state.is_host ? "room.go.create" : watching ? "room.go.watch" : "room.go.join";
   let why = "";
   let off = false;
 
   if (state.dota_running) {
     key = "room.go.running"; off = true;
   } else if (!mine) {
-    key = state.is_host ? "room.go.create" : "room.go.join";
     off = true; why = t("room.go.needseat");
-  } else if (watching) {
-    off = true; why = t("room.go.watching");
   }
   // A locked room does not stop the nine people already seated in it from
   // starting Dota, and that is the whole flow: the host presses Create Game,
@@ -2674,13 +2682,23 @@ $("btn-open").onclick = () => act(() => api("/api/rooms/status", { status: "open
 // already shows, so a dropdown that could disagree with the seat was one
 // place too many for the same fact to live (D57).
 //
-// myTeam reads the side out of the slot. A spectator, and anybody the room
-// has not told us about yet, is Radiant - the game requires a side and that
-// is the one it defaults to.
+// myTeam reads the side out of the seat, and the gallery is a side of its own
+// (D81): somebody in a watching seat goes in as "spec", which is the team
+// Dota keeps for people who are not playing.
+//
+// The host included. Their machine runs the listen server whether or not they
+// are playing on it, so a host who has sat down to watch still starts the
+// match - and starting it as a spectator is what leaves all ten playing slots
+// for the ten people who came to play, instead of nine.
+//
+// Anybody the room has not told us about yet is Radiant: the game requires a
+// side and that is the one it defaults to.
 function myTeam() {
   const me = ((state.room && state.room.members) || [])
-    .find((m) => m.player_id === state.player_id && !m.spectator);
-  return me && me.slot >= 5 ? "bad" : "good";
+    .find((m) => m.player_id === state.player_id);
+  if (!me) return "good";
+  if (me.spectator) return "spec";
+  return me.slot >= 5 ? "bad" : "good";
 }
 
 // --- settings -------------------------------------------------------------

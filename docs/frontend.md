@@ -532,5 +532,11 @@ WIDE=1366 TALL=768 bash scripts/preview.sh small
     it goes through the coordinator; the control on screen only proposes it
     (D80). The test for it: could somebody else in this room be surprised by
     what this widget decided?
-17. **Never leave a change on this PC.** `./scripts/ship.sh` after the commit
+17. **Never let a line that may be cut carry a fact somebody chooses on.**
+    `.room-meta .rest` is deliberately allowed to run out of space and be
+    ellipsised — the room name is not. "You are here" and, briefly, the game
+    mode lived at the end of it. Anything a player scans the lobby *for* goes
+    in its own `flex: none` element beside the status badge, or into the row's
+    own colour (D81).
+18. **Never leave a change on this PC.** `./scripts/ship.sh` after the commit
     (D62). The owner tests on the live product.
