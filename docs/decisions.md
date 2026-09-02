@@ -2907,3 +2907,80 @@ needs in order to offer them the one action that helps.
 Half of D82's open question is still open: **what a moderator can see and do
 once they are inside a room** is undecided, and `JoinAdmin` still has no
 caller.
+
+## D86 - the room boards, back to the Nocturne mock
+
+**2026-09-03.** The owner handed over the original design canvas -
+`Gaming Matchmaking App Redesign/LobbyBaz.dc.html`, the Nocturne mock this
+interface was reskinned from on 2026-08-25 (D42) - and asked for the product
+to be pulled back to it:
+
+> background colors, buttons colors, no glow, no flashy buttons, no laser
+> moving on top, same contrast as the mock
+> [...] same for rooms but only for the seats and the background color and
+> contrast levels, no need to change anything related to top sections of the
+> rooms, including Room info, start, etc.
+
+The ask covered the lobby as well. After seeing both screens redrawn the
+owner kept the lobby as it was and took only the room:
+
+> nevermind the new design on homepage, just apply the Rooms requriments
+> adjustments
+> revert back the Lobby changes if u have done any
+
+**So the lobby is untouched and stays as it is** - it keeps the light that
+travels its top edge, the halo behind its title, the pulse on Create room,
+the green row for the room you are in, and the strength of its status greens.
+A later agent reading this decision should not "finish the job" by applying
+any of what follows to the lobby: it was applied, looked at, and reversed.
+
+### What changed on the room screen
+
+The palette was never wrong. `--bg`, `--panel`, `--accent` and the rest are
+the mock's own values and have been since D42. What had drifted was the
+boards, which had grown a language of their own:
+
+- A **board** sat on `--board` (`#191b25`, a shade darker than every other
+  panel) behind a heavy `--line2` inside line, because the coloured washes in
+  its header needed a darker ground to read against. The washes are gone with
+  D86, so the ground went with them: a board is `--panel` with a `--line`
+  ring, like every other panel in the product.
+- A **seat** was a full-width row separated from its neighbour by a hairline,
+  with a two-pixel `--host-mark` violet edge at its leading end meaning
+  "somebody who is not you". Ten of those under a washed header was a board
+  made of lines. A seat is now what the mock draws: a 38px row with an 8px
+  radius, lying 6px inside its board, saying "empty", "taken" or "yours" with
+  a one-pixel ring - `--seat-ring`, `--seat-ring-on`, `--accent-ring`.
+- The **Join Game** button lost its glow, which was the last one on the
+  screen. The mock's own primary action is a border and a wash.
+- The room band lost the light travelling its top edge.
+
+`--board`, `--host-mark` and `--host-wash` have nothing left that reads them
+and are deleted.
+
+### Two things the mock has that the room did not take
+
+- **`Sit here` versus `Empty`.** A copy change nobody asked for.
+- **The mock's boards have no watching seats.** They predate D59. The two
+  watching seats on each board stay, in the same rounded-row idiom at 30px.
+
+### The trap this left behind
+
+Focus used to be an inset `box-shadow` on `.room`, `.slot.takeable` and
+`.friend.clickable`. A seat now carries its own ring in that same property,
+at the same specificity, and the two took turns winning by source order - so
+a seat you had tabbed to showed no focus at all. Focus is an
+`outline` with `outline-offset: -2px` now, which draws in the same place and
+cannot be beaten by a background rule. **Nothing else in the stylesheet uses
+`outline`, and nothing else should.**
+
+### What proves it
+
+Two checks in `uicheck`, both watched failing first:
+
+- *a seat is a rounded row with daylight round it, not a band across the
+  board* - measures every seat on the first board against the board's own
+  rectangle, and against the seat above it.
+- *nothing inside a room animates itself* - walks `#screen-room` and asserts
+  every computed `animation-name` is `none`. It is scoped to the room on
+  purpose; the lobby's decorations are the owner's and are meant to stay.

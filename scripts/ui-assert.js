@@ -119,6 +119,58 @@ const CHECKS = [
        why: "the seat boards were rebuilt by a poll that changed nothing" })
   `],
 
+  // ---- the seats that lie inside their board (D86) ---------------------
+  //
+  // Both of these encode an owner decision that a stylesheet cannot argue
+  // for itself: a seat is a rounded row with daylight round it rather than a
+  // band across the board, and nothing on this screen moves. The lobby is
+  // deliberately not in either check - it keeps its travelling light, its
+  // halo and the pulse on Create room, which the owner has kept.
+
+  ["a seat is a rounded row with daylight round it, not a band across the board", `
+    ${STOP}
+    show("room");
+    render();
+    const seats = Array.from(document.querySelectorAll("#slots .slot[data-seat]"));
+    const board = seats.length ? seats[0].closest(".team") : null;
+    if (!board) {
+      return ({ ok: false, why: "no seats on the room screen" });
+    } else {
+      const mine = seats.filter((s) => s.closest(".team") === board);
+      const b = board.getBoundingClientRect();
+      let why = "";
+      for (const s of mine) {
+        const r = s.getBoundingClientRect();
+        if (r.left - b.left < 3 || b.right - r.right < 3) {
+          why = why || ("seat " + s.dataset.seat + " runs to the edge of its board");
+        }
+        if (parseFloat(getComputedStyle(s).borderTopLeftRadius) < 4) {
+          why = why || ("seat " + s.dataset.seat + " has square corners");
+        }
+      }
+      for (let i = 1; i < mine.length; i++) {
+        const a = mine[i - 1].getBoundingClientRect(), c = mine[i].getBoundingClientRect();
+        if (c.top - a.bottom < 2) why = why || ("seats " + (i - 1) + " and " + i + " are touching");
+      }
+      return ({ ok: mine.length >= 5 && !why,
+         why: why || (mine.length + " seats found on the first board") });
+    }
+  `],
+
+  ["nothing inside a room animates itself", `
+    ${STOP}
+    show("room");
+    render();
+    const root = document.getElementById("screen-room");
+    const moving = [];
+    for (const el of [root].concat(Array.from(root.querySelectorAll("*")))) {
+      const a = getComputedStyle(el).animationName;
+      if (a && a !== "none") moving.push((el.id || el.className || el.tagName) + ": " + a);
+    }
+    return ({ ok: moving.length === 0,
+       why: moving.length + " animated: " + moving.slice(0, 4).join(", ") })
+  `],
+
   ["the friends rail survives a poll that changes nothing", `
     ${STOP}
     render();

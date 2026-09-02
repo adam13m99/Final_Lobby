@@ -547,5 +547,19 @@ WIDE=1366 TALL=768 bash scripts/preview.sh small
     one of its two doors, by the half of the system a player can bypass
     (D82). The server enforces; the interface stops offering what would be
     refused, on **every** door.
-19. **Never leave a change on this PC.** `./scripts/ship.sh` after the commit
+19. **Focus is the one thing in this stylesheet drawn with `outline`, and it
+    has to stay that way.** A room row, a takeable seat and a friend all show
+    the keyboard with `outline: 2px solid ...; outline-offset: -2px`, which
+    draws inside the element exactly where the old inset `box-shadow` did. It
+    moved there because a seat now carries its own ring in `box-shadow` at the
+    same specificity, so the two took turns winning by source order and a seat
+    you had tabbed to showed nothing at all (D86). Anything new that wants a
+    ring uses `box-shadow`; nothing new uses `outline`.
+20. **The lobby and the room are not one design any more, and that is
+    deliberate.** The owner took the room boards back to the Nocturne mock on
+    2026-09-03, looked at the lobby redrawn beside them, and kept the lobby as
+    it was (D86). So the lobby keeps its travelling light, its halo, the pulse
+    on Create room and its brighter status greens, and the room has none of
+    them. Do not "make them consistent" in either direction without asking.
+21. **Never leave a change on this PC.** `./scripts/ship.sh` after the commit
     (D62). The owner tests on the live product.

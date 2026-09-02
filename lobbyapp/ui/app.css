@@ -33,6 +33,11 @@
   --line2:   #3f424d;
   --line3:   #32353f;
   --hair:    #24262f;
+  /* The two rings the Nocturne mock draws round a seat, added when the room
+     boards were taken back to it (D86): one for an empty seat, one for a
+     seat with somebody in it. */
+  --seat-ring:    #232634;
+  --seat-ring-on: #282b38;
 
   --text:    #e9e9ed;
   --text2:   #cfd3e5;
@@ -52,14 +57,6 @@
   --accent-deep: #423a6a;
   --accent-ring: #4b4278;
   --accent-wash: rgba(145,132,217,.10);
-
-  /* Somebody who is not you, in a seat. One violet, so a board reads as
-     "people, and one of them is me" without anybody having to read a name.
-     A face still gets its own colour from its account id - that is how the
-     same person is recognisable across screens - but a seat's edge and wash
-     are about position, not identity. */
-  --host-mark: #b06ec4;
-  --host-wash: rgba(176,110,196,.11);
 
   /* Status. These are the design's own values rather than muted versions of
      them: the greens had been desaturated to a sage that reads as grey at
@@ -86,7 +83,6 @@
      value. */
   --stage:  #0b0d14;
   --stage2: #0d0f18;
-  --board:  #191b25;
 
   --rail: 244px;
   --bar: 72px;
@@ -664,11 +660,16 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
 .room:hover { background: var(--panel2); }
 /* A row that a keyboard can reach has to show where the keyboard is. Drawn
    inside the row rather than around it: a ring outside a full-width row is
-   clipped on three sides by the list that holds it. */
+   clipped on three sides by the list that holds it.
+
+   An outline pulled inward rather than an inset shadow, because a seat now
+   carries a ring of its own in that property and the two would have taken
+   turns winning by source order (D86). Nothing else in the stylesheet uses
+   outline, so focus can never be the thing that loses. */
 .room:focus-visible,
 .slot.takeable:focus-visible,
 .friend.clickable:focus-visible {
-  outline: none; box-shadow: inset 0 0 0 2px rgba(145,132,217,.45);
+  outline: 2px solid rgba(145,132,217,.45); outline-offset: -2px;
 }
 /* The room you are already in, in green (D81). It carried the accent wash
    until now, matching your own seat and your own name, with the words "You
@@ -804,12 +805,6 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
   background: linear-gradient(100deg, var(--accent-wash), var(--panel) 54%);
   box-shadow: inset 0 0 0 1px var(--accent-ring);
 }
-.roomband .sweepline {
-  position: absolute; inset-block-start: 0; inset-inline-start: 0;
-  width: 20%; height: 1px; pointer-events: none;
-  background: linear-gradient(to right, transparent, var(--accent-hi), transparent);
-  animation: sweepline 4.8s linear infinite;
-}
 .tier1 {
   position: relative; z-index: 1;
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
@@ -864,11 +859,13 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
   flex: 0 0 auto; margin-inline-start: auto;
 }
 .bandacts button { height: 30px; flex: none; }
-/* Exactly one glow on this screen, on the one action, and no pulse. Open and
-   Join in the lobby used to be as loud as the thing that starts a match. */
+/* The one action on this screen is bigger than what is round it, and that
+   is now all it is (D86). It carried a soft glow as well; the mock's own
+   primary action is a border and a wash and nothing else, and the owner
+   asked for no glow on this screen. */
 .bandacts .go {
   height: 32px; padding: 0 18px; font-size: 12.5px;
-  box-shadow: 0 0 0 1px var(--accent-ring), 0 0 12px var(--accent-soft);
+  box-shadow: 0 0 0 1px var(--accent-ring);
 }
 .bandacts .go:disabled { box-shadow: 0 0 0 1px var(--line2); }
 /* The last cell before the buttons must not push its rule against them. */
@@ -954,19 +951,22 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
    They are darker than the panel around them on purpose: the team colour
    washes in their headers have to read strongly, and they cannot do that
    against a ground of the same value. */
-.teams { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 8px; }
+.teams { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+/* A board is a panel like every other panel (D86). It sat a shade darker
+   than the stage with a heavy inside line, on the argument that the coloured
+   washes in its header needed a ground to read against - and the washes have
+   gone, so the argument has too. The swatch is what says which side this is,
+   which is what it was always for. */
 .team {
-  border-radius: var(--r-md); background: var(--board);
-  box-shadow: inset 0 0 0 1px var(--line2); overflow: hidden;
+  border-radius: var(--r-lg); background: var(--panel);
+  box-shadow: 0 0 0 1px var(--line); overflow: hidden;
 }
 .team-head {
   display: flex; align-items: center; gap: 8px;
-  padding: 9px 13px; border-block-end: 1px solid var(--hair);
-  font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase;
+  padding: 10px 13px; border-block-end: 1px solid var(--hair);
+  font-size: 11px; font-weight: 500; letter-spacing: .1em; text-transform: uppercase;
   color: var(--text2);
 }
-.team.radiant .team-head { background: linear-gradient(to inline-end, rgba(78,201,138,.16), transparent 66%); }
-.team.dire .team-head { background: linear-gradient(to inline-end, rgba(229,139,139,.16), transparent 66%); }
 .team-head .swatch { width: 8px; height: 8px; flex: none; border-radius: 2px; }
 .team.radiant .team-head .swatch { background: var(--radiant); }
 .team.dire .team-head .swatch { background: var(--dire); }
@@ -981,38 +981,46 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
    side without being confused for a sixth playing slot. */
 .obs-head {
   display: flex; align-items: center; gap: 8px;
-  padding: 7px 13px 5px; margin-block-start: 4px;
-  background: color-mix(in srgb, var(--stage) 55%, transparent);
-  border-block-start: 1px solid var(--line2);
-  font-size: 9.5px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase;
+  padding: 8px 13px 5px; margin-block-start: 3px;
+  border-block-start: 1px solid var(--hair);
+  font-size: 9.5px; font-weight: 500; letter-spacing: .1em; text-transform: uppercase;
   color: var(--dim);
 }
 .obs-head .swatch { width: 6px; height: 6px; flex: none; border-radius: 2px; background: var(--accent-line); }
 .obs-head .head-gap { flex: 1; }
 .obs-head .n { flex: none; font-size: 10.5px; font-weight: 400; letter-spacing: 0; text-transform: none; }
 
-/* A seat is a row, not a card. Ten boxed cards down two columns was ten
-   outlines competing with the two board borders around them; a row with a
-   coloured edge says "occupied, and by whom" with one mark instead of four. */
-/* A fixed height, not a minimum. The two boards sit side by side and are
+/* A seat is a rounded row lying inside the board, which is how the mock
+   draws it and what the owner asked for (D86). It was a full-width row
+   separated by hairlines, with a two-pixel coloured edge saying "occupied,
+   and by whom"; ten of those under a washed header was a board made of
+   lines. A ring says the same thing more quietly, and it says it round the
+   whole seat rather than at one end of it.
+
+   The 6px inset is the mock's padding on the box that holds the slots. There
+   is no such box here - the seats are children of the board, beside its two
+   headings - so it is carried on the seats themselves.
+
+   A fixed height, not a minimum. The two boards sit side by side and are
    read across as much as down - "who is opposite me in slot 3" - and rows
    that grew a little when somebody sat in them put the two columns out of
    step with each other by the fifth seat. */
 .slot {
   position: relative;
-  display: flex; align-items: center; gap: 11px;
-  height: 36px; padding: 0 13px;
+  display: flex; align-items: center; gap: 9px;
+  height: 38px; padding: 0 9px; margin: 0 6px 3px;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px var(--seat-ring);
 }
-.slot + .slot { border-block-start: 1px solid var(--hair); }
-.slot:not(.empty)::before {
-  content: ""; position: absolute; inset-block: 0; inset-inline-start: 0; width: 2px;
-  background: var(--host-mark);
-}
+.team-head + .slot, .obs-head + .slot { margin-block-start: 6px; }
+.slot:last-child { margin-block-end: 6px; }
 .slot.empty { background: none; }
-.slot.taken { background: var(--host-wash); }
+.slot.taken { background: var(--panel2); box-shadow: inset 0 0 0 1px var(--seat-ring-on); }
 .slot.takeable .slot-name { color: var(--muted); }
-.slot.you { background: rgba(145,132,217,.12); }
-.slot.you::before { background: var(--accent); }
+.slot.you {
+  background: var(--accent-wash);
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
 .slot.you .slot-name { color: var(--accent-text); }
 .slot .mine { font-weight: 400; color: var(--dim); }
 /* An empty seat you may take says so and lights up under the pointer. A card
@@ -1054,11 +1062,8 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
    are the overflow of a room that only has two sides. */
 /* A watching seat is the same row on a recessed ground, so the eye can tell
    the two kinds apart down a single column without reading either. */
-.slot.watch {
-  height: 28px; padding: 0 13px;
-  background: color-mix(in srgb, var(--stage) 34%, transparent);
-}
-.slot.watch.taken { background: var(--host-wash); }
+.slot.watch { height: 30px; }
+.slot.watch.taken { background: var(--panel2); }
 .slot.watch.you { background: var(--accent-wash); }
 .slot.watch .slot-name { font-size: 11.5px; font-weight: 400; }
 .slot.watch .slot-num { width: 18px; }
@@ -1538,7 +1543,7 @@ button.primary.block { box-shadow: 0 0 24px rgba(145,132,217,.22); }
    carrying information in the first place. */
 @media (prefers-reduced-motion: reduce) {
   .authglow, .authsweep, .authnet .dot, .sweep span,
-  .roomspanel .sweepline, .roomspanel .halo, .roomband .sweepline,
+  .roomspanel .sweepline, .roomspanel .halo,
   .dot.ok { animation: none; }
   #btn-create { animation: none; box-shadow: 0 0 0 1px var(--accent-ring); }
   .chatdock, .meRow, .room, .slot, .nav, .chip { transition: none; }
