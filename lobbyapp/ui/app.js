@@ -683,10 +683,6 @@ function roomCard(r) {
   // one of the things somebody scans the lobby *for*, so by rule it gets its
   // own element beside the badge and is never cut (D81).
   //
-  // The title carries the words for anybody who wants them, and for a screen
-  // reader, which is why the three strings are still in the catalogue.
-  meta.appendChild(doorMark(r));
-
   const bits = [r.host_nick];
   if (r.description) bits.push(r.description);
   meta.appendChild(el("span", "rest", bits.join(" · ")));
@@ -702,6 +698,13 @@ function roomCard(r) {
   card.appendChild(seatCell(r));
   card.appendChild(mmrCell(r));
   card.appendChild(pingCell(r));
+  // The door is a column of its own now, next to the button and the live dot
+  // (D89). It began beside the game-mode badge inside the meta line, which
+  // solved the thing that was actually wrong - the door used to be words on
+  // the end of a line that gets cut - but left it in a different place on
+  // every row, so it could only be read one room at a time. In a column it
+  // reads down the list.
+  card.appendChild(doorMark(r));
   card.appendChild(roomActions(r));
   return card;
 }
@@ -799,14 +802,20 @@ function drawCreateButton() {
   b.title = state.room_id ? t("room.join.busy") : "";
 }
 
+// Being in a room no longer stops you joining another one (D89). One person
+// is still in one room at a time (D82) - that has not changed and cannot,
+// because the coordinator enforces it - but the interface now does the
+// leaving for you instead of refusing and telling you to go and do it
+// yourself. GameRanger did this and it is the reason its lobby felt free to
+// move around in.
 function roomActions(r) {
   const acts = el("div", "room-actions");
   const mine = r.id === state.room_id;
-  const b = el("button", mine || (r.joinable && !state.room_id) ? "primary" : "",
+  const b = el("button", mine || r.joinable ? "primary" : "",
     mine ? t("room.open") : (r.seats || 0) >= 10 ? t("room.full")
       : inGame(r) ? t("room.ingame") : t("room.join"));
-  b.disabled = !mine && (!r.joinable || !!state.room_id);
-  b.title = mine ? "" : state.room_id ? t("room.join.busy") : r.joinable ? "" : t("room.join.closed");
+  b.disabled = !mine && !r.joinable;
+  b.title = mine || r.joinable ? "" : t("room.join.closed");
   b.onclick = (e) => { e.stopPropagation(); mine ? show("room") : joinRoom(r); };
   acts.appendChild(b);
 
@@ -818,26 +827,58 @@ function roomActions(r) {
 
 // joinRoom asks for the password only when the room actually has one, so an
 // open room is one click and a locked one is honest about why it is asking.
-function joinRoom(r) {
+async function joinRoom(r) {
   if (needName("namegate.why.join")) return;
+  if (r.id === state.room_id) { show("room"); return; }
+
+  // Leaving your own room closes it, at once and for everybody in it (D84).
+  // That is not something to do to nine other people because somebody clicked
+  // the wrong row, so the host - and only the host - is asked first. A player
+  // who is merely sitting in a room loses nothing by moving, and is not
+  // stopped to be told so.
+  if (state.room_id && state.is_host) {
+    const yes = await askGate("room.switch.title", "room.switch.host",
+      "room.switch.go");
+    if (!yes) return;
+  }
+
   let password = "";
   if (r.needs_password) {
     password = window.prompt(t("lobby.door.ask")) || "";
     if (!password) return;
   }
-  // Joining puts you in the room you joined. It used to leave you in the
-  // lobby looking at a row that had quietly become yours, with nothing saying
-  // so but a colour - and the one thing anybody wants after joining is to see
-  // who is in there. The invitation path in the friends rail has always done
-  // this; the lobby row and the friend's Join button now do it too.
+  enterRoom(r.id, password);
+}
+
+// enterRoom is every way into a room: the lobby row, the button on it, a
+// friend's room, an invitation. It leaves the room you are in first if there
+// is one, because the coordinator refuses a join from somebody who is already
+// seated - the rule is the coordinator's and is not going anywhere, so the
+// interface keeps it by doing the two steps rather than by disabling things.
+//
+// Joining puts you in the room you joined. It used to leave you in the lobby
+// looking at a row that had quietly become yours, with nothing saying so but
+// a colour, and the one thing anybody wants after joining is to see who is in
+// there.
+function enterRoom(id, password) {
   act(async () => {
-    await api("/api/rooms/join", { room_id: r.id, password });
+    if (state.room_id && state.room_id !== id) {
+      await api("/api/rooms/leave", {});
+      state.room_id = "";
+    }
+    await api("/api/rooms/join", { room_id: id, password: password || "" });
     show("room");
   });
 }
 
+// The three that are not "open" each get their own class, and each of those
+// classes now has a colour (D89). They shared one for a long time and it did
+// not matter, because none of them had ever been given a single line of
+// styling: in game, closed and needs-a-player were all painted in the green
+// that means open.
 function statusClass(status) {
-  if (status === "locked_in_game" || status === "closed") return "badge locked";
+  if (status === "locked_in_game") return "badge locked";
+  if (status === "closed") return "badge shut";
   if (status === "open_to_new_players") return "badge replace";
   return "badge";
 }
@@ -1406,13 +1447,12 @@ function invitationRows(box, list) {
 
     const acts = el("div", "acts");
     acts.style.opacity = "1";
-    if (room && room.joinable && !state.room_id) {
+    if (room && room.joinable) {
       const go = el("button", "primary tiny", t("friends.join"));
-      go.onclick = () => act(async () => {
-        await api("/api/friends/invitations/seen", {});
-        await api("/api/rooms/join", { room_id: inv.room_id });
-        show("room");
-      });
+      go.onclick = async () => {
+        await act(() => api("/api/friends/invitations/seen", {}));
+        joinRoom(room);
+      };
       acts.appendChild(go);
     }
     const no = el("button", "tiny", t("friends.invited.dismiss"));
@@ -2848,6 +2888,65 @@ for (const k of NOTIFY_KEYS) {
 // acted on, or every start-up would reload once for nothing.
 let uiStamp = null;
 
+// askGate puts one question in front of somebody and answers with true or
+// false. It exists because the two other ways of asking are both wrong here:
+// window.confirm is a different typeface and, inside a desktop shell, a
+// different window; and a bespoke dialog per question is how an interface
+// ends up with four of them that behave differently.
+//
+// It resolves false if the card is dismissed any of the ways a card can be -
+// Escape, the backdrop, Cancel - because all three of those mean no.
+let askSettle = null;
+
+function askGate(titleKey, whyKey, goKey) {
+  $("asktitle").textContent = t(titleKey);
+  $("askwhy").textContent = t(whyKey);
+  $("askyes").textContent = t(goKey);
+  $("askgate").classList.remove("hidden");
+  $("askyes").focus();
+  return new Promise((resolve) => { askSettle = resolve; });
+}
+
+// Closing is not conditional on there being a question outstanding. A card
+// that is on the screen has to go away when its button is pressed, whatever
+// put it there - which is also the only reason the Escape check can reach it.
+function askClose(answer) {
+  $("askgate").classList.add("hidden");
+  const settle = askSettle;
+  askSettle = null;
+  if (settle) settle(answer);
+}
+
+$("askyes").onclick = () => askClose(true);
+$("askno").onclick = () => askClose(false);
+
+// --- the friends rail, folded away ---------------------------------------
+
+// The rail is the widest thing on the screen that is not the room list, and
+// on a small window it is the difference between reading a room and squinting
+// at one. It folds (D89). The choice is remembered, because a preference that
+// has to be set again every time the app starts is not a preference.
+//
+// Below 1100px the stylesheet takes the decision away: there is no room, the
+// column is nought whatever this says, and both arrows are hidden. The class
+// is still kept honest so that widening the window puts back what the person
+// last chose rather than a default.
+// Not a dotted name: anything shaped like one in this file is taken for an
+// i18n key by the catalogue tests, and a browser storage key is not one.
+const RAIL_KEY = "lobbybaz-rail-shut";
+
+function setRail(shut) {
+  $("shell").classList.toggle("rail-shut", shut);
+  try { localStorage.setItem(RAIL_KEY, shut ? "1" : "0"); } catch (e) { /* private mode */ }
+}
+
+$("railhide").onclick = () => setRail(true);
+$("railshow").onclick = () => setRail(false);
+
+try {
+  if (localStorage.getItem(RAIL_KEY) === "1") $("shell").classList.add("rail-shut");
+} catch (e) { /* private mode */ }
+
 // --- getting out of a dialog ---------------------------------------------
 
 // Every dialog in here had exactly one way out: find its own button and click
@@ -2862,6 +2961,7 @@ let uiStamp = null;
 // behind it to go back to, and no gate is dismissed while a request it
 // started is still running.
 const DISMISS = [
+  ["askgate", "askno"],
   ["passgate", "pw-cancel"],
   ["profilegate", "p-cancel"],
   ["invitegate", "inviteclose"],

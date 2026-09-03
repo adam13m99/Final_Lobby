@@ -3144,3 +3144,150 @@ the cells are deliberate.
 object and is unaffected, but without it a check could only ever see what the
 page does *before its first await* - which is exactly where "and then it
 showed you the room" happens.
+
+## D89 - Rooms you can move between, a door you can read down, and the rail that had never hidden (2026-09-03)
+
+Four things the owner asked for after the T44 build went up, and one bug
+underneath them that turns out to be the reason the app has looked wrong on a
+small window for as long as anyone has looked at it on one.
+
+### You can join another room without leaving the first one yourself
+
+**One person is in one room at a time (D82) and that has not changed.** The
+coordinator still refuses a join from somebody who is already seated, and it
+is right to. What changed is who does the leaving. The interface used to
+switch every Join button off and put "Leave your current room first" in a
+tooltip, which is an application telling somebody to go and do a thing it
+could perfectly well do for them. It now does it: leave, then join, then show
+you the room. GameRanger worked this way and it is most of why its lobby felt
+free to move around in.
+
+Every way into a room goes through one function now - `enterRoom` - so the
+lobby row, the button on it, a friend's room and an accepted invitation all
+behave the same. The invitation path in particular was switched off while you
+were anywhere else, which meant a friend could invite you and you would watch
+the invitation sit there unusable.
+
+**The host is asked first, and only the host.** Leaving a room you host closes
+it at once, for everybody in it, with no grace (D84). Doing that to nine other
+people because somebody clicked the wrong row is not a thing to do quietly. A
+player who is merely sitting in a room loses nothing by moving and is not
+stopped to be told so.
+
+That question needed somewhere to live, so there is now one small dialog,
+`askGate`, that asks a yes/no question and answers with a promise. Not
+`window.confirm`: in a desktop shell that is a different typeface, a different
+pair of buttons and a different window. Not a bespoke card per question
+either - that is how an interface ends up with four dialogs that behave four
+ways. Escape, the backdrop and Cancel all mean no.
+
+Creating a room is still switched off while you are in one. The owner asked
+about joining; this is the same question about a different button and is
+theirs to answer.
+
+### The door is a column
+
+T44 moved the door out of the meta line, which is allowed to run out of space
+and be cut, and put it beside the game-mode badge. That fixed the thing that
+was actually wrong. It left a smaller one: beside the badge, the mark lands in
+a different place on every row, so it can only be read one room at a time. In
+a column it reads down the list, which is how somebody actually scans for "a
+room I can walk into". It sits between the ping and the Join button, next to
+the live dot, where the owner asked for it.
+
+The heading is the one heading in that row that does not sort. There is no
+order to put three unlike doors in that anybody would ask for, and a heading
+that looks like a button and does nothing when pressed is worse than one that
+plainly is not.
+
+### The friends rail folds away
+
+A chevron in the Friends header sends it out to the inline-end; a chevron in
+the top bar brings it back. The choice is remembered in browser storage,
+because a preference that has to be set again on every start is not one.
+
+It slides rather than vanishing. The mechanism is worth naming because it
+costs nothing: the shell's third grid column animates between `var(--rail)`
+and `0px`, and `#rail` is given its own `width` so that it keeps its size
+while its track shrinks and slides out past the edge of the shell instead of
+being squashed on the way. **No `transform`**, so there is nothing to mirror in
+Persian (frontend rule 14) - under `dir="rtl"` the grid flips on its own and
+the rail leaves to the left.
+
+### The rail had never once hidden, and that is why the app looked broken small
+
+`@media (max-width: 1100px) { #rail { display: none } }` was written at line
+172. `#rail { display: flex }` is at line 1166. Same specificity, later wins:
+the rule had never fired in its life. This is frontend rule 13 - never write a
+media query above the rule it narrows - and it had been sitting there since
+the rail was built.
+
+What it did instead was worse than not working. The same media query dropped
+the shell to two named columns, `"bar head" "bar stage"...`, with no `rail`
+area in them. A rail that was still `display: flex` therefore had a
+`grid-area: rail` that named nothing, fell out to auto-placement, and landed
+in an **implicit track in the bottom-right corner of the window**. At 1024x640
+- the app's own window minimum - the rail sat in the bottom corner, the room
+list was squeezed into a third of the width, and the room screen's seat boards
+were pushed off the bottom. That is the whole of the owner's "the app should
+be responsive".
+
+The fix is one token. The shell keeps its three named columns always and the
+third is allowed to be nought: `--rail-w`, written once into
+`grid-template-columns`, narrowed by the media query below it and overridden
+by `#shell.rail-shut` above the media query on specificity - which is what
+lets somebody who has opened the rail keep it open. Below 1100px there is no
+room and no argument. Because the areas never change, the rail can never again
+be left without one to sit in.
+
+The chat dock also gives up more height below 700px, so that at the 640px
+window minimum the seat boards get more than three rows of ten.
+
+### Every status in the lobby was painted green
+
+`statusClass` has always emitted `badge locked` and `badge replace`. **Neither
+class had a single line of styling.** `.badge.game` and `.badge.shut` existed
+and were written for class names nothing emits, and a hundred lines above the
+room list sat `.state`, `.state.game`, `.state.shut` - a second copy of the
+same idea that nothing has ever used. So "In game", "Closed" and "Needs a
+player" were all drawn in the green that means open.
+
+In game is now the same red as the live dot on the same row, so a row says one
+thing twice rather than two things once. Closed is grey. Needs a player is
+amber. `closed` and `locked_in_game` stopped sharing a class, which mattered
+the moment the classes had colours.
+
+And the label used to climb out of its own background on a narrow window - the
+screenshot the owner sent. The box has a fixed 17px height, so a label that
+wraps does not make it taller, it stands out of it. Two things stop it, and
+either alone is enough: `flex: none` keeps the badge from being squeezed by
+the flex line it sits in, and `white-space: nowrap` keeps the text on one line
+if it is.
+
+### What proves it
+
+Five new `uicheck` checks and one amended, each watched failing on its own
+broken version and green on the others:
+
+- *being in a room does not stop you joining another one*
+- *joining another room leaves the one you are in first* - asserts the two
+  requests go out in that order.
+- *a host is asked before their own room is closed under them* - asserts the
+  dialog opens, that nothing has been sent yet, and that Cancel sends nothing.
+- *the friends rail folds away and comes back* - asserts it ends up past the
+  edge of the shell at full width rather than squashed, that something on
+  screen brings it back, that it returns to the pixel it left from, and -
+  caught 90ms in - that it **moved** rather than jumped. A transition that has
+  been dropped looks identical once it has finished.
+- *a room in a match says so in red, on one line* - asserts the badge is the
+  same colour as the dot beside it, that it is not the colour of an open room,
+  and that squeezed to 420px the label does not stand out of its box.
+- *every door a room can have is a mark, and none of them is cut off* now also
+  asserts the mark is a column of the row rather than something inside it.
+
+**One falsification is worth recording as a near miss.** The wrapping check
+passed with `white-space: nowrap` deleted, and passed again with `flex: none`
+deleted, and only went red when both were gone - which is correct, because
+either one alone prevents it. The first version of the check measured the
+badge's height, which a fixed-height box can never change; it had been green
+against every broken variant. Measure the overflow, not the box.

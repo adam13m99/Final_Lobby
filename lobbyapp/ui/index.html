@@ -166,6 +166,10 @@
   <div class="searchbox">
     <input id="search" maxlength="40" data-t-placeholder="lobby.search.placeholder" autocomplete="off">
   </div>
+  <div class="head-gap"></div>
+  <button class="railtoggle" id="railshow" data-t-title="rail.show">
+    <span class="g" aria-hidden="true">&#8249;</span>
+  </button>
 </header>
 
 <!-- Announcements, then problems. Two strips: one the staff write, one the
@@ -233,6 +237,7 @@
       <button data-sort="players"><span data-t="lobby.col.players"></span><span class="arrow"></span></button>
       <button class="rcol-hide" data-sort="mmr"><span data-t="lobby.col.mmr"></span><span class="arrow"></span></button>
       <button class="rcol-hide" data-sort="ping" data-t-title="lobby.col.ping.explain"><span data-t="lobby.col.ping"></span><span class="arrow"></span></button>
+      <span class="colhead" data-t="lobby.col.door"></span>
       <button data-sort="status"><span data-t="lobby.col.status"></span><span class="arrow"></span></button>
     </div>
     <div id="roomlist" class="roomlist"></div>
@@ -595,6 +600,9 @@
     <button class="iconbtn" id="btn-findfriend" data-t-title="friends.add">
       <span aria-hidden="true">+</span>
     </button>
+    <button class="railtoggle" id="railhide" data-t-title="rail.hide">
+      <span class="g" aria-hidden="true">&#8250;</span>
+    </button>
   </div>
   <div class="railtop">
     <form class="findrow hidden" id="findform">
@@ -816,6 +824,20 @@
     <div class="gate-body" id="invitelist"></div>
     <div class="gate-foot">
       <button id="inviteclose" data-t="profile.done"></button>
+    </div>
+  </div>
+</div>
+
+<!-- One question, two answers. Filled in by askGate(). -->
+<div id="askgate" class="gate hidden">
+  <div class="gate-card narrow">
+    <div class="gate-head">
+      <h2 id="asktitle"></h2>
+      <p id="askwhy"></p>
+    </div>
+    <div class="gate-foot">
+      <button id="askno" data-t="profile.cancel"></button>
+      <button class="primary" id="askyes"></button>
     </div>
   </div>
 </div>

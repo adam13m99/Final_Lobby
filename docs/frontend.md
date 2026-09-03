@@ -587,5 +587,25 @@ WIDE=1366 TALL=768 bash scripts/preview.sh small
     and hidden by one rule each (D88). A `uicheck` check asserts they still
     exist *and* are invisible, so tidying them away goes red. When you hide a
     cell in a list of cells, take its separator with it: `:has(+ .the-cell)`.
-25. **Never leave a change on this PC.** `./scripts/ship.sh` after the commit
+25. **A named grid area that disappears strands whatever was assigned to
+    it.** Rule 13's cost, made concrete: the narrow media query dropped the
+    shell to `"bar head" "bar stage"...` with no `rail` area, and a `#rail`
+    whose `display: none` had been overridden by a later rule therefore had a
+    `grid-area` naming nothing, fell out to auto-placement, and landed in an
+    implicit track in the corner of the window (D89). The shell now keeps all
+    three named columns at every width and varies one token, `--rail-w`. If
+    you must hide a column, give it a width of nought - never take its area
+    away.
+26. **A class the renderer emits must have a rule, and there must be exactly
+    one place that rule could be.** `statusClass` emitted `badge locked` and
+    `badge replace` for months and neither existed; `.badge.game`,
+    `.badge.shut` and a whole parallel `.state` block existed for names
+    nothing emits (D89). Two copies of one idea is how a class ends up styled
+    in the copy nobody uses. When you add a status, grep for the class name in
+    both files before you write either half.
+27. **Measure the overflow, not the box.** A badge with a fixed height whose
+    label wraps does not get taller - the text climbs out of it. A check that
+    measured the height was green against every broken version of the
+    stylesheet (D89). `scrollHeight - clientHeight` is the measurement.
+28. **Never leave a change on this PC.** `./scripts/ship.sh` after the commit
     (D62). The owner tests on the live product.

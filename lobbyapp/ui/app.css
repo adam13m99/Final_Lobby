@@ -70,6 +70,7 @@
   --warn:      #e5c78b;
   --bad:       #e58b8b;
   --bad-text:  #efb9b9;
+  --warn-soft: rgba(229,199,139,.10);
   --bad-soft:  rgba(229,139,139,.10);
   --bad-line:  rgba(229,139,139,.26);
 
@@ -92,6 +93,7 @@
   --w-players: 128px;
   --w-mmr: 92px;
   --w-ping: 92px;
+  --w-door: 54px;
   --w-status: 104px;
 
   --r-sm: 7px;
@@ -153,8 +155,9 @@ h3 em { font-style: normal; text-transform: none; letter-spacing: 0; color: var(
 /* The toolbar is a grid column rather than a positioned element, which is
    what makes it flip sides on its own under dir="rtl". */
 #shell {
+  --rail-w: var(--rail);
   display: grid;
-  grid-template-columns: var(--bar) minmax(0, 1fr) var(--rail);
+  grid-template-columns: var(--bar) minmax(0, 1fr) var(--rail-w);
   grid-template-rows: 54px auto minmax(0, 1fr) auto;
   grid-template-areas:
     "bar head rail"
@@ -163,13 +166,22 @@ h3 em { font-style: normal; text-transform: none; letter-spacing: 0; color: var(
     "bar chat rail";
   height: 100vh;
   min-height: 560px;
+  /* The rail slides out past this edge rather than being switched off. */
+  overflow: hidden;
+  transition: grid-template-columns 240ms ease;
 }
+/* Three columns always, and the third is allowed to be nought. One token
+   moves; `grid-template-columns` is written once. The named areas never
+   change, so the rail can never again be left without an area to sit in.
+
+   The order below is load-bearing. The media query narrows the rule above it
+   and so is written after it, and the class beats the media query on
+   specificity, which is what lets somebody who has opened the rail keep it
+   open. Below 1100px there is no room for it and no argument: both the rule
+   and the class land on nought. */
+#shell.rail-shut { --rail-w: 0px; }
 @media (max-width: 1100px) {
-  #shell {
-    grid-template-columns: var(--bar) minmax(0, 1fr);
-    grid-template-areas: "bar head" "bar strip" "bar stage" "bar chat";
-  }
-  #rail { display: none; }
+  #shell { --rail-w: 0px; }
 }
 
 /* --------------------------------------------------------------- toolbar */
@@ -637,7 +649,7 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
 .roomhead, .room {
   display: grid;
   grid-template-columns:
-    minmax(0, 1fr) var(--w-players) var(--w-ping) var(--w-status);
+    minmax(0, 1fr) var(--w-players) var(--w-ping) var(--w-door) var(--w-status);
   gap: 12px;
 }
 .room-mmr, .roomhead button[data-sort="mmr"] { display: none; }
@@ -648,7 +660,7 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
 /* Every heading sorts. A room list is read for one thing at a time - who has
    space, who is closest, who is at my level - and which one it is changes
    between one glance and the next. */
-.roomhead button {
+.roomhead button, .roomhead .colhead {
   display: inline-flex; align-items: center; gap: 2px;
   justify-self: start; height: auto; padding: 0;
   border: 0; background: none; color: var(--dimmer);
@@ -721,7 +733,10 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
    machine has, and on Windows it arrives as a colour emoji in a product with
    no other colour in it. Nothing here uses transform, so there is nothing to
    mirror in Persian. */
-.doors { display: flex; align-items: center; gap: 5px; flex: none; }
+.doors { display: flex; align-items: center; gap: 6px; min-width: 0; }
+/* A room anybody may walk into still occupies the column, so the columns
+   either side of it do not shuffle from row to row. */
+.doors:empty { display: block; }
 .door {
   position: relative; flex: none;
   width: 12px; height: 12px; color: var(--muted);
@@ -779,15 +794,6 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
 }
 /* On the row that is yours the meta line is green; the marks follow it. */
 .room.here .door { color: var(--good); }
-
-.state {
-  flex: none; height: 15px; padding: 0 5px; border-radius: 4px;
-  display: inline-flex; align-items: center;
-  font-size: 9.5px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase;
-  background: var(--good-soft); color: var(--good);
-}
-.state.game  { background: #2a2733; color: var(--muted); }
-.state.shut  { background: var(--panel3); color: var(--dimmer); }
 
 /* How full a room is, as a number and as ten marks. The marks are read
    faster than the number and the number settles the ambiguity. */
@@ -861,7 +867,7 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
 
 @media (max-width: 1180px) {
   .roomhead, .room {
-    grid-template-columns: minmax(0, 1fr) 118px var(--w-status);
+    grid-template-columns: minmax(0, 1fr) 118px var(--w-door) var(--w-status);
   }
   .rcol-hide { display: none !important; }
   /* The settings grid gives up its second column here rather than squeezing
@@ -1165,6 +1171,13 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
 
 #rail {
   grid-area: rail;
+  /* Its own width rather than the column's. A grid item that is told how wide
+     it is keeps that width while its track shrinks, so the rail slides out
+     past the edge of the shell instead of being squashed on the way. It also
+     means the slide costs no `transform`, and so has nothing to mirror in
+     Persian (rule 14) - under dir="rtl" the grid flips and it leaves to the
+     left on its own. */
+  width: var(--rail);
   display: flex; flex-direction: column; min-height: 0;
   padding-block-start: 14px;
   /* The same wash as the toolbar, for the same reason: the two columns down
@@ -1178,6 +1191,27 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
   display: flex; align-items: center; gap: 8px; flex: none;
   height: 54px; padding: 0 12px; border-block-end: 1px solid var(--hair);
 }
+/* Folding the rail away (D89). The glyph is the same chevron the profile
+   row uses, and it points at what will happen: out to the inline-end to send
+   the rail away, back to the inline-start to fetch it. */
+.railtoggle {
+  width: 26px; height: 26px; flex: none; padding: 0;
+  border-radius: 6px; border: 1px solid var(--line3); background: none;
+  display: grid; place-items: center;
+  font-size: 15px; line-height: 1; color: var(--muted);
+}
+.railtoggle:hover { color: var(--text); border-color: var(--line2); }
+.railtoggle .g { display: block; }
+/* The chevron is a character, so it is the one thing here that does not flip
+   itself: it is replaced under dir="rtl" rather than mirrored. */
+[dir="rtl"] .railtoggle .g { transform: scaleX(-1); }
+#railshow { display: none; }
+#shell.rail-shut #railshow { display: grid; }
+@media (max-width: 1100px) {
+  /* No room for the rail at all down here, so there is nothing to offer. */
+  #railhide, #shell.rail-shut #railshow { display: none; }
+}
+
 .rail-head .t { font-size: 13.5px; font-weight: 500; }
 .rail-head .n { font-size: 11.5px; color: var(--dimmer); }
 .iconbtn {
@@ -1257,6 +1291,12 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
 .chatdock.collapsed { height: 38px; }
 @media (max-height: 820px) {
   .chatdock { height: 194px; margin-block: 10px 12px; }
+}
+/* The app's own window minimum is 640px tall. At that height the dock and the
+   room band together were leaving the boards about a hundred pixels, which is
+   three seats of ten. */
+@media (max-height: 700px) {
+  .chatdock { height: 148px; }
 }
 .chatdock.collapsed .chatbody, .chatdock.collapsed .tabmenu { display: none; }
 .chatdock.collapsed .tabmin span { transform: rotate(180deg); }
@@ -1652,6 +1692,7 @@ button.primary.block { box-shadow: 0 0 24px rgba(145,132,217,.22); }
   .dot.ok { animation: none; }
   #btn-create { animation: none; box-shadow: 0 0 0 1px var(--accent-ring); }
   .chatdock, .meRow, .room, .slot, .nav, .chip { transition: none; }
+  #shell { transition: none; }
   .authcard, .termscard { animation: fadein 200ms ease both; }
   @keyframes fadein { 0% { opacity: 0; } 100% { opacity: 1; } }
 }
@@ -1677,12 +1718,18 @@ button.primary.block { box-shadow: 0 0 24px rgba(145,132,217,.22); }
 
 /* Small shared pieces the screens above all borrow. */
 .badge {
-  display: inline-flex; align-items: center; height: 17px; padding: 0 6px;
+  display: inline-flex; align-items: center; flex: none;
+  height: 17px; padding: 0 6px;
   border-radius: 5px; font-size: 10px; font-weight: 500;
   letter-spacing: .06em; text-transform: uppercase;
+  white-space: nowrap;
   background: var(--good-soft); color: var(--good);
 }
-.badge.game { background: #2a2733; color: var(--muted); }
+/* A match is running in there and you cannot get in: the same red as the live
+   dot on the same row, so the row says one thing twice rather than two things
+   once (D89). */
+.badge.locked { background: var(--bad-soft); color: var(--bad); }
+.badge.replace { background: var(--warn-soft); color: var(--warn); }
 .badge.shut { background: var(--panel3); color: var(--dimmer); }
 .tag {
   display: inline-flex; align-items: center; gap: 4px;

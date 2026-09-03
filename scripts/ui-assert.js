@@ -230,6 +230,11 @@ const CHECKS = [
         if (m.right > r.right - 4) why = why || (want[i] + " mark is cut off by the row");
         if (!mark.title) why = why || (want[i] + " mark says nothing when you point at it");
         if (mark.closest(".rest")) why = why || (want[i] + " mark is inside the line that gets cut");
+        // A column of its own, so it is in the same place on every row and can
+        // be read down the list rather than one room at a time (D89).
+        if (mark.parentElement.parentElement !== row) {
+          why = why || (want[i] + " mark is not a column of the row");
+        }
       }
       return ({ ok: !why, why: why || "all three doors drawn and whole" });
     }
@@ -273,6 +278,172 @@ const CHECKS = [
       }
     }
     return ({ ok: !why, why: why || "both hidden, both still built" });
+  `],
+
+  // ---- moving between rooms, and folding the rail away (D89) ------------
+
+  ["being in a room does not stop you joining another one", `
+    ${STOP}
+    show("lobby");
+    const other = state.rooms.find((r) => r.id !== state.room_id && r.joinable);
+    if (!other) {
+      return ({ ok: false, why: "no other joinable room in the sandbox" });
+    } else {
+      const was = state.room_id;
+      state.room_id = state.rooms.find((r) => r.id !== other.id).id;
+      renderRooms(state.rooms);
+      const row = document.querySelector("[data-room='" + other.id + "']");
+      const b = row && row.querySelector(".room-actions button");
+      const off = !b || b.disabled;
+      state.room_id = was;
+      renderRooms(state.rooms);
+      return ({ ok: !off,
+         why: "Join is switched off on a room you are not in, because you are in another" });
+    }
+  `],
+
+  // The half of it the coordinator cannot be talked out of: it refuses a join
+  // from somebody who is already seated. So the interface does the leaving,
+  // in that order, rather than refusing.
+  ["joining another room leaves the one you are in first", `
+    ${STOP}
+    const realApi = api, realShow = show, realNeed = needName, realRefresh = refresh;
+    const realRoom = state.room_id, realHost = state.is_host;
+    const calls = [];
+    api = async (path) => { calls.push(path); return {}; };
+    show = () => {};
+    needName = () => false;
+    refresh = async () => {};
+    state.room_id = "room-i-am-in";
+    state.is_host = false;
+    return (async () => {
+      try {
+        joinRoom({ id: "room-i-want", needs_password: false });
+        await new Promise((r) => setTimeout(r, 60));
+      } finally {
+        api = realApi; show = realShow; needName = realNeed; refresh = realRefresh;
+        state.room_id = realRoom; state.is_host = realHost;
+      }
+      return ({ ok: calls.join(" then ") === "/api/rooms/leave then /api/rooms/join",
+         why: "it called " + (calls.join(" then ") || "nothing") });
+    })();
+  `],
+
+  // A player who moves loses nothing. A host who moves closes their room on
+  // nine other people (D84), so the host is asked and nobody else is.
+  ["a host is asked before their own room is closed under them", `
+    ${STOP}
+    const realApi = api, realShow = show, realNeed = needName, realRefresh = refresh;
+    const realRoom = state.room_id, realHost = state.is_host;
+    const calls = [];
+    api = async (path) => { calls.push(path); return {}; };
+    show = () => {};
+    needName = () => false;
+    refresh = async () => {};
+    state.room_id = "room-i-host";
+    state.is_host = true;
+    return (async () => {
+      let why = "";
+      try {
+        joinRoom({ id: "room-i-want", needs_password: false });
+        await new Promise((r) => setTimeout(r, 40));
+        if (document.getElementById("askgate").classList.contains("hidden")) {
+          why = "the host was not asked anything";
+        }
+        if (calls.length) why = why || "it had already called " + calls.join(", ");
+        // Saying no has to mean no.
+        document.getElementById("askno").click();
+        await new Promise((r) => setTimeout(r, 40));
+        if (calls.length) why = why || "cancelling still called " + calls.join(", ");
+      } finally {
+        document.getElementById("askgate").classList.add("hidden");
+        api = realApi; show = realShow; needName = realNeed; refresh = realRefresh;
+        state.room_id = realRoom; state.is_host = realHost;
+      }
+      return ({ ok: !why, why: why || "asked first, and no meant no" });
+    })();
+  `],
+
+  // The rail hid behind a media query written a thousand lines above the rule
+  // it was narrowing, so it had never hidden once - and the narrow layout it
+  // belonged to dropped the named area it needed, which is how the rail ended
+  // up auto-placed in the bottom corner of the window.
+  ["the friends rail folds away and comes back", `
+    ${STOP}
+    const shell = document.getElementById("shell");
+    const rail = document.getElementById("rail");
+    const open = rail.getBoundingClientRect();
+    if (open.width < 100) {
+      return ({ ok: false, why: "the rail is " + open.width + "px wide to begin with" });
+    } else {
+      document.getElementById("railhide").click();
+      return (async () => {
+        // Caught in the middle. The owner asked for it to move rather than
+        // vanish, and a transition that has been dropped - or that a later
+        // rule has quietly replaced - looks identical once it has finished.
+        await new Promise((r) => setTimeout(r, 90));
+        const mid = rail.getBoundingClientRect().left;
+        await new Promise((r) => setTimeout(r, 400));
+        const shut = rail.getBoundingClientRect();
+        if (mid <= open.left + 2 || mid >= shut.left - 2) {
+          return ({ ok: false,
+             why: "it jumped: 90ms in it was at " + Math.round(mid)
+               + ", between " + Math.round(open.left) + " and " + Math.round(shut.left) });
+        }
+        const stage = shell.getBoundingClientRect();
+        let why = "";
+        if (!shell.classList.contains("rail-shut")) why = "the shell was not marked shut";
+        if (shut.left < stage.right - 2) why = why || "the rail is still on the screen";
+        if (shut.width < 100) why = why || "the rail was squashed rather than sent away";
+        const back = document.getElementById("railshow");
+        if (!back.getClientRects().length) why = why || "nothing on screen brings it back";
+        back.click();
+        await new Promise((r) => setTimeout(r, 400));
+        const again = rail.getBoundingClientRect();
+        if (Math.round(again.left) !== Math.round(open.left)) {
+          why = why || "it came back to " + Math.round(again.left) + ", not " + Math.round(open.left);
+        }
+        return ({ ok: !why, why: why || "out to the edge and back" });
+      })();
+    }
+  `],
+
+  // Every status in the lobby was painted in the green that means open,
+  // because the classes statusClass emits had never been given a colour, and
+  // the label was allowed to wrap inside a box with a fixed height.
+  ["a room in a match says so in red, on one line", `
+    ${STOP}
+    show("lobby");
+    state.rooms[0].status = "locked_in_game";
+    renderRooms(state.rooms);
+    const row = document.querySelector("[data-room='" + state.rooms[0].id + "']");
+    const badge = row && row.querySelector(".room-meta .badge.locked");
+    const dot = row && row.querySelector(".livedot.game");
+    if (!badge || !dot) {
+      return ({ ok: false, why: "no in-game badge or dot on the row" });
+    } else {
+      let why = "";
+      // The badge and the dot are the same fact; they say it in one colour.
+      if (getComputedStyle(badge).color !== getComputedStyle(dot).backgroundColor) {
+        why = "the badge is " + getComputedStyle(badge).color
+          + " and the dot is " + getComputedStyle(dot).backgroundColor;
+      }
+      const open = document.querySelector("#roomlist .badge:not(.locked):not(.shut):not(.replace)");
+      if (open && getComputedStyle(open).color === getComputedStyle(badge).color) {
+        why = why || "in game is painted the same colour as open";
+      }
+      // The badge's own height is nailed to 17px, so a label that wraps does
+      // not make the box taller - it climbs out of it, which is what the
+      // owner photographed. The overflow is the measurement, not the height.
+      const list = document.getElementById("roomlist");
+      list.style.width = "420px";
+      const over = badge.scrollHeight - badge.clientHeight;
+      const wide = badge.scrollWidth - badge.clientWidth;
+      list.style.width = "";
+      if (over > 1) why = why || "squeezed, the label stands " + over + "px out of its box";
+      if (wide > 1) why = why || "squeezed, the label runs " + wide + "px past its box";
+      return ({ ok: !why, why: why || "red, and one line at any width" });
+    }
   `],
 
   ["the friends rail survives a poll that changes nothing", `
@@ -530,7 +701,7 @@ const CHECKS = [
   ["every dialog can be closed with Escape", `
     ${STOP}
     const gates = ["creategate", "roomsetgate", "invitegate", "profilegate",
-                   "passgate", "termsgate"];
+                   "passgate", "termsgate", "askgate"];
     const stuck = [];
     for (const id of gates) {
       const gate = document.getElementById(id);
