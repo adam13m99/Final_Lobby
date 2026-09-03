@@ -244,6 +244,7 @@
   "door.public": "Anyone can join",
   "door.friends": "Friends only",
   "door.invite": "Invited only",
+  "door.password.label": "Password",
   "door.password.placeholder": "none",
   "door.password.keep": "Password set — type to change it",
   "door.password.needed": "Choose a password, or pick a different door.",

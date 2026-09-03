@@ -1390,12 +1390,29 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
   background: rgba(11,12,20,.76); backdrop-filter: blur(7px);
   align-items: start; overflow: auto; padding: 30px 30px 70px;
 }
+/* A dialog may never be taller than the window it is centred in (D87).
+   `.gate` is a fixed grid that centres its card and does not scroll, and the
+   card had no ceiling - so a card taller than the viewport was cut off at
+   *both* ends, the title above the top edge and, fatally, the buttons below
+   the bottom one. There was no scrollbar anywhere to reach them with: the
+   dialog simply could not be answered, which from the outside looks exactly
+   like a Create room button that does nothing.
+
+   This was reachable on a supported configuration, not a corner. The app's
+   own window minimum is 640px tall, Windows display scaling divides the CSS
+   viewport by 1.25 or 1.5 again, and the room-creation dialog with its
+   password field showing is about 690px. */
 .gate-card {
   width: 520px; max-width: 100%;
+  max-height: 100%;
+  display: flex; flex-direction: column;
   border-radius: var(--r-xl); background: #1e2030;
   box-shadow: 0 0 0 1px #595d6c, var(--lift);
-  overflow: hidden;
+  overflow: auto;
 }
+/* The fields give way; the title and the buttons never do. A dialog whose
+   buttons have scrolled off the bottom is a dialog with no answer. */
+.gate-head, .gate-foot, .gate-actions { flex: none; }
 .gate-card.narrow { width: 400px; }
 /* The host's controls carry three buttons on one line and a segmented
    control above them. At 520px the buttons wrapped their own labels. */
@@ -1403,7 +1420,10 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
 .gate-head { padding: 15px 18px 12px; border-block-end: 1px solid var(--line); }
 .gate-head h2 { font-size: 16px; margin-block-end: 2px; }
 .gate-head p { margin: 0; font-size: 12px; color: var(--dim); }
-.gate-body { padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; }
+.gate-body {
+  padding: 16px 18px; display: flex; flex-direction: column; gap: 14px;
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+}
 .gate-foot {
   display: flex; justify-content: flex-end; gap: 8px;
   padding: 12px 18px 15px; border-block-start: 1px solid var(--line);

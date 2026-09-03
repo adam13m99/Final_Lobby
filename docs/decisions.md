@@ -2984,3 +2984,66 @@ Two checks in `uicheck`, both watched failing first:
 - *nothing inside a room animates itself* - walks `#screen-room` and asserts
   every computed `animation-name` is `none`. It is scoped to the room on
   purpose; the lobby's decorations are the owner's and are meant to stay.
+
+## D87 - a dialog that could not be answered
+
+**2026-09-03.** From the owner, on the live product:
+
+> u just broke the app, i cant make a room.
+> [...] m creation window is broken
+
+### It was not the change it arrived with
+
+T41 had shipped minutes earlier, so the first job was to find out whether it
+was the cause. It was not, and the way that was settled is worth keeping:
+the create dialog was photographed on the commit before T41 and on T41
+itself, in the same sandbox, and the two pictures were subtracted. **Zero
+differing pixels inside the dialog.** T41's diff is the room boards, one
+decorative span and a focus rule; nothing it touched is on this screen.
+
+Do not take that as "the report was wrong". The dialog was broken, and had
+been for a long time; the owner had simply not hit the window size that
+shows it before.
+
+### The bug
+
+`.gate` is a fixed overlay that centres its card with `place-items: center`
+and does not scroll. `.gate-card` had no `max-height`. A card taller than the
+viewport is therefore centred on it and hangs off **both** ends - the title
+above the top edge, and the Cancel and Create buttons below the bottom one -
+with no scrollbar anywhere to reach them. The dialog opens, looks almost
+right, and cannot be answered. From the outside that is a Create room button
+that does nothing.
+
+This was not a corner. Three numbers meet in the middle of a supported
+configuration:
+
+- the app's own window minimum is **640px** tall (`tauri.conf.json`),
+- Windows display scaling at 125% or 150% divides the CSS viewport again, so
+  a 800px window can present as 640 or 533,
+- the room-creation dialog with its password row showing is about **690px**.
+
+A card now may never exceed the height of the window it is centred in. It is
+a flex column: the head and the foot are fixed, and `.gate-body` scrolls. The
+buttons cannot leave the screen.
+
+### And the password field was labelled "none"
+
+`door.password.placeholder` is the string shown *inside* the box when no
+password is set. It was also being used as the field's **label**, in the
+create dialog and again in Room settings - so the field above the "Ask for a
+password as well" tick was captioned "none". A new `door.password.label`
+says "Password", and the placeholder keeps its one honest use.
+
+### What proves it
+
+`uicheck`, *the create dialog can still be answered in a short window*: it
+opens the dialog in its tallest state, shrinks the overlay to 480px, and
+asserts the head and the foot are both inside it. Watched failing on the
+shipped stylesheet first, with the right words - *the buttons are outside the
+window; the title is above the top edge*.
+
+**The lesson for the harness.** Every screenshot this project takes is
+1440x820, and `preview.sh` has taken `WIDE`/`TALL` all along. A bug that only
+exists below a certain height cannot be seen by a rung that only ever looks
+at one height. When a change is about layout, photograph it small as well.

@@ -561,5 +561,18 @@ WIDE=1366 TALL=768 bash scripts/preview.sh small
     it was (D86). So the lobby keeps its travelling light, its halo, the pulse
     on Create room and its brighter status greens, and the room has none of
     them. Do not "make them consistent" in either direction without asking.
-21. **Never leave a change on this PC.** `./scripts/ship.sh` after the commit
+21. **Never let a dialog grow taller than the window.** `.gate` centres its
+    card and does not scroll, so a card with no ceiling hangs off the top
+    *and* the bottom with nothing to scroll to reach it - and the buttons are
+    at the bottom (D87). `.gate-card` is capped at the window height with a
+    fixed head and foot and a scrolling `.gate-body`; anything new that goes
+    in a dialog goes inside that body. The numbers that make this real rather
+    than theoretical: the app's own window minimum is 640px tall, and Windows
+    display scaling divides the CSS viewport again.
+22. **Photograph it small.** `preview.sh` has always taken `WIDE` and `TALL`
+    and every shot anybody took was 1440x820, which is why the dialog above
+    was broken for weeks in plain sight. A layout change is not looked at
+    until it has been looked at short: `WIDE=1100 TALL=560 bash
+    scripts/preview.sh <name>`.
+23. **Never leave a change on this PC.** `./scripts/ship.sh` after the commit
     (D62). The owner tests on the live product.

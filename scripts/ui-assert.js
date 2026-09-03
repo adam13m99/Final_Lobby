@@ -377,6 +377,52 @@ const CHECKS = [
            (gone ? "" : "the room closing under you was wiped by the next poll") })
   `],
 
+  // ---- a dialog you cannot answer (D87) --------------------------------
+  //
+  // The room-creation dialog was cut off at both ends in a short window: its
+  // card had no ceiling, and neither the card nor the overlay behind it
+  // scrolled, so the Cancel and Create buttons sat below the bottom edge with
+  // no way to reach them. From the outside that is a Create room button that
+  // does nothing. The app's own minimum window is 640px tall and Windows
+  // display scaling shrinks the CSS viewport further, so it was reachable on
+  // a supported machine and no screenshot at 1440x820 could ever show it.
+  //
+  // The test is not "is the foot inside the box" but "can the pointer land on
+  // the button", which is the thing the person was actually unable to do.
+
+  ["the create dialog can still be answered in a short window", `
+    ${STOP}
+    const g = document.getElementById("creategate");
+    state.room_id = "";
+    openCreate();
+    // The tallest the dialog gets: the password row is only drawn once the
+    // box is ticked, and that is the state the owner hit it in.
+    document.getElementById("newpasson").checked = true;
+    drawCreateDoor();
+    // .gate is fixed with inset:0, so bottom has to give way before height
+    // means anything. 480px is a 640px window at 133% display scaling.
+    g.style.bottom = "auto";
+    g.style.height = "480px";
+    const foot = g.querySelector(".gate-foot");
+    const btn = foot.querySelector("button[type=submit]");
+    const gr = g.getBoundingClientRect();
+    const fr = foot.getBoundingClientRect();
+    const br = btn.getBoundingClientRect();
+    const inside = fr.bottom <= gr.bottom + 1 && fr.top >= gr.top - 1;
+    const hit = document.elementFromPoint(br.left + br.width / 2, br.top + br.height / 2);
+    const clickable = !!hit && (hit === btn || btn.contains(hit) || hit.contains(btn));
+    // And the head must not have been pushed off the top either.
+    const head = g.querySelector(".gate-head").getBoundingClientRect();
+    const titled = head.top >= gr.top - 1;
+    g.style.bottom = "";
+    g.style.height = "";
+    g.classList.add("hidden");
+    return ({ ok: inside && clickable && titled,
+       why: (inside ? "" : "the buttons are outside the window; ") +
+            (clickable ? "" : "nothing can click the Create button; ") +
+            (titled ? "" : "the title is above the top edge") })
+  `],
+
   ["every dialog can be closed with Escape", `
     ${STOP}
     const gates = ["creategate", "roomsetgate", "invitegate", "profilegate",
