@@ -76,3 +76,8 @@ scripts/shots/
 # scripts/live.sh keeps its address stable between runs.
 scripts/.live-token
 scripts/.live-url
+
+# The QA lobby fixture keeps its live session tokens here.
+scripts/.qa-lobby
+scripts/.qa-lobby.pid
+scripts/.qa-lobby.log

@@ -59,8 +59,9 @@ things stay outside it because no machine can grade them: `preview.sh` and
 `try.sh`, which produce pictures and a window for a person to look at, and
 `live.sh`, which is the whole product at one fixed address that reloads itself
 as you edit. **None of the three touches the live server** — every one of them
-is loopback, on a throwaway database. Only `deploy.sh`, `publish.sh` and
-`ship.sh` reach `87.107.110.199`.
+is loopback, on a throwaway database. Four scripts reach `87.107.110.199`:
+`deploy.sh`, `publish.sh`, `ship.sh` — and `qa-lobby.sh`, which is the odd one
+out and is described below.
 
 Finishing a task means: `bash scripts/verify.sh` green, `STATE.md` updated,
 one commit naming the task number, pushed via `./scripts/git-sync.sh push`,
@@ -111,6 +112,17 @@ the predecessor platform. Reasons are in `docs/decisions.md`.
   loopback with a seeded lobby, opened in the browser, deleted on Ctrl-C. It
   is the only way to click through the interface without publishing, and
   `./scripts/preview.sh <name>` is the same sandbox photographed instead.
+- **To give the owner something to click on, run `./scripts/qa-lobby.sh up`.**
+  Two dozen test players and six test rooms — every door, a nearly full one,
+  a locked one — on the **live** server, so manual QA has somebody to play
+  with. Three things about it are not optional to know: the rooms live only
+  while its heartbeat keeps running on this PC (a host who goes quiet closes
+  their room, D84), a coordinator restart wipes them because rooms are in
+  memory, so **ship first and build the lobby after**, and the accounts it
+  creates are permanent — there is no API that deletes a player. They are all
+  named `qa_*`. `./scripts/qa-lobby.sh down` empties the rooms.
+  `bash scripts/qa-lobby-selftest.sh` rehearses the whole thing on loopback,
+  and is what to run after changing it.
 - **To put a build on a test PC, run `./scripts/publish.sh`.** It stamps the
   server details into the binaries, uploads one installer, and prints a
   link. Installed copies pick up later builds themselves. Never go back to
