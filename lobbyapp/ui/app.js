@@ -836,6 +836,25 @@ async function joinRoom(r) {
   if (needName("namegate.why.join")) return;
   if (r.id === state.room_id) { show("room"); return; }
 
+  // A room that will not have you is not worth leaving yours for (D91).
+  //
+  // This guard was not needed while the button was the only way in and being
+  // in a room switched every button off: a room that refused you refused you,
+  // and you were still where you started. Two changes turned that into
+  // something that costs a room. D89 made joining leave your own room first,
+  // and D90 made the row itself join on a double click - and the row has no
+  // button to grey out. Double-clicking an in-game room while hosting closed
+  // the host's room on nine people and then failed to join the one they had
+  // pointed at, leaving them in no room at all.
+  //
+  // `joinable` is the coordinator's own answer to "would Join work right now",
+  // and it is false for a match in progress, a full room and a closed one -
+  // which is every reason a door refuses somebody who is standing at it.
+  if (!r.joinable) {
+    report(t(inGame(r) ? "room.join.playing" : "room.join.closed"));
+    return;
+  }
+
   if (state.room_id && !(await askLeave())) return;
 
   let password = "";
@@ -868,11 +887,23 @@ function askLeave() {
 // there.
 function enterRoom(id, password) {
   act(async () => {
-    if (state.room_id && state.room_id !== id) {
+    const gaveUp = !!(state.room_id && state.room_id !== id);
+    if (gaveUp) {
       await api("/api/rooms/leave", {});
       state.room_id = "";
     }
-    await api("/api/rooms/join", { room_id: id, password: password || "" });
+    try {
+      await api("/api/rooms/join", { room_id: id, password: password || "" });
+    } catch (err) {
+      // The guard above closes the ordinary case. What is left is a race:
+      // the room filled up, locked or closed in the moment between the lobby
+      // list being drawn and this request arriving. Nothing can close that
+      // window - the coordinator will not accept a join from somebody who is
+      // still seated, so the leaving has to go first - but somebody who has
+      // just lost their room must be told that, not handed the raw refusal
+      // and left to work out why the lobby looks different (D91).
+      throw new Error(gaveUp ? t("room.join.lost") + " " + err.message : err.message);
+    }
     show("room");
   });
 }

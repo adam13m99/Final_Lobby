@@ -3370,3 +3370,54 @@ calls are the same line of source in two functions, so a single blind
 find-and-replace could not tell them apart; each had to be falsified against
 its own surrounding context to prove the checks were not covering for each
 other.
+
+## D91 - A shut door must not cost you the room you are in (2026-09-03)
+
+Found while mapping the room lifecycle end to end for the owner, which is the
+whole argument for having drawn the map.
+
+`joinRoom` never checked whether the room it was about to join would have it.
+That was harmless for as long as it was true that (a) the only way in was a
+button, and (b) the button was greyed out for a room that would refuse you.
+A refused join cost nothing: the coordinator said no and you were still
+exactly where you started.
+
+Two changes in the last two days took both of those away.
+
+- **D89** made joining another room **leave your own first**, because the
+  coordinator will not accept a join from somebody already seated. The cost of
+  a refusal stopped being nothing and became the room you were in.
+- **D90** made the **row** join on a double click. A row has no button to grey
+  out.
+
+Together: double-click a room that is in a match, while hosting one of your
+own, and the app asked you to confirm, closed your room on the nine people in
+it, and *then* failed to join the room you had pointed at. You ended up in no
+room at all, having destroyed one, with a raw coordinator refusal in the
+banner.
+
+`joinable` is the coordinator's own answer to "would a join work right now" -
+false for a match in progress, for a full room, and for a closed one, which is
+every reason a door refuses somebody standing at it. `joinRoom` now asks it
+before it asks anything else, and says which of those it is.
+
+**The race underneath cannot be closed and is handled instead.** The room can
+fill, lock or close in the moment between the lobby list being drawn and the
+join arriving, and the leaving has to go first because the coordinator refuses
+a join from somebody still seated. So if the join fails *after* the leave,
+the message says so - "You have left your room, and that one would not let you
+in:" - rather than handing over the bare refusal and letting somebody work out
+for themselves why the lobby suddenly looks different.
+
+### What proves it
+
+`uicheck`, *a room that will not have you never costs you the one you are in*:
+sets you up as a host, points `joinRoom` at a room in a match, a full room and
+a closed room in turn, and asserts that none of them opens the leave
+confirmation, that no request is sent for any of them, and that the banner
+says why. Watched failing with the guard removed.
+
+**Three existing checks went red on the fix, correctly.** They fabricate a
+room to join and none of them had set `joinable`, so the new guard stopped
+them at the door - which is the check doing its job on a test fixture that was
+lying about the world. They now say `joinable: true`, which they always meant.

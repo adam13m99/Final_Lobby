@@ -196,7 +196,7 @@ const CHECKS = [
     state.room_id = "";
     return (async () => {
       try {
-        joinRoom({ id: "check-room", needs_password: false });
+        joinRoom({ id: "check-room", needs_password: false, joinable: true });
         await new Promise((r) => setTimeout(r, 60));
       } finally {
         api = realApi; show = realShow; needName = realNeed; refresh = realRefresh;
@@ -323,7 +323,7 @@ const CHECKS = [
     state.is_host = false;
     return (async () => {
       try {
-        joinRoom({ id: "room-i-want", needs_password: false });
+        joinRoom({ id: "room-i-want", needs_password: false, joinable: true });
         await new Promise((r) => setTimeout(r, 40));
         document.getElementById("askyes").click();
         await new Promise((r) => setTimeout(r, 60));
@@ -356,7 +356,7 @@ const CHECKS = [
         for (const host of [false, true]) {
           state.is_host = host;
           const who = host ? "a host" : "a player";
-          joinRoom({ id: "room-i-want", needs_password: false });
+          joinRoom({ id: "room-i-want", needs_password: false, joinable: true });
           await new Promise((r) => setTimeout(r, 40));
           if (gate.classList.contains("hidden")) {
             why = why || (who + " was not asked anything");
@@ -382,6 +382,55 @@ const CHECKS = [
         state.room_id = realRoom; state.is_host = realHost;
       }
       return ({ ok: !why, why: why || "both asked first, and no meant no" });
+    })();
+  `],
+
+  // The row has no button to grey out, so the guard has to be in the code
+  // behind it. Before D89 a refused join cost nothing - you were still where
+  // you started. Now it costs the room you were in, so it must not be reached
+  // for a room that was never going to have you.
+  ["a room that will not have you never costs you the one you are in", `
+    ${STOP}
+    show("lobby");
+    const realApi = api, realShow = show, realNeed = needName, realRefresh = refresh;
+    const realRoom = state.room_id, realHost = state.is_host;
+    const calls = [];
+    api = async (path) => { calls.push(path); return {}; };
+    show = () => {};
+    needName = () => false;
+    refresh = async () => {};
+    state.room_id = "room-i-am-in";
+    state.is_host = true;
+    const gate = document.getElementById("askgate");
+    return (async () => {
+      let why = "";
+      try {
+        for (const shut of [
+          { id: "in-a-match", joinable: false, status: "locked_in_game", seats: 4 },
+          { id: "quite-full", joinable: false, status: "open", seats: 10 },
+          { id: "gone-away", joinable: false, status: "closed", seats: 2 },
+        ]) {
+          joinRoom(shut);
+          await new Promise((r) => setTimeout(r, 40));
+          if (!gate.classList.contains("hidden")) {
+            why = why || (shut.id + " asked to leave a room for a door that is shut");
+            document.getElementById("askno").click();
+          }
+          if (calls.length) {
+            why = why || (shut.id + " called " + calls.join(", "));
+            calls.length = 0;
+          }
+        }
+        // And the refusal is said out loud rather than swallowed.
+        if (!document.getElementById("banner").textContent) {
+          why = why || "nothing on screen said why the door was shut";
+        }
+      } finally {
+        gate.classList.add("hidden");
+        api = realApi; show = realShow; needName = realNeed; refresh = realRefresh;
+        state.room_id = realRoom; state.is_host = realHost;
+      }
+      return ({ ok: !why, why: why || "a shut door costs nothing" });
     })();
   `],
 
