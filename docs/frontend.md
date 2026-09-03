@@ -607,5 +607,12 @@ WIDE=1366 TALL=768 bash scripts/preview.sh small
     label wraps does not get taller - the text climbs out of it. A check that
     measured the height was green against every broken version of the
     stylesheet (D89). `scrollHeight - clientHeight` is the measurement.
-28. **Never leave a change on this PC.** `./scripts/ship.sh` after the commit
+28. **Falsify the whole operation, not its first step.** The check that
+    Create asks before it opens the form was green with the leaving deleted
+    from the submit, because it never got as far as submitting (D90). A check
+    that covers the front half of a two-step operation is a check that says
+    the back half is fine. And when the same line of source appears in two
+    functions, falsify each against its own context - a blind replace cannot
+    tell them apart, and one check will happily cover for the other.
+29. **Never leave a change on this PC.** `./scripts/ship.sh` after the commit
     (D62). The owner tests on the live product.

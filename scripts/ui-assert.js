@@ -185,17 +185,22 @@ const CHECKS = [
   ["joining a room ends up inside the room", `
     ${STOP}
     const realApi = api, realShow = show, realNeed = needName, realRefresh = refresh;
+    const realRoom = state.room_id;
     let asked = null, went = null;
     api = async (path) => { asked = path; return {}; };
     show = (name) => { went = name; };
     needName = () => false;
     refresh = async () => {};
+    // From the lobby, in no room. Joining out of a room you are already in is
+    // a question now (D90) and has checks of its own below.
+    state.room_id = "";
     return (async () => {
       try {
         joinRoom({ id: "check-room", needs_password: false });
         await new Promise((r) => setTimeout(r, 60));
       } finally {
         api = realApi; show = realShow; needName = realNeed; refresh = realRefresh;
+        state.room_id = realRoom;
       }
       return ({ ok: asked === "/api/rooms/join" && went === "room",
          why: "join asked for " + asked + " and then showed " + went });
@@ -319,8 +324,11 @@ const CHECKS = [
     return (async () => {
       try {
         joinRoom({ id: "room-i-want", needs_password: false });
+        await new Promise((r) => setTimeout(r, 40));
+        document.getElementById("askyes").click();
         await new Promise((r) => setTimeout(r, 60));
       } finally {
+        document.getElementById("askgate").classList.add("hidden");
         api = realApi; show = realShow; needName = realNeed; refresh = realRefresh;
         state.room_id = realRoom; state.is_host = realHost;
       }
@@ -329,9 +337,9 @@ const CHECKS = [
     })();
   `],
 
-  // A player who moves loses nothing. A host who moves closes their room on
-  // nine other people (D84), so the host is asked and nobody else is.
-  ["a host is asked before their own room is closed under them", `
+  // Anybody leaving a room they are in is asked first (D90), and the host is
+  // told the extra thing that leaving does on their way out (D84).
+  ["leaving the room you are in is a question, whoever you are", `
     ${STOP}
     const realApi = api, realShow = show, realNeed = needName, realRefresh = refresh;
     const realRoom = state.room_id, realHost = state.is_host;
@@ -340,28 +348,103 @@ const CHECKS = [
     show = () => {};
     needName = () => false;
     refresh = async () => {};
-    state.room_id = "room-i-host";
-    state.is_host = true;
+    state.room_id = "room-i-am-in";
     return (async () => {
       let why = "";
+      const gate = document.getElementById("askgate");
       try {
-        joinRoom({ id: "room-i-want", needs_password: false });
-        await new Promise((r) => setTimeout(r, 40));
-        if (document.getElementById("askgate").classList.contains("hidden")) {
-          why = "the host was not asked anything";
+        for (const host of [false, true]) {
+          state.is_host = host;
+          const who = host ? "a host" : "a player";
+          joinRoom({ id: "room-i-want", needs_password: false });
+          await new Promise((r) => setTimeout(r, 40));
+          if (gate.classList.contains("hidden")) {
+            why = why || (who + " was not asked anything");
+            continue;
+          }
+          if (calls.length) why = why || "it had already called " + calls.join(", ");
+          const said = document.getElementById("askwhy").textContent;
+          if (!said) why = why || (who + " was asked with no reason given");
+          if (host && !/clos/i.test(said)) {
+            why = why || "the host was not told their room closes: " + said;
+          }
+          if (!host && /clos/i.test(said)) {
+            why = why || "a player was told their room closes: " + said;
+          }
+          // Saying no has to mean no.
+          document.getElementById("askno").click();
+          await new Promise((r) => setTimeout(r, 40));
+          if (calls.length) why = why || ("no still called " + calls.join(", "));
         }
-        if (calls.length) why = why || "it had already called " + calls.join(", ");
-        // Saying no has to mean no.
-        document.getElementById("askno").click();
-        await new Promise((r) => setTimeout(r, 40));
-        if (calls.length) why = why || "cancelling still called " + calls.join(", ");
       } finally {
         document.getElementById("askgate").classList.add("hidden");
         api = realApi; show = realShow; needName = realNeed; refresh = realRefresh;
         state.room_id = realRoom; state.is_host = realHost;
       }
-      return ({ ok: !why, why: why || "asked first, and no meant no" });
+      return ({ ok: !why, why: why || "both asked first, and no meant no" });
     })();
+  `],
+
+  // The other half of Create working like Join: the coordinator refuses a
+  // create from somebody already seated, so the leaving has to happen, and it
+  // has to happen first.
+  ["creating a room leaves the one you are in first", `
+    ${STOP}
+    const realApi = api, realShow = show, realNeed = needName, realRefresh = refresh;
+    const realRoom = state.room_id;
+    const calls = [];
+    needName = () => false;
+    state.room_id = "";
+    openCreate();
+    document.getElementById("roomname").value = "a room from a check";
+    api = async (path) => { calls.push(path); return {}; };
+    show = () => {};
+    refresh = async () => {};
+    state.room_id = "room-i-am-in";
+    return (async () => {
+      try {
+        document.getElementById("createform").dispatchEvent(
+          new Event("submit", { bubbles: true, cancelable: true }));
+        await new Promise((r) => setTimeout(r, 60));
+      } finally {
+        document.getElementById("creategate").classList.add("hidden");
+        api = realApi; show = realShow; needName = realNeed; refresh = realRefresh;
+        state.room_id = realRoom;
+      }
+      return ({ ok: calls.join(" then ") === "/api/rooms/leave then /api/rooms/create",
+         why: "it called " + (calls.join(" then ") || "nothing") });
+    })();
+  `],
+
+  // A list somebody drags a pointer down while reading must not join a room
+  // when the pointer lands on one (D90). The button is the one-click way in.
+  ["a room row joins on two clicks and never on one", `
+    ${STOP}
+    show("lobby");
+    const realJoin = joinRoom, realShow = show;
+    let joined = 0;
+    joinRoom = () => { joined++; };
+    show = () => {};
+    const row = document.querySelector("#roomlist [data-room]:not(.here)");
+    let why = "";
+    try {
+      if (!row) {
+        why = "no room in the sandbox that is not the one you are in";
+      } else {
+        row.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        if (joined) why = "one click joined it";
+        row.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+        if (!joined) why = why || "two clicks did not join it";
+        // A keyboard cannot double-click, so Enter is the one way in there.
+        joined = 0;
+        row.focus();
+        row.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+        if (!joined) why = why || "Enter on a focused row did nothing";
+      }
+    } finally {
+      joinRoom = realJoin; show = realShow;
+    }
+    return ({ ok: !why, why: why || "one click does nothing, two join, Enter joins" });
   `],
 
   // The rail hid behind a media query written a thousand lines above the rule
@@ -560,26 +643,51 @@ const CHECKS = [
   // One person, one room (D82). The Join button on every row already said so;
   // Create did not, so the interface was enforcing half a rule and the
   // coordinator was enforcing none of it.
-  ["Create room is switched off while you are in one", `
+  // Create used to be switched off while you were in a room, because the
+  // coordinator refuses it - which it still does. The interface does the
+  // leaving now, the same as Join does, and asks the same question first
+  // (D90). Asked before the form, not after it.
+  ["Create room is live in a room, and asks before it opens the form", `
     ${STOP}
-    const was = state.room_id;
-    state.room_id = "";
-    renderRooms(state.rooms);
-    const free = !document.getElementById("btn-create").disabled;
-    state.room_id = (state.rooms[0] || {}).id || "r-test";
-    renderRooms(state.rooms);
+    const was = state.room_id, wasHost = state.is_host;
+    const gate = document.getElementById("creategate");
+    const ask = document.getElementById("askgate");
     const btn = document.getElementById("btn-create");
-    const shut = btn.disabled && !!btn.title;
-    // And pressing it anyway takes you to the room you are in rather than
-    // opening a dialog the coordinator will refuse.
-    openCreate();
-    const dialog = !document.getElementById("creategate").classList.contains("hidden");
-    state.room_id = was;
-    renderRooms(state.rooms);
-    return ({ ok: free && shut && !dialog,
-       why: "in no room the button is " + (free ? "live" : "off") +
-            ", in a room it is " + (shut ? "off with a reason" : "still live") +
-            (dialog ? ", and it opened the dialog anyway" : "") })
+    let why = "";
+    return (async () => {
+      try {
+        state.room_id = "";
+        state.is_host = false;
+        renderRooms(state.rooms);
+        if (btn.disabled) why = "the button is off when you are in no room";
+        // In no room it opens straight away, with nothing asked.
+        openCreate();
+        await new Promise((r) => setTimeout(r, 40));
+        if (gate.classList.contains("hidden")) why = why || "it did not open the form";
+        if (!ask.classList.contains("hidden")) why = why || "it asked, in no room";
+        gate.classList.add("hidden");
+
+        state.room_id = (state.rooms[0] || {}).id || "r-test";
+        renderRooms(state.rooms);
+        if (btn.disabled) why = why || "the button is still switched off in a room";
+        openCreate();
+        await new Promise((r) => setTimeout(r, 40));
+        if (ask.classList.contains("hidden")) why = why || "it did not ask";
+        if (!gate.classList.contains("hidden")) {
+          why = why || "it opened the form before asking";
+        }
+        // No means the form never opens.
+        document.getElementById("askno").click();
+        await new Promise((r) => setTimeout(r, 40));
+        if (!gate.classList.contains("hidden")) why = why || "no still opened the form";
+      } finally {
+        gate.classList.add("hidden");
+        ask.classList.add("hidden");
+        state.room_id = was; state.is_host = wasHost;
+        renderRooms(state.rooms);
+      }
+      return ({ ok: !why, why: why || "live in both, asked in one" });
+    })();
   `],
 
   // Bug one (D83). All four notices used to be handed `grid-area: strip`

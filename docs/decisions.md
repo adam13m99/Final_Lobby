@@ -3291,3 +3291,82 @@ deleted, and only went red when both were gone - which is correct, because
 either one alone prevents it. The first version of the check measured the
 badge's height, which a fixed-height box can never change; it had been green
 against every broken variant. Measure the overflow, not the box.
+
+## D90 - Create leaves too, everybody is asked, and a row joins on two clicks (2026-09-03)
+
+Three corrections to D89, all of them the owner's, the day after it shipped.
+
+### Create room works like Join, and both ask the same question
+
+D89 made joining another room leave the first one for you, and left **Create
+room switched off** while you were in one - which the owner immediately named
+as the inconsistency it was. It is the same rule (D82, the coordinator refuses
+either from somebody already seated) and it now gets the same answer: the
+interface leaves for you.
+
+The question is asked **before the form opens**, not after it - nobody should
+fill in a room name, a mode and a door and only then be told what pressing
+Create costs. The leaving itself happens on submit, at the last possible
+moment, so somebody who says yes and then closes the dialog has not left
+anything.
+
+### Everybody is asked, not only the host
+
+D89 asked only the host, reasoning that a player sitting in a room loses
+nothing by moving. The owner's rule is simpler and better: **leaving a room is
+worth a question whoever you are.** The old rule also made two buttons behave
+differently for a reason nobody pressing them could see.
+
+The owner gave the wording: *"Are you sure you want to leave your room?"*, No
+and Yes. What still differs is the sentence underneath, because the
+consequence genuinely differs:
+
+- host: *"You are hosting. Leaving closes your room at once and sends everyone
+  in it back to the lobby."* - the D84 consequence, and it lands on nine other
+  people.
+- anybody else: *"You will lose your seat in it."*
+
+`askGate` gained a fourth argument for the No button's words. They come from
+JavaScript now rather than from `data-t` in the markup, because this one card
+asks more than one question and they do not all answer "Cancel".
+
+### A room row joins on two clicks, never on one
+
+The Join button is still one click. The **row** is now two. A room list is
+something a person drags a pointer down while reading, and a list that joins a
+room the moment the pointer lands on one is a trap - which is what it was.
+
+A keyboard cannot double-click, so `pressable` grew an optional second
+argument: what Enter should do, for the things whose pointer gesture is not a
+single click. Enter on a focused row joins it.
+
+Nothing happens on a single click, deliberately. The row keeps `cursor:
+pointer` and its hover, which is the affordance; adding a selected state is a
+bigger change than was asked for.
+
+### What proves it
+
+Two checks amended and three new, each watched failing on its own broken
+version and green on the others:
+
+- *leaving the room you are in is a question, whoever you are* - runs the
+  whole thing twice, as a player and as a host, and asserts both are asked,
+  that nothing has been sent before the answer, that **No sends nothing**, and
+  that only the host is told their room closes.
+- *Create room is live in a room, and asks before it opens the form* -
+  asserts the button is never disabled, that in no room it opens straight
+  through with nothing asked, that in a room it asks **before** the form
+  appears, and that No means the form never opens.
+- *creating a room leaves the one you are in first* - asserts the two
+  requests go out in that order on submit.
+- *a room row joins on two clicks and never on one* - one click does nothing,
+  two clicks join, Enter joins.
+
+**Two gaps the first falsification pass found**, both worth recording. Removing
+the leave from the create submit broke nothing, because the create check
+stopped at the dialog and never submitted the form - a check that covers the
+front half of a two-step operation and calls it covered. And the two `askLeave`
+calls are the same line of source in two functions, so a single blind
+find-and-replace could not tell them apart; each had to be falsified against
+its own surrounding context to prove the checks were not covering for each
+other.

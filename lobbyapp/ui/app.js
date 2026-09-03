@@ -240,14 +240,19 @@ function el(tag, cls, text) {
 //
 // Buttons nested inside these rows already stop their own clicks; they stop
 // keys here too, or Enter on a Kick button would also take its seat.
-function pressable(e) {
+// pressable makes something that is not a button behave like one for a
+// keyboard. The optional second argument is what Enter should do, for the
+// things whose pointer gesture is not a single click - a room row joins on a
+// double click (D90), and a keyboard has no such thing.
+function pressable(e, go) {
   e.tabIndex = 0;
   e.setAttribute("role", "button");
   e.onkeydown = (ev) => {
     if (ev.key !== "Enter" && ev.key !== " ") return;
     if (ev.target !== e) return;
     ev.preventDefault();
-    if (e.onclick) e.onclick(ev);
+    if (go) go(ev);
+    else if (e.onclick) e.onclick(ev);
   };
   return e;
 }
@@ -591,8 +596,6 @@ function renderRooms(rooms) {
       acts.appendChild(clear);
     }
     const make = el("button", "primary", t("lobby.create"));
-    make.disabled = !!state.room_id;
-    make.title = state.room_id ? t("room.join.busy") : "";
     make.onclick = openCreate;
     acts.appendChild(make);
     none.appendChild(acts);
@@ -659,8 +662,13 @@ function paintRoomPing(row, r) {
 // button in the last column joins it.
 function roomCard(r) {
   const mine = r.id === state.room_id;
-  const card = pressable(el("div", "room" + (mine ? " here" : "")));
-  card.onclick = () => (mine ? show("room") : joinRoom(r));
+  // Two ways in, at the owner's word (D90): the Join button on one click, the
+  // row itself on two. A single click on the row does nothing on purpose -
+  // it is a list somebody drags a pointer down while reading, and a list that
+  // joins a room when the pointer lands on it is a trap.
+  const go = () => (mine ? show("room") : joinRoom(r));
+  const card = pressable(el("div", "room" + (mine ? " here" : "")), go);
+  card.ondblclick = go;
 
   const who = el("div", "room-who");
   who.appendChild(avatar(r.host_nick, r.host_id));
@@ -791,15 +799,12 @@ function pingCell(r) {
 // The last column: one button, and a dot saying whether a match is running
 // in there. The dot is the only thing on the row that can be read without
 // looking directly at it.
-// One person, one room (D82). Opening one is refused by the coordinator when
-// you are already in another, so the button that would be refused is switched
-// off - and it says the same thing the Join buttons on every row already said,
-// because it is the same rule and the interface was only ever enforcing half
-// of it.
+// Create room is live whether or not you are in one (D90). It was switched
+// off, on the grounds that the coordinator refuses a create from somebody who
+// is already seated - which it still does. The interface does the leaving now,
+// exactly as it does for Join, and asks the same question first.
 function drawCreateButton() {
-  const b = $("btn-create");
-  b.disabled = !!state.room_id;
-  b.title = state.room_id ? t("room.join.busy") : "";
+  $("btn-create").disabled = false;
 }
 
 // Being in a room no longer stops you joining another one (D89). One person
@@ -831,16 +836,7 @@ async function joinRoom(r) {
   if (needName("namegate.why.join")) return;
   if (r.id === state.room_id) { show("room"); return; }
 
-  // Leaving your own room closes it, at once and for everybody in it (D84).
-  // That is not something to do to nine other people because somebody clicked
-  // the wrong row, so the host - and only the host - is asked first. A player
-  // who is merely sitting in a room loses nothing by moving, and is not
-  // stopped to be told so.
-  if (state.room_id && state.is_host) {
-    const yes = await askGate("room.switch.title", "room.switch.host",
-      "room.switch.go");
-    if (!yes) return;
-  }
+  if (state.room_id && !(await askLeave())) return;
 
   let password = "";
   if (r.needs_password) {
@@ -848,6 +844,16 @@ async function joinRoom(r) {
     if (!password) return;
   }
   enterRoom(r.id, password);
+}
+
+// askLeave is the one question in front of both of the ways out of a room you
+// are in: joining another, and creating one. The host gets a second sentence
+// because leaving closes their room at once, for everybody in it, with no
+// grace (D84) - which is a different size of consequence and has to be said.
+function askLeave() {
+  return askGate("room.switch.title",
+    state.is_host ? "room.switch.host" : "room.switch.player",
+    "room.switch.go", "room.switch.no");
 }
 
 // enterRoom is every way into a room: the lobby row, the button on it, a
@@ -2494,13 +2500,12 @@ $("profileform").onsubmit = async (e) => {
 
 // The door is chosen before the room exists (D41). A room opened public and
 // locked a second later is a second in which anybody can walk in.
-function openCreate() {
-  // Belt and braces: the button is switched off above, but a keyboard, a
-  // stale render or a second window can still get here. Going to the room
-  // they are already in is a better answer than a dialog that will be
-  // refused.
-  if (state.room_id) { show("room"); return; }
+async function openCreate() {
   if (needName("namegate.why.create")) return;
+  // Asked before the form rather than after it, so that nobody fills in a
+  // room and is then told what it costs. Leaving happens on submit, not here:
+  // somebody who says yes and then closes the dialog has not left anything.
+  if (state.room_id && !(await askLeave())) return;
   $("createerr").textContent = "";
   $("roomname").value = "";
   $("newpass").value = "";
@@ -2539,6 +2544,12 @@ $("createform").onsubmit = (e) => {
   }
   act(async () => {
     try {
+      // The coordinator refuses a create from somebody already seated, so the
+      // leaving happens here, at the last possible moment (D90).
+      if (state.room_id) {
+        await api("/api/rooms/leave", {});
+        state.room_id = "";
+      }
       await api("/api/rooms/create", {
         name: $("roomname").value,
         privacy: pass ? "password" : door,
@@ -2898,10 +2909,11 @@ let uiStamp = null;
 // Escape, the backdrop, Cancel - because all three of those mean no.
 let askSettle = null;
 
-function askGate(titleKey, whyKey, goKey) {
+function askGate(titleKey, whyKey, goKey, noKey) {
   $("asktitle").textContent = t(titleKey);
   $("askwhy").textContent = t(whyKey);
   $("askyes").textContent = t(goKey);
+  $("askno").textContent = t(noKey || "profile.cancel");
   $("askgate").classList.remove("hidden");
   $("askyes").focus();
   return new Promise((resolve) => { askSettle = resolve; });
