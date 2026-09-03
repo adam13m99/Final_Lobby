@@ -3047,3 +3047,100 @@ window; the title is above the top edge*.
 1440x820, and `preview.sh` has taken `WIDE`/`TALL` all along. A bug that only
 exists below a certain height cannot be seen by a rung that only ever looks
 at one height. When a change is about layout, photograph it small as well.
+
+## D88 - Joining lands you in the room, the door is a mark, and two numbers are hidden (2026-09-03)
+
+Five things the owner asked for after an evening of manual QA on the live
+product. They are one decision because they are one sitting, and because four
+of the five are the same complaint: **the lobby row was doing too much work
+and saying too little.**
+
+### Joining a room puts you in the room
+
+`joinRoom` fired the request and stopped. You stayed in the lobby, looking at
+a list in which one row had quietly become yours - the same row, a slightly
+different green, its button now reading *Open*. Every other way into a room
+already went in: accepting an invitation from the friends rail called
+`show("room")`, and creating a room does too. Only the two obvious ones - the
+row itself and a friend's Join button - did not.
+
+The one thing anybody wants a second after joining is to see who is in there.
+
+### The door is a mark, not words at the end of a line that gets cut
+
+*Password*, *Friends only* and *Invite only* were three phrases appended to
+the room's meta line, after the host's name and the description. That line is
+the run-on line: it is explicitly allowed to run out of room and be
+ellipsised (D81 keeps the things people scan for in their own elements for
+exactly this reason). So on a narrow window, or under a long description, the
+first fact to disappear was that the room wanted a password - and a player
+would click Join and be surprised by a prompt.
+
+Three marks now sit beside the game-mode badge, in their own element, never
+cut: a **padlock** for a password, an **outlined person** for friends-only, an
+**envelope** for invite-only. A room can want both a password and membership,
+so they are not exclusive and both are drawn.
+
+**They are drawn in the stylesheet, not typed as characters.** The same
+reason the search magnifier is: a padlock glyph comes from whichever font the
+machine happens to have, and on Windows it arrives as a full-colour emoji in
+a product that is otherwise entirely monochrome. None of the three uses
+`transform`, so there is nothing to mirror in Persian (rule 14).
+
+Three shapes were tried and thrown away before these, which is worth
+recording so nobody spends the evening again:
+
+- **Two overlapping circles** for friends-only needed the front circle filled
+  in the row's own colour to cut the one behind it - and the stylesheet does
+  not know what colour the row is. On the green row you are in, it was wrong.
+- **Two circles side by side** merged at twelve pixels into a single capsule
+  that read as a letter of the alphabet.
+- **A shallow flap floating inside the envelope** read as a dropdown with a
+  caret in it. The flap has to hang from the envelope's top inner edge and
+  span its full width before it reads as a letter.
+
+The words are still in the catalogue and still shown - as the mark's `title`
+and its `aria-label` - which is also why the i18n rule that forbids unused
+keys stays satisfied.
+
+### MMR off the lobby, your own address off the room
+
+Hidden, **not removed** - the owner was explicit. The MMR column's cell, its
+sortable heading and the sort itself are all still built; one rule hides them
+and the grid template lost one column. Bringing it back is putting
+`var(--w-mmr)` into the two templates and deleting the rule. The same for
+*Your address* on the room screen: the cell is still filled from
+`state.virtual_ip`, and the hairline that would otherwise be left dangling in
+front of it goes with it via `:has()`.
+
+Each stat cell now carries its own key as a class - `room.stat.you` becomes
+`stat-room-stat-you` - which is what lets a cell be hidden from the
+stylesheet without the renderer knowing anything about it.
+
+### What proves it
+
+Three new `uicheck` checks, each watched failing on its own broken version
+and green on the other three:
+
+- *joining a room ends up inside the room* - stubs `api` and `show` and
+  asserts the request goes out and the screen changes when it returns. Stubs
+  rather than a real join, because a real join would seat the sandbox player
+  in a second room and one person is in one room at a time (D82), which would
+  poison every check that runs after it.
+- *every door a room can have is a mark, and none of them is cut off* - sets
+  all three doors, asserts each mark is drawn, is at least 8x8, has a title,
+  is inside its row, and is **not** inside the line that gets ellipsised.
+- *MMR is off the lobby and your address is off the room, hidden but still
+  built* - asserts each element still exists and is invisible, that the
+  heading grid and the row grid still have the same number of columns, and
+  that no hairline is left hanging where the address used to be.
+
+That last check is the reason this is a check at all rather than a deletion:
+if somebody later tidies the hidden cells away, it goes red and tells them
+the cells are deliberate.
+
+**A harness fix came with it.** The runner now passes `awaitPromise` to
+`Runtime.evaluate`. Every check written before this answers with a plain
+object and is unaffected, but without it a check could only ever see what the
+page does *before its first await* - which is exactly where "and then it
+showed you the room" happens.

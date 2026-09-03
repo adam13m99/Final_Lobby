@@ -574,5 +574,18 @@ WIDE=1366 TALL=768 bash scripts/preview.sh small
     was broken for weeks in plain sight. A layout change is not looked at
     until it has been looked at short: `WIDE=1100 TALL=560 bash
     scripts/preview.sh <name>`.
-23. **Never leave a change on this PC.** `./scripts/ship.sh` after the commit
+23. **A fact people scan for gets its own element; only prose goes on the
+    run-on line.** The room meta line is allowed to run out of room and be
+    cut (D81). *Password* and *Invite only* were words on the end of it, so
+    the first thing a narrow window hid was the reason a click would be
+    refused (D88). Marks now, beside the badge, outside the ellipsis. And
+    when a mark is the answer, **draw it in the stylesheet**: a glyph comes
+    from whichever font the machine has, and on Windows the obvious ones
+    arrive as colour emoji in a product with no other colour in it.
+24. **Hidden is not removed.** Two things the owner asked to hide - MMR on
+    the lobby, your own address in a room - are still built, still filled,
+    and hidden by one rule each (D88). A `uicheck` check asserts they still
+    exist *and* are invisible, so tidying them away goes red. When you hide a
+    cell in a list of cells, take its separator with it: `:has(+ .the-cell)`.
+25. **Never leave a change on this PC.** `./scripts/ship.sh` after the commit
     (D62). The owner tests on the live product.

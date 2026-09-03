@@ -676,11 +676,19 @@ function roomCard(r) {
   // because that line is allowed to run out of space and be cut - and a mode
   // somebody is scanning for must not be the thing that gets cut.
   meta.appendChild(el("div", "room-mode", modeName(r.game_mode)));
+  // Which door this room has, as a mark rather than as words (D88). It was
+  // three phrases on the end of the run-on line below - the line that is
+  // allowed to run out of space and be cut - so the fact that a room wanted a
+  // password was the first thing to disappear on a narrow window. A door is
+  // one of the things somebody scans the lobby *for*, so by rule it gets its
+  // own element beside the badge and is never cut (D81).
+  //
+  // The title carries the words for anybody who wants them, and for a screen
+  // reader, which is why the three strings are still in the catalogue.
+  meta.appendChild(doorMark(r));
+
   const bits = [r.host_nick];
   if (r.description) bits.push(r.description);
-  if (r.needs_password) bits.push(t("lobby.door.password"));
-  if (r.privacy === "friends") bits.push(t("lobby.door.friends"));
-  if (r.privacy === "invite") bits.push(t("lobby.door.invite"));
   meta.appendChild(el("span", "rest", bits.join(" · ")));
   // The room you are in used to say "You are here" at the end of its meta
   // line. It is the green row now (D81) - the whole row answers the question,
@@ -696,6 +704,28 @@ function roomCard(r) {
   card.appendChild(pingCell(r));
   card.appendChild(roomActions(r));
   return card;
+}
+
+// doorMark draws the room's door, or nothing at all for a room anybody may
+// walk into. The shapes themselves are in the stylesheet, drawn rather than
+// typed: a glyph would come from whichever font the machine happens to have,
+// and on Windows the obvious ones arrive as colour emoji in a product that is
+// otherwise entirely monochrome.
+function doorMark(r) {
+  const wrap = el("span", "doors");
+  const add = (kind, key) => {
+    const m = el("span", "door " + kind);
+    m.title = t(key);
+    m.setAttribute("aria-label", t(key));
+    m.setAttribute("role", "img");
+    wrap.appendChild(m);
+  };
+  // A password and a members-only door are different things and a room can
+  // have both, so these are not exclusive.
+  if (r.privacy === "friends") add("friends", "lobby.door.friends");
+  if (r.privacy === "invite") add("invite", "lobby.door.invite");
+  if (r.needs_password) add("lock", "lobby.door.password");
+  return wrap;
 }
 
 // seatCell draws the ten playing slots as ten marks beside the count.
@@ -795,7 +825,15 @@ function joinRoom(r) {
     password = window.prompt(t("lobby.door.ask")) || "";
     if (!password) return;
   }
-  act(() => api("/api/rooms/join", { room_id: r.id, password }));
+  // Joining puts you in the room you joined. It used to leave you in the
+  // lobby looking at a row that had quietly become yours, with nothing saying
+  // so but a colour - and the one thing anybody wants after joining is to see
+  // who is in there. The invitation path in the friends rail has always done
+  // this; the lobby row and the friend's Join button now do it too.
+  act(async () => {
+    await api("/api/rooms/join", { room_id: r.id, password });
+    show("room");
+  });
 }
 
 function statusClass(status) {
@@ -896,9 +934,13 @@ function drawStats(r) {
   }
   box.textContent = "";
 
+  // Each cell carries its own key as a class - room.stat.you becomes
+  // "stat-room-stat-you" - so that a cell can be hidden from the stylesheet
+  // without touching what builds it. That is what the owner asked for: hide,
+  // do not remove (D88).
   const cell = (labelKey, fill) => {
     if (box.children.length) box.appendChild(el("span", "statrule"));
-    const c = el("div", "stat");
+    const c = el("div", "stat stat-" + labelKey.replace(/\./g, "-"));
     c.appendChild(el("div", "k", t(labelKey)));
     const v = el("div", "v");
     fill(v);

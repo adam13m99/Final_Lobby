@@ -171,6 +171,110 @@ const CHECKS = [
        why: moving.length + " animated: " + moving.slice(0, 4).join(", ") })
   `],
 
+  // ---- what the lobby says about a room, and where joining lands (D88) ----
+
+  // Joining used to leave you in the lobby. Nothing about the room list said
+  // so except a colour, and the row you had just joined looked much like the
+  // rest. This is the check that the click ends somewhere.
+  //
+  // The stubs are deliberate: a real join would seat the sandbox player in a
+  // second room, and one person is in one room at a time (D82), so an honest
+  // end-to-end join here would break every check that runs after it. What is
+  // worth proving is the wiring - that the request goes out and the screen
+  // changes when it comes back - and stubs prove exactly that.
+  ["joining a room ends up inside the room", `
+    ${STOP}
+    const realApi = api, realShow = show, realNeed = needName, realRefresh = refresh;
+    let asked = null, went = null;
+    api = async (path) => { asked = path; return {}; };
+    show = (name) => { went = name; };
+    needName = () => false;
+    refresh = async () => {};
+    return (async () => {
+      try {
+        joinRoom({ id: "check-room", needs_password: false });
+        await new Promise((r) => setTimeout(r, 60));
+      } finally {
+        api = realApi; show = realShow; needName = realNeed; refresh = realRefresh;
+      }
+      return ({ ok: asked === "/api/rooms/join" && went === "room",
+         why: "join asked for " + asked + " and then showed " + went });
+    })();
+  `],
+
+  // The door, and the promise that it is never the thing that gets cut. It
+  // used to be words on the end of the run-on line, which is allowed to run
+  // out of room, so on a narrow window the fact that a room wanted a password
+  // was the first thing to disappear.
+  ["every door a room can have is a mark, and none of them is cut off", `
+    ${STOP}
+    show("lobby");
+    if (state.rooms.length < 3) {
+      return ({ ok: false, why: "the sandbox has " + state.rooms.length + " rooms, want 3" });
+    } else {
+      state.rooms[0].privacy = "friends";
+      state.rooms[0].needs_password = false;
+      state.rooms[1].privacy = "invite";
+      state.rooms[1].needs_password = false;
+      state.rooms[2].privacy = "public";
+      state.rooms[2].needs_password = true;
+      renderRooms(state.rooms);
+      const want = ["friends", "invite", "lock"];
+      let why = "";
+      for (let i = 0; i < 3; i++) {
+        const row = document.querySelector("[data-room='" + state.rooms[i].id + "']");
+        const mark = row && row.querySelector(".doors .door." + want[i]);
+        if (!mark) { why = why || ("no " + want[i] + " mark on room " + i); continue; }
+        const m = mark.getBoundingClientRect(), r = row.getBoundingClientRect();
+        if (m.width < 8 || m.height < 8) why = why || (want[i] + " mark is " + m.width + "x" + m.height);
+        if (m.right > r.right - 4) why = why || (want[i] + " mark is cut off by the row");
+        if (!mark.title) why = why || (want[i] + " mark says nothing when you point at it");
+        if (mark.closest(".rest")) why = why || (want[i] + " mark is inside the line that gets cut");
+      }
+      return ({ ok: !why, why: why || "all three doors drawn and whole" });
+    }
+  `],
+
+  // Hidden, not removed - which is what the owner asked for, and the only
+  // reason this is a check rather than a deletion. If someone later takes the
+  // cells out for tidiness, this goes red and says why they are still there.
+  ["MMR is off the lobby and your address is off the room, hidden but still built", `
+    ${STOP}
+    const gone = (sel, what) => {
+      const n = document.querySelector(sel);
+      if (!n) return "nothing builds " + what + " any more - it was hidden, not removed";
+      if (n.offsetParent !== null || n.getClientRects().length) return what + " is still on the screen";
+      return "";
+    };
+    // Each half is measured on its own screen. A hidden screen makes
+    // everything on it invisible, which would let both halves pass for the
+    // wrong reason and prove nothing at all.
+    show("lobby");
+    renderRooms(state.rooms);
+    let why = gone("#roomhead button[data-sort='mmr']", "the MMR heading")
+      || gone("#roomlist [data-room] .room-mmr", "a room's MMR");
+    if (!why) {
+      // The heading row and the room rows are one grid each and have to agree,
+      // or every column below the heading is off by one.
+      const head = getComputedStyle(document.getElementById("roomhead")).gridTemplateColumns.split(" ").length;
+      const row = getComputedStyle(document.querySelector("#roomlist [data-room]")).gridTemplateColumns.split(" ").length;
+      if (head !== row) why = "the heading has " + head + " columns and a room row has " + row;
+    }
+    show("room");
+    render();
+    if (!why) {
+      why = gone("#roomstats .stat-room-stat-you", "your address");
+      // A rule with no cell after it would be a hairline hanging off the end.
+      const rules = document.querySelectorAll("#roomstats .statrule");
+      for (const r of rules) {
+        if (r.offsetParent !== null && !(r.nextElementSibling && r.nextElementSibling.offsetParent !== null)) {
+          why = why || "a hairline is left over where your address used to be";
+        }
+      }
+    }
+    return ({ ok: !why, why: why || "both hidden, both still built" });
+  `],
+
   ["the friends rail survives a poll that changes nothing", `
     ${STOP}
     render();
@@ -470,7 +574,8 @@ const CHECKS = [
   for (const [name, expr] of CHECKS) {
     let out;
     try {
-      const res = await call("Runtime.evaluate", { expression: `(() => {${expr}})()`, returnByValue: true });
+      const res = await call("Runtime.evaluate",
+        { expression: `(() => {${expr}})()`, returnByValue: true, awaitPromise: true });
       out = res.exceptionDetails
         ? { ok: false, why: res.exceptionDetails.text + " " + (res.exceptionDetails.exception || {}).description }
         : res.result.value;

@@ -627,12 +627,20 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
    old last column was `auto`, so a row with two buttons pushed its numbers
    one way and a row with one pushed them the other, and no two rows lined
    up. Nothing here sizes to its content. */
+/* Four columns, not five: MMR is hidden at the owner's request (D88).
+   Everything that builds it is untouched - the cell, the sortable heading and
+   the sort itself are all still there, and so is --w-mmr - so bringing it
+   back is putting var(--w-mmr) back into the template below, between players
+   and ping, and deleting the one rule that hides the cells. The narrow
+   template in the media query at the foot of this section never carried MMR;
+   it drops to three columns and hides ping as well. */
 .roomhead, .room {
   display: grid;
   grid-template-columns:
-    minmax(0, 1fr) var(--w-players) var(--w-mmr) var(--w-ping) var(--w-status);
+    minmax(0, 1fr) var(--w-players) var(--w-ping) var(--w-status);
   gap: 12px;
 }
+.room-mmr, .roomhead button[data-sort="mmr"] { display: none; }
 .roomhead {
   flex: none; padding: 0 16px 7px;
   border-block-end: 1px solid var(--line);
@@ -704,6 +712,74 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
   font-size: 11.5px; color: var(--dim);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* The door, drawn (D88). Three shapes rather than three words: the words
+   were on the end of the meta line, which is allowed to be cut, so on a
+   narrow window a room's password quietly stopped being mentioned.
+
+   Drawn in the stylesheet rather than typed as glyphs, for the same reason
+   the search magnifier is: a padlock character comes from whichever font the
+   machine has, and on Windows it arrives as a colour emoji in a product with
+   no other colour in it. Nothing here uses transform, so there is nothing to
+   mirror in Persian. */
+.doors { display: flex; align-items: center; gap: 5px; flex: none; }
+.door {
+  position: relative; flex: none;
+  width: 12px; height: 12px; color: var(--muted);
+}
+/* A padlock: a shackle standing on a solid body. */
+.door.lock::before {
+  content: ""; position: absolute;
+  inset-block-start: 1px; inset-inline-start: 3px;
+  width: 6px; height: 4px;
+  border: 1.5px solid currentColor; border-block-end: 0;
+  border-start-start-radius: 3px; border-start-end-radius: 3px;
+}
+.door.lock::after {
+  content: ""; position: absolute;
+  inset-block-end: 1px; inset-inline-start: 1px;
+  width: 10px; height: 6px; border-radius: 2px; background: currentColor;
+}
+/* Friends: a head above a pair of shoulders, drawn in outline. Two earlier
+   attempts are worth not repeating - two circles overlapping needed the front
+   one filled in the row's colour, which the stylesheet cannot know, and two
+   circles side by side merged at twelve pixels into one capsule that read as
+   a letter. Outline is also what keeps this apart from the padlock, whose
+   body is solid: at this size "arc over a shape" is the whole silhouette, so
+   filled against hollow has to carry the difference. */
+.door.friends::before {
+  content: ""; position: absolute;
+  inset-block-start: .5px; inset-inline-start: 3.5px;
+  width: 5px; height: 5px; border-radius: 50%;
+  border: 1.5px solid currentColor;
+}
+.door.friends::after {
+  content: ""; position: absolute;
+  inset-block-end: 1px; inset-inline-start: 1px;
+  width: 10px; height: 5px;
+  border: 1.5px solid currentColor; border-block-end: 0;
+  border-start-start-radius: 5px; border-start-end-radius: 5px;
+}
+/* Invite: an envelope. The flap is a bordered triangle - no transform, so
+   nothing to mirror in Persian - and it hangs from the envelope's top inner
+   edge across its full width. Floating in the middle at half width, it read
+   as a dropdown with a caret in it rather than as a letter. */
+.door.invite::before {
+  content: ""; position: absolute;
+  inset-block-start: 2px; inset-inline-start: 0;
+  width: 12px; height: 9px;
+  border: 1.5px solid currentColor; border-radius: 1px;
+}
+.door.invite::after {
+  content: ""; position: absolute;
+  inset-block-start: 3.5px; inset-inline-start: 1.5px;
+  width: 0; height: 0;
+  border-inline-start: 4.5px solid transparent;
+  border-inline-end: 4.5px solid transparent;
+  border-block-start: 5.5px solid currentColor;
+}
+/* On the row that is yours the meta line is green; the marks follow it. */
+.room.here .door { color: var(--good); }
+
 .state {
   flex: none; height: 15px; padding: 0 5px; border-radius: 4px;
   display: inline-flex; align-items: center;
@@ -875,6 +951,15 @@ button.launch:hover:not(:disabled) { background: var(--good-soft); }
   font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase;
   color: var(--muted);
 }
+/* "Your address" is hidden at the owner's request (D88). It is still built,
+   still filled from state.virtual_ip and still one line away from coming
+   back: delete this rule.
+
+   The hairline before a cell is a separate element inserted by the renderer,
+   so hiding the cell alone would leave two rules side by side with nothing
+   between them. :has() takes the rule out with it. */
+.stat-room-stat-you,
+.statrule:has(+ .stat-room-stat-you) { display: none; }
 .stat .v {
   display: flex; align-items: center; gap: 6px;
   margin-block-start: 4px; font-size: 13px; font-weight: 500; line-height: 1;
